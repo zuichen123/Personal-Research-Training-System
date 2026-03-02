@@ -26,6 +26,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 		r.Get("/", h.list)
 		r.Get("/{id}", h.getMeta)
 		r.Get("/{id}/download", h.download)
+		r.Delete("/{id}", h.delete)
 	})
 }
 
@@ -126,4 +127,12 @@ func splitCSV(raw string) []string {
 func sanitizeFilename(name string) string {
 	replacer := strings.NewReplacer("\r", "", "\n", "", `"`, "")
 	return replacer.Replace(name)
+}
+
+func (h *Handler) delete(w http.ResponseWriter, r *http.Request) {
+	if err := h.service.Delete(r.Context(), chi.URLParam(r, "id")); err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }

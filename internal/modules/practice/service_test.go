@@ -17,7 +17,7 @@ func TestService_SubmitWrongAnswerCreatesMistake(t *testing.T) {
 	mistakeRepo := mistake.NewMemoryRepository()
 	mistakeService := mistake.NewService(mistakeRepo)
 
-	aiService := ai.NewService(ai.NewMockClient(0*time.Millisecond), questionService)
+	aiService := ai.NewService(ai.NewMockClient(0*time.Millisecond), questionService, false)
 	practiceService := NewService(NewMemoryRepository(), questionService, aiService, mistakeService)
 
 	q, err := questionService.Create(context.Background(), question.CreateInput{

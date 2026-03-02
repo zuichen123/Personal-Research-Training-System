@@ -18,6 +18,7 @@ func NewHandler(service *Service) *Handler {
 
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Route("/ai", func(r chi.Router) {
+		r.Get("/provider", h.providerStatus)
 		r.Post("/questions/generate", h.generate)
 		r.Get("/questions/search", h.searchOnline)
 		r.Post("/grade", h.grade)
@@ -117,4 +118,8 @@ func (h *Handler) score(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, result)
+}
+
+func (h *Handler) providerStatus(w http.ResponseWriter, _ *http.Request) {
+	httpx.WriteJSON(w, http.StatusOK, h.service.ProviderStatus())
 }

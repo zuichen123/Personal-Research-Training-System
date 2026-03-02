@@ -106,6 +106,18 @@ func (r *SQLiteRepository) List(ctx context.Context, questionID string) ([]Mater
 	return result, nil
 }
 
+func (r *SQLiteRepository) Delete(ctx context.Context, id string) error {
+	res, err := r.db.ExecContext(ctx, `DELETE FROM resources WHERE id = ?`, id)
+	if err != nil {
+		return errs.Internal(fmt.Sprintf("failed to delete resource: %v", err))
+	}
+	affected, _ := res.RowsAffected()
+	if affected == 0 {
+		return errs.NotFound("resource not found")
+	}
+	return nil
+}
+
 type materialScanner interface {
 	Scan(dest ...any) error
 }

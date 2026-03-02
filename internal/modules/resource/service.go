@@ -78,3 +78,10 @@ func (s *Service) List(ctx context.Context, questionID string) ([]Material, erro
 	}
 	return s.repo.List(ctx, strings.TrimSpace(questionID))
 }
+
+func (s *Service) Delete(ctx context.Context, id string) error {
+	if strings.TrimSpace(id) == "" {
+		return errs.BadRequest("resource id is required")
+	}
+	return s.repo.Delete(ctx, strings.TrimSpace(id))
+}

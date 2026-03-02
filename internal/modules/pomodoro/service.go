@@ -21,6 +21,13 @@ func (s *Service) Start(ctx context.Context, in StartInput) (Session, error) {
 	if strings.TrimSpace(in.TaskTitle) == "" {
 		return Session{}, errs.BadRequest("task_title is required")
 	}
+	running, err := s.repo.List(ctx, string(Running))
+	if err != nil {
+		return Session{}, err
+	}
+	if len(running) > 0 {
+		return Session{}, errs.Conflict("another running session already exists")
+	}
 
 	now := time.Now().UTC()
 	item := Session{

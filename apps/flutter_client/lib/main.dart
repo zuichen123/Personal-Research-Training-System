@@ -1,7 +1,12 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'core/logging/app_logger.dart';
 import 'providers/app_provider.dart';
+import 'screens/ai_screen.dart';
+import 'screens/debug_log_screen.dart';
 import 'screens/mistakes_screen.dart';
 import 'screens/plans_screen.dart';
 import 'screens/pomodoro_screen.dart';
@@ -9,7 +14,32 @@ import 'screens/practice_screen.dart';
 import 'screens/questions_screen.dart';
 import 'screens/resources_screen.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await AppLogger.instance.init();
+
+  FlutterError.onError = (details) {
+    AppLogger.instance.error(
+      module: 'app',
+      event: 'flutter.error',
+      message: 'Flutter异常',
+      error: details.exceptionAsString(),
+      stack: details.stack.toString(),
+    );
+    FlutterError.presentError(details);
+  };
+
+  PlatformDispatcher.instance.onError = (error, stack) {
+    AppLogger.instance.error(
+      module: 'app',
+      event: 'platform.error',
+      message: '平台异常',
+      error: error.toString(),
+      stack: stack.toString(),
+    );
+    return true;
+  };
+
   runApp(const MyApp());
 }
 
@@ -21,7 +51,7 @@ class MyApp extends StatelessWidget {
     return MultiProvider(
       providers: [ChangeNotifierProvider(create: (_) => AppProvider())],
       child: MaterialApp(
-        title: 'Self Study Tool',
+        title: '自学工具',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           useMaterial3: true,
@@ -61,6 +91,8 @@ class _MainScreenState extends State<MainScreen> {
     ResourcesScreen(),
     PlansScreen(),
     PomodoroScreen(),
+    AIScreen(),
+    DebugLogScreen(),
   ];
 
   @override
@@ -90,32 +122,42 @@ class _MainScreenState extends State<MainScreen> {
           NavigationDestination(
             icon: Icon(Icons.question_answer_outlined),
             selectedIcon: Icon(Icons.question_answer),
-            label: 'Questions',
+            label: '题库',
           ),
           NavigationDestination(
             icon: Icon(Icons.menu_book_outlined),
             selectedIcon: Icon(Icons.menu_book),
-            label: 'Mistakes',
+            label: '错题',
           ),
           NavigationDestination(
             icon: Icon(Icons.edit_note_outlined),
             selectedIcon: Icon(Icons.edit_note),
-            label: 'Practice',
+            label: '练习',
           ),
           NavigationDestination(
             icon: Icon(Icons.folder_outlined),
             selectedIcon: Icon(Icons.folder),
-            label: 'Resources',
+            label: '资料',
           ),
           NavigationDestination(
             icon: Icon(Icons.event_note_outlined),
             selectedIcon: Icon(Icons.event_note),
-            label: 'Plans',
+            label: '计划',
           ),
           NavigationDestination(
             icon: Icon(Icons.timer_outlined),
             selectedIcon: Icon(Icons.timer),
-            label: 'Focus',
+            label: '专注',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.psychology_outlined),
+            selectedIcon: Icon(Icons.psychology),
+            label: 'AI',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.bug_report_outlined),
+            selectedIcon: Icon(Icons.bug_report),
+            label: '日志',
           ),
         ],
       ),

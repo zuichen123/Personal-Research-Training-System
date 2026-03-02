@@ -38,7 +38,7 @@ func (h *Handler) submit(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) listAttempts(w http.ResponseWriter, r *http.Request) {
-	items, err := h.service.ListAttempts(r.Context())
+	items, err := h.service.ListAttemptsByQuestionID(r.Context(), r.URL.Query().Get("question_id"))
 	if err != nil {
 		httpx.WriteError(w, err)
 		return

@@ -74,10 +74,20 @@ type ScoreResult struct {
 	Advice []string `json:"advice"`
 }
 
+type ProviderStatus struct {
+	Provider string `json:"provider"`
+	Model    string `json:"model"`
+	Ready    bool   `json:"ready"`
+	Fallback bool   `json:"fallback"`
+}
+
 type Client interface {
 	GenerateQuestions(ctx context.Context, req GenerateRequest) ([]question.CreateInput, error)
 	GradeAnswer(ctx context.Context, req GradeRequest) (GradeResult, error)
 	BuildLearningPlan(ctx context.Context, req LearnRequest) (LearnResult, error)
 	EvaluateLearning(ctx context.Context, req EvaluateRequest) (EvaluateResult, error)
 	ScoreLearning(ctx context.Context, req ScoreRequest) (ScoreResult, error)
+	ProviderName() string
+	ModelName() string
+	IsReady() bool
 }

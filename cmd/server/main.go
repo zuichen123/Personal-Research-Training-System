@@ -2,20 +2,50 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"self-study-tool/internal/bootstrap"
 	"self-study-tool/internal/config"
+	"self-study-tool/internal/platform/observability/logx"
 )
 
 func main() {
 	cfg := config.Load()
+	if err := logx.Init(logx.Config{
+		AppEnv:              cfg.AppEnv,
+		Level:               cfg.LogLevel,
+		Format:              cfg.LogFormat,
+		StdoutEnabled:       cfg.LogStdoutEnabled,
+		FileEnabled:         cfg.LogFileEnabled,
+		FilePath:            cfg.LogFilePath,
+		FileMaxSizeMB:       cfg.LogFileMaxSizeMB,
+		FileMaxBackups:      cfg.LogFileMaxBackups,
+		FileMaxAgeDays:      cfg.LogFileMaxAgeDays,
+		FileCompress:        cfg.LogCompress,
+		HTTPBodyEnabled:     cfg.LogHTTPBodyEnabled,
+		HTTPBodyMaxBytes:    cfg.LogHTTPBodyMaxBytes,
+		RedactionMode:       cfg.LogRedactionMode,
+		LogSQLEnabled:       cfg.LogSQLEnabled,
+		LogSQLSlowMS:        cfg.LogSQLSlowMS,
+		LogAISummaryEnabled: cfg.LogAISummaryEnabled,
+	}); err != nil {
+		slog.Error("init logger failed", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	slog.Info("application starting",
+		slog.String("event", "app.start"),
+		slog.String("http_port", cfg.HTTPPort),
+		slog.String("ai_provider", cfg.AIProvider),
+		slog.String("sqlite_path", cfg.DatabasePath),
+	)
+
 	app, err := bootstrap.NewApp(cfg)
 	if err != nil {
-		log.Fatalf("bootstrap app: %v", err)
+		slog.Error("bootstrap app failed", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -28,10 +58,11 @@ func main() {
 
 	select {
 	case <-ctx.Done():
-		log.Println("shutdown signal received")
+		slog.Info("shutdown signal received", slog.String("event", "app.shutdown.signal"))
 	case err := <-errCh:
 		if err != nil {
-			log.Fatalf("server error: %v", err)
+			slog.Error("server error", slog.String("error", err.Error()))
+			os.Exit(1)
 		}
 	}
 
@@ -39,6 +70,8 @@ func main() {
 	defer cancel()
 
 	if err := app.Shutdown(shutdownCtx); err != nil {
-		log.Fatalf("graceful shutdown failed: %v", err)
+		slog.Error("graceful shutdown failed", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
+	slog.Info("application stopped", slog.String("event", "app.shutdown.complete"))
 }

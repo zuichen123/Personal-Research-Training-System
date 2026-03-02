@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../core/logging/app_logger.dart';
+import '../i18n/error_mapper.dart';
 import '../models/mistake.dart';
 import '../models/plan.dart';
 import '../models/pomodoro.dart';
@@ -8,10 +10,19 @@ import '../models/question.dart';
 import '../models/resource.dart';
 import '../services/api_service.dart';
 
-enum DataSection { questions, mistakes, attempts, resources, plans, pomodoro }
+enum DataSection {
+  questions,
+  mistakes,
+  attempts,
+  resources,
+  plans,
+  pomodoro,
+  ai,
+}
 
 class AppProvider with ChangeNotifier {
   final ApiService _api = ApiService();
+  final AppLogger _logger = AppLogger.instance;
 
   final Map<DataSection, bool> _isSectionLoading = {
     DataSection.questions: false,
@@ -20,6 +31,7 @@ class AppProvider with ChangeNotifier {
     DataSection.resources: false,
     DataSection.plans: false,
     DataSection.pomodoro: false,
+    DataSection.ai: false,
   };
 
   final Map<DataSection, bool> _isSectionLoaded = {
@@ -29,6 +41,7 @@ class AppProvider with ChangeNotifier {
     DataSection.resources: false,
     DataSection.plans: false,
     DataSection.pomodoro: false,
+    DataSection.ai: false,
   };
 
   String? _errorMessage;
@@ -60,6 +73,27 @@ class AppProvider with ChangeNotifier {
   List<PomodoroSession> _pomodoroSessions = [];
   List<PomodoroSession> get pomodoroSessions => _pomodoroSessions;
 
+  Map<String, dynamic> _aiProviderStatus = {};
+  Map<String, dynamic> get aiProviderStatus => _aiProviderStatus;
+
+  Map<String, dynamic>? _aiLearningPlan;
+  Map<String, dynamic>? get aiLearningPlan => _aiLearningPlan;
+
+  Map<String, dynamic>? _aiGradeResult;
+  Map<String, dynamic>? get aiGradeResult => _aiGradeResult;
+
+  Map<String, dynamic>? _aiEvaluateResult;
+  Map<String, dynamic>? get aiEvaluateResult => _aiEvaluateResult;
+
+  Map<String, dynamic>? _aiScoreResult;
+  Map<String, dynamic>? get aiScoreResult => _aiScoreResult;
+
+  List<Question> _aiGeneratedQuestions = [];
+  List<Question> get aiGeneratedQuestions => _aiGeneratedQuestions;
+
+  List<Question> _aiSearchQuestions = [];
+  List<Question> get aiSearchQuestions => _aiSearchQuestions;
+
   PomodoroSession? get runningPomodoro {
     for (final item in _pomodoroSessions) {
       if (item.status == 'running') {
@@ -89,58 +123,60 @@ class AppProvider with ChangeNotifier {
       case 5:
         await ensurePomodoroLoaded();
         break;
+      case 6:
+        await ensureAILoaded();
+        break;
       default:
         return;
     }
   }
 
   Future<void> ensureQuestionsLoaded() async {
-    if (isSectionLoaded(DataSection.questions)) {
-      return;
+    if (!isSectionLoaded(DataSection.questions)) {
+      await fetchQuestions();
     }
-    await fetchQuestions();
   }
 
   Future<void> ensureMistakesLoaded() async {
-    if (isSectionLoaded(DataSection.mistakes)) {
-      return;
+    if (!isSectionLoaded(DataSection.mistakes)) {
+      await fetchMistakes();
     }
-    await fetchMistakes();
   }
 
   Future<void> ensureAttemptsLoaded() async {
-    if (isSectionLoaded(DataSection.attempts)) {
-      return;
+    if (!isSectionLoaded(DataSection.attempts)) {
+      await fetchAttempts();
     }
-    await fetchAttempts();
   }
 
   Future<void> ensureResourcesLoaded() async {
-    if (isSectionLoaded(DataSection.resources)) {
-      return;
+    if (!isSectionLoaded(DataSection.resources)) {
+      await fetchResources();
     }
-    await fetchResources();
   }
 
   Future<void> ensurePlansLoaded() async {
-    if (isSectionLoaded(DataSection.plans)) {
-      return;
+    if (!isSectionLoaded(DataSection.plans)) {
+      await fetchPlans();
     }
-    await fetchPlans();
   }
 
   Future<void> ensurePomodoroLoaded() async {
-    if (isSectionLoaded(DataSection.pomodoro)) {
-      return;
+    if (!isSectionLoaded(DataSection.pomodoro)) {
+      await fetchPomodoroSessions();
     }
-    await fetchPomodoroSessions();
+  }
+
+  Future<void> ensureAILoaded() async {
+    if (!isSectionLoaded(DataSection.ai)) {
+      await fetchAIProviderStatus();
+    }
   }
 
   Future<void> fetchQuestions({bool force = false}) async {
     if (!force && isSectionLoading(DataSection.questions)) {
       return;
     }
-
     await _runSection(DataSection.questions, () async {
       _questions = await _api.getQuestions();
       _isSectionLoaded[DataSection.questions] = true;
@@ -148,84 +184,168 @@ class AppProvider with ChangeNotifier {
   }
 
   Future<void> createQuestion(Map<String, dynamic> input) async {
-    try {
+    await _runAction('创建题目', () async {
       final q = await _api.createQuestion(input);
       _questions.insert(0, q);
       _isSectionLoaded[DataSection.questions] = true;
-      _errorMessage = null;
       notifyListeners();
-    } catch (e) {
-      _errorMessage = e.toString();
-      notifyListeners();
-      rethrow;
-    }
+    });
   }
 
-  Future<void> fetchMistakes({bool force = false}) async {
+  Future<void> updateQuestion(String id, Map<String, dynamic> input) async {
+    await _runAction('更新题目', () async {
+      final updated = await _api.updateQuestion(id, input);
+      final idx = _questions.indexWhere((e) => e.id == updated.id);
+      if (idx >= 0) {
+        _questions[idx] = updated;
+      } else {
+        _questions.insert(0, updated);
+      }
+      notifyListeners();
+    });
+  }
+
+  Future<void> deleteQuestion(String id) async {
+    await _runAction('删除题目', () async {
+      await _api.deleteQuestion(id);
+      _questions.removeWhere((e) => e.id == id);
+      notifyListeners();
+    });
+  }
+
+  Future<void> fetchMistakes({bool force = false, String? questionId}) async {
     if (!force && isSectionLoading(DataSection.mistakes)) {
       return;
     }
-
     await _runSection(DataSection.mistakes, () async {
-      _mistakes = await _api.getMistakes();
+      _mistakes = await _api.getMistakes(questionId: questionId);
       _isSectionLoaded[DataSection.mistakes] = true;
     });
   }
 
-  Future<void> fetchAttempts({bool force = false}) async {
+  Future<void> deleteMistake(String id) async {
+    await _runAction('删除错题', () async {
+      await _api.deleteMistake(id);
+      _mistakes.removeWhere((e) => e.id == id);
+      notifyListeners();
+    });
+  }
+
+  Future<void> fetchAttempts({bool force = false, String? questionId}) async {
     if (!force && isSectionLoading(DataSection.attempts)) {
       return;
     }
-
     await _runSection(DataSection.attempts, () async {
-      _attempts = await _api.getPracticeAttempts();
+      _attempts = await _api.getPracticeAttempts(questionId: questionId);
       _isSectionLoaded[DataSection.attempts] = true;
     });
   }
 
-  Future<void> fetchResources({bool force = false}) async {
+  Future<void> submitPractice(
+    String questionId,
+    List<String> userAnswers,
+  ) async {
+    await _runAction('提交练习', () async {
+      final attempt = await _api.submitPractice(questionId, userAnswers);
+      _attempts.insert(0, attempt);
+      _isSectionLoaded[DataSection.attempts] = true;
+      if (!attempt.correct) {
+        await fetchMistakes(force: true);
+      }
+      notifyListeners();
+    });
+  }
+
+  Future<void> fetchResources({bool force = false, String? questionId}) async {
     if (!force && isSectionLoading(DataSection.resources)) {
       return;
     }
-
     await _runSection(DataSection.resources, () async {
-      _resources = await _api.getResources();
+      _resources = await _api.getResources(questionId: questionId);
       _isSectionLoaded[DataSection.resources] = true;
     });
   }
 
-  Future<void> fetchPlans({bool force = false}) async {
+  Future<void> uploadResource({
+    required String filePath,
+    required String category,
+    required String tags,
+    String questionId = '',
+  }) async {
+    await _runAction('上传资料', () async {
+      final item = await _api.uploadResource(
+        filePath: filePath,
+        category: category,
+        tags: tags,
+        questionId: questionId,
+      );
+      _resources.insert(0, item);
+      _isSectionLoaded[DataSection.resources] = true;
+      notifyListeners();
+    });
+  }
+
+  Future<DownloadedResource> downloadResource(String id) {
+    return _api.downloadResource(id);
+  }
+
+  Future<void> deleteResource(String id) async {
+    await _runAction('删除资料', () async {
+      await _api.deleteResource(id);
+      _resources.removeWhere((e) => e.id == id);
+      notifyListeners();
+    });
+  }
+
+  Future<void> fetchPlans({bool force = false, String? planType}) async {
     if (!force && isSectionLoading(DataSection.plans)) {
       return;
     }
-
     await _runSection(DataSection.plans, () async {
-      _plans = await _api.getPlans();
+      _plans = await _api.getPlans(planType: planType);
       _isSectionLoaded[DataSection.plans] = true;
     });
   }
 
   Future<void> createPlan(Map<String, dynamic> input) async {
-    try {
+    await _runAction('创建计划', () async {
       final item = await _api.createPlan(input);
       _plans.insert(0, item);
       _isSectionLoaded[DataSection.plans] = true;
-      _errorMessage = null;
       notifyListeners();
-    } catch (e) {
-      _errorMessage = e.toString();
-      notifyListeners();
-      rethrow;
-    }
+    });
   }
 
-  Future<void> fetchPomodoroSessions({bool force = false}) async {
+  Future<void> updatePlan(String id, Map<String, dynamic> input) async {
+    await _runAction('更新计划', () async {
+      final updated = await _api.updatePlan(id, input);
+      final idx = _plans.indexWhere((e) => e.id == updated.id);
+      if (idx >= 0) {
+        _plans[idx] = updated;
+      } else {
+        _plans.insert(0, updated);
+      }
+      notifyListeners();
+    });
+  }
+
+  Future<void> deletePlan(String id) async {
+    await _runAction('删除计划', () async {
+      await _api.deletePlan(id);
+      _plans.removeWhere((e) => e.id == id);
+      notifyListeners();
+    });
+  }
+
+  Future<void> fetchPomodoroSessions({
+    bool force = false,
+    String? status,
+  }) async {
     if (!force && isSectionLoading(DataSection.pomodoro)) {
       return;
     }
-
     await _runSection(DataSection.pomodoro, () async {
-      _pomodoroSessions = await _api.getPomodoroSessions();
+      _pomodoroSessions = await _api.getPomodoroSessions(status: status);
       _isSectionLoaded[DataSection.pomodoro] = true;
     });
   }
@@ -236,7 +356,7 @@ class AppProvider with ChangeNotifier {
     int breakMinutes = 5,
     String planId = '',
   }) async {
-    try {
+    await _runAction('开始专注', () async {
       final session = await _api.startPomodoro(
         taskTitle: taskTitle,
         durationMinutes: durationMinutes,
@@ -245,17 +365,12 @@ class AppProvider with ChangeNotifier {
       );
       _pomodoroSessions.insert(0, session);
       _isSectionLoaded[DataSection.pomodoro] = true;
-      _errorMessage = null;
       notifyListeners();
-    } catch (e) {
-      _errorMessage = e.toString();
-      notifyListeners();
-      rethrow;
-    }
+    });
   }
 
   Future<void> endPomodoro(String id, {String status = 'completed'}) async {
-    try {
+    await _runAction('结束专注', () async {
       final updated = await _api.endPomodoro(id, status: status);
       final idx = _pomodoroSessions.indexWhere((e) => e.id == updated.id);
       if (idx >= 0) {
@@ -263,36 +378,77 @@ class AppProvider with ChangeNotifier {
       } else {
         _pomodoroSessions.insert(0, updated);
       }
-      _errorMessage = null;
       notifyListeners();
-    } catch (e) {
-      _errorMessage = e.toString();
-      notifyListeners();
-      rethrow;
-    }
+    });
   }
 
-  Future<void> submitPractice(
-    String questionId,
-    List<String> userAnswers,
-  ) async {
-    try {
-      final attempt = await _api.submitPractice(questionId, userAnswers);
-      _attempts.insert(0, attempt);
-      _isSectionLoaded[DataSection.attempts] = true;
-
-      _isSectionLoaded[DataSection.mistakes] = false;
-      if (!attempt.correct) {
-        await fetchMistakes(force: true);
-      }
-
-      _errorMessage = null;
-      notifyListeners();
-    } catch (e) {
-      _errorMessage = e.toString();
-      notifyListeners();
-      rethrow;
+  Future<void> fetchAIProviderStatus({bool force = false}) async {
+    if (!force && isSectionLoading(DataSection.ai)) {
+      return;
     }
+    await _runSection(DataSection.ai, () async {
+      _aiProviderStatus = await _api.getAIProviderStatus();
+      _isSectionLoaded[DataSection.ai] = true;
+    });
+  }
+
+  Future<void> buildLearningPlan(Map<String, dynamic> input) async {
+    await _runAction('生成学习计划', () async {
+      _aiLearningPlan = await _api.buildLearningPlan(input);
+      notifyListeners();
+    });
+  }
+
+  Future<void> generateAIQuestions(
+    Map<String, dynamic> input, {
+    bool persist = false,
+  }) async {
+    await _runAction('AI出题', () async {
+      _aiGeneratedQuestions = await _api.generateAIQuestions(
+        input,
+        persist: persist,
+      );
+      if (persist) {
+        await fetchQuestions(force: true);
+      }
+      notifyListeners();
+    });
+  }
+
+  Future<void> searchAIQuestions({
+    required String topic,
+    String subject = '',
+    int count = 5,
+  }) async {
+    await _runAction('AI搜题', () async {
+      _aiSearchQuestions = await _api.searchAIQuestions(
+        topic: topic,
+        subject: subject,
+        count: count,
+      );
+      notifyListeners();
+    });
+  }
+
+  Future<void> gradeWithAI(Map<String, dynamic> input) async {
+    await _runAction('AI批阅', () async {
+      _aiGradeResult = await _api.gradeWithAI(input);
+      notifyListeners();
+    });
+  }
+
+  Future<void> evaluateWithAI(Map<String, dynamic> input) async {
+    await _runAction('AI评估', () async {
+      _aiEvaluateResult = await _api.evaluateWithAI(input);
+      notifyListeners();
+    });
+  }
+
+  Future<void> scoreWithAI(Map<String, dynamic> input) async {
+    await _runAction('AI评分', () async {
+      _aiScoreResult = await _api.scoreWithAI(input);
+      notifyListeners();
+    });
   }
 
   Future<void> _runSection(
@@ -304,9 +460,46 @@ class AppProvider with ChangeNotifier {
       await action();
       _errorMessage = null;
     } catch (e) {
-      _errorMessage = e.toString();
+      _errorMessage = mapErrorToZh(e);
+      _logger.error(
+        module: 'provider',
+        event: 'section.error',
+        message: '分区数据加载失败',
+        data: {'section': section.name},
+        error: e.toString(),
+      );
     } finally {
       _setSectionLoading(section, false);
+    }
+  }
+
+  Future<void> _runAction(
+    String actionName,
+    Future<void> Function() action,
+  ) async {
+    try {
+      _logger.info(
+        module: 'provider',
+        event: 'action.start',
+        message: '$actionName开始',
+      );
+      await action();
+      _errorMessage = null;
+      _logger.info(
+        module: 'provider',
+        event: 'action.end',
+        message: '$actionName成功',
+      );
+    } catch (e) {
+      _errorMessage = mapErrorToZh(e);
+      _logger.error(
+        module: 'provider',
+        event: 'action.error',
+        message: '$actionName失败',
+        error: e.toString(),
+      );
+      notifyListeners();
+      rethrow;
     }
   }
 

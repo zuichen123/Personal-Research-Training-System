@@ -5,9 +5,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"self-study-tool/internal/config"
@@ -20,6 +22,7 @@ import (
 	"self-study-tool/internal/modules/resource"
 	"self-study-tool/internal/modules/system"
 	"self-study-tool/internal/platform/httpserver"
+	"self-study-tool/internal/platform/observability/logx"
 	sqlitestore "self-study-tool/internal/platform/storage/sqlite"
 )
 
@@ -55,16 +58,13 @@ func NewApp(cfg config.Config) (*App, error) {
 	pomodoroService := pomodoro.NewService(pomodoroRepo)
 	resourceService := resource.NewService(resourceRepo, questionService)
 
-	var aiClient ai.Client
-	switch cfg.AIProvider {
-	case "mock", "":
-		aiClient = ai.NewMockClient(cfg.AIMockLatency)
-	default:
+	aiClient, fallbackUsed, err := buildAIClient(cfg)
+	if err != nil {
 		_ = db.Close()
-		return nil, fmt.Errorf("unsupported ai provider: %s", cfg.AIProvider)
+		return nil, err
 	}
 
-	aiService := ai.NewService(aiClient, questionService)
+	aiService := ai.NewService(aiClient, questionService, fallbackUsed)
 	practiceService := practice.NewService(practiceRepo, questionService, aiService, mistakeService)
 
 	questionHandler := question.NewHandler(questionService)
@@ -76,7 +76,13 @@ func NewApp(cfg config.Config) (*App, error) {
 	resourceHandler := resource.NewHandler(resourceService, cfg.UploadMaxBytes)
 	systemHandler := system.NewHandler()
 
-	router := httpserver.NewRouter(cfg.WriteTimeout, func(r chi.Router) {
+	router := httpserver.NewRouter(httpserver.MiddlewareConfig{
+		Timeout:          cfg.WriteTimeout,
+		HTTPBodyEnabled:  cfg.LogHTTPBodyEnabled,
+		HTTPBodyMaxBytes: cfg.LogHTTPBodyMaxBytes,
+		RedactionMode:    cfg.LogRedactionMode,
+		AppEnv:           cfg.AppEnv,
+	}, func(r chi.Router) {
 		r.Get("/", func(w http.ResponseWriter, _ *http.Request) {
 			_, _ = w.Write([]byte("Self Study Tool API"))
 		})
@@ -132,4 +138,52 @@ func ensureDatabaseDir(dbPath string) error {
 		return fmt.Errorf("create database dir: %w", err)
 	}
 	return nil
+}
+
+func buildAIClient(cfg config.Config) (ai.Client, bool, error) {
+	provider := strings.ToLower(strings.TrimSpace(cfg.AIProvider))
+	fallbackToMock := cfg.AIFallbackToMock
+
+	switch provider {
+	case "", "mock":
+		return ai.NewMockClient(cfg.AIMockLatency), false, nil
+	case "openai":
+		client := ai.NewOpenAIClient(ai.OpenAIConfig{
+			BaseURL: cfg.AIOpenAIBaseURL,
+			APIKey:  cfg.AIOpenAIAPIKey,
+			Model:   cfg.AIOpenAIModel,
+			Timeout: cfg.AIHTTPTimeout,
+		})
+		if client.IsReady() {
+			return client, false, nil
+		}
+	case "gemini":
+		client := ai.NewGeminiClient(ai.GeminiConfig{
+			APIKey:  cfg.AIGeminiAPIKey,
+			Model:   cfg.AIGeminiModel,
+			Timeout: cfg.AIHTTPTimeout,
+		})
+		if client.IsReady() {
+			return client, false, nil
+		}
+	case "claude":
+		client := ai.NewClaudeClient(ai.ClaudeConfig{
+			APIKey:  cfg.AIClaudeAPIKey,
+			Model:   cfg.AIClaudeModel,
+			Timeout: cfg.AIHTTPTimeout,
+		})
+		if client.IsReady() {
+			return client, false, nil
+		}
+	default:
+		return nil, false, fmt.Errorf("unsupported ai provider: %s", cfg.AIProvider)
+	}
+
+	if fallbackToMock {
+		logx.L().Warn("ai provider is not ready, fallback to mock",
+			slog.String("ai_provider", provider),
+		)
+		return ai.NewMockClient(cfg.AIMockLatency), true, nil
+	}
+	return nil, false, fmt.Errorf("ai provider %q is not ready, check credentials/model", provider)
 }

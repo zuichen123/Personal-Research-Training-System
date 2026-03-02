@@ -13,10 +13,24 @@ import (
 type Service struct {
 	client          Client
 	questionService *question.Service
+	fallbackEnabled bool
 }
 
-func NewService(client Client, questionService *question.Service) *Service {
-	return &Service{client: client, questionService: questionService}
+func NewService(client Client, questionService *question.Service, fallbackEnabled bool) *Service {
+	return &Service{
+		client:          client,
+		questionService: questionService,
+		fallbackEnabled: fallbackEnabled,
+	}
+}
+
+func (s *Service) ProviderStatus() ProviderStatus {
+	return ProviderStatus{
+		Provider: s.client.ProviderName(),
+		Model:    s.client.ModelName(),
+		Ready:    s.client.IsReady(),
+		Fallback: s.fallbackEnabled,
+	}
 }
 
 func (s *Service) Generate(ctx context.Context, req GenerateRequest, persist bool) ([]question.Question, error) {

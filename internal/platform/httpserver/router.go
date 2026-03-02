@@ -13,13 +13,14 @@ type Config struct {
 	WriteTimeout time.Duration
 }
 
-func NewRouter(timeout time.Duration, registrars ...func(r chi.Router)) *chi.Mux {
+func NewRouter(mwCfg MiddlewareConfig, registrars ...func(r chi.Router)) *chi.Mux {
 	r := chi.NewRouter()
-	r.Use(RequestMiddleware(timeout))
+	r.Use(RequestMiddleware(mwCfg))
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{"*"},
 		AllowedMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type"},
+		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type", "X-Trace-ID"},
+		ExposedHeaders: []string{"X-Trace-ID"},
 	}))
 
 	for _, registrar := range registrars {

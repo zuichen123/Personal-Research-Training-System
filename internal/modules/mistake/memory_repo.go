@@ -3,6 +3,8 @@ package mistake
 import (
 	"context"
 	"sync"
+
+	"self-study-tool/internal/shared/errs"
 )
 
 type MemoryRepository struct {
@@ -41,4 +43,29 @@ func (r *MemoryRepository) ListByQuestionID(_ context.Context, questionID string
 		}
 	}
 	return result, nil
+}
+
+func (r *MemoryRepository) GetByID(_ context.Context, id string) (Record, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for _, item := range r.items {
+		if item.ID == id {
+			return item, nil
+		}
+	}
+	return Record{}, errs.NotFound("mistake not found")
+}
+
+func (r *MemoryRepository) Delete(_ context.Context, id string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for i, item := range r.items {
+		if item.ID == id {
+			r.items = append(r.items[:i], r.items[i+1:]...)
+			return nil
+		}
+	}
+	return errs.NotFound("mistake not found")
 }

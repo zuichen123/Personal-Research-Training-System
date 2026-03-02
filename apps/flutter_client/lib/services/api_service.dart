@@ -1,8 +1,11 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../core/logging/app_logger.dart';
+import '../core/logging/trace_id.dart';
 import '../models/mistake.dart';
 import '../models/plan.dart';
 import '../models/pomodoro.dart';
@@ -10,31 +13,59 @@ import '../models/practice.dart';
 import '../models/question.dart';
 import '../models/resource.dart';
 
-class ApiService {
-  final String baseUrl;
-  final http.Client _client;
+class ApiException implements Exception {
+  ApiException({
+    required this.code,
+    required this.message,
+    required this.statusCode,
+  });
 
+  final String code;
+  final String message;
+  final int statusCode;
+
+  @override
+  String toString() => '$message (HTTP $statusCode, code=$code)';
+}
+
+class DownloadedResource {
+  DownloadedResource({
+    required this.filename,
+    required this.contentType,
+    required this.bytes,
+  });
+
+  final String filename;
+  final String contentType;
+  final Uint8List bytes;
+}
+
+class ApiService {
   ApiService({String? baseUrl, http.Client? client})
     : baseUrl = baseUrl ?? _defaultBaseUrl(),
       _client = client ?? http.Client();
+
+  final String baseUrl;
+  final http.Client _client;
+  final AppLogger _logger = AppLogger.instance;
 
   static String _defaultBaseUrl() {
     if (kIsWeb) {
       return 'http://127.0.0.1:8080/api/v1';
     }
-
     if (defaultTargetPlatform == TargetPlatform.android) {
       return 'http://10.0.2.2:8080/api/v1';
     }
-
     return 'http://127.0.0.1:8080/api/v1';
   }
 
   Future<bool> checkHealth() async {
     try {
-      final response = await _client
-          .get(Uri.parse('$baseUrl/healthz'))
-          .timeout(const Duration(seconds: 8));
+      final response = await _request(
+        method: 'GET',
+        path: '/healthz',
+        timeout: const Duration(seconds: 8),
+      );
       return response.statusCode == 200;
     } catch (_) {
       return false;
@@ -49,104 +80,198 @@ class ApiService {
     if (source != null && source.trim().isNotEmpty) {
       query['source'] = source.trim();
     }
+    final response = await _request(
+      method: 'GET',
+      path: '/questions',
+      query: query,
+    );
+    return _extractDataList(response).map(Question.fromJson).toList();
+  }
 
-    final uri = Uri.parse('$baseUrl/questions').replace(queryParameters: query);
-    final response = await _client
-        .get(uri)
-        .timeout(const Duration(seconds: 10));
-    _throwApiErrorIfNeeded(response, 'Failed to load questions');
-
-    return _extractDataList(response.body).map(Question.fromJson).toList();
+  Future<Question> getQuestionById(String id) async {
+    final response = await _request(method: 'GET', path: '/questions/$id');
+    return Question.fromJson(_extractDataMap(response));
   }
 
   Future<Question> createQuestion(Map<String, dynamic> input) async {
-    final response = await _client
-        .post(
-          Uri.parse('$baseUrl/questions'),
-          headers: {'Content-Type': 'application/json'},
-          body: json.encode(input),
-        )
-        .timeout(const Duration(seconds: 10));
+    final response = await _request(
+      method: 'POST',
+      path: '/questions',
+      jsonBody: input,
+    );
+    return Question.fromJson(_extractDataMap(response));
+  }
 
-    if (response.statusCode != 201 && response.statusCode != 200) {
-      _throwApiErrorIfNeeded(response, 'Failed to create question');
-    }
+  Future<Question> updateQuestion(String id, Map<String, dynamic> input) async {
+    final response = await _request(
+      method: 'PUT',
+      path: '/questions/$id',
+      jsonBody: input,
+    );
+    return Question.fromJson(_extractDataMap(response));
+  }
 
-    return Question.fromJson(_extractDataMap(response.body));
+  Future<void> deleteQuestion(String id) async {
+    await _request(method: 'DELETE', path: '/questions/$id');
   }
 
   Future<PracticeAttempt> submitPractice(
     String questionId,
     List<String> userAnswer,
   ) async {
-    final response = await _client
-        .post(
-          Uri.parse('$baseUrl/practice/submit'),
-          headers: {'Content-Type': 'application/json'},
-          body: json.encode({
-            'question_id': questionId,
-            'user_answer': userAnswer,
-          }),
-        )
-        .timeout(const Duration(seconds: 10));
+    final response = await _request(
+      method: 'POST',
+      path: '/practice/submit',
+      jsonBody: {'question_id': questionId, 'user_answer': userAnswer},
+    );
+    return PracticeAttempt.fromJson(_extractDataMap(response));
+  }
 
-    if (response.statusCode != 200 && response.statusCode != 201) {
-      _throwApiErrorIfNeeded(response, 'Failed to submit practice');
+  Future<List<PracticeAttempt>> getPracticeAttempts({
+    String? questionId,
+  }) async {
+    final query = <String, String>{};
+    if (questionId != null && questionId.trim().isNotEmpty) {
+      query['question_id'] = questionId.trim();
+    }
+    final response = await _request(
+      method: 'GET',
+      path: '/practice/attempts',
+      query: query,
+    );
+    return _extractDataList(response).map(PracticeAttempt.fromJson).toList();
+  }
+
+  Future<List<MistakeRecord>> getMistakes({String? questionId}) async {
+    final query = <String, String>{};
+    if (questionId != null && questionId.trim().isNotEmpty) {
+      query['question_id'] = questionId.trim();
+    }
+    final response = await _request(
+      method: 'GET',
+      path: '/mistakes',
+      query: query,
+    );
+    return _extractDataList(response).map(MistakeRecord.fromJson).toList();
+  }
+
+  Future<MistakeRecord> getMistakeById(String id) async {
+    final response = await _request(method: 'GET', path: '/mistakes/$id');
+    return MistakeRecord.fromJson(_extractDataMap(response));
+  }
+
+  Future<MistakeRecord> createMistake(Map<String, dynamic> input) async {
+    final response = await _request(
+      method: 'POST',
+      path: '/mistakes',
+      jsonBody: input,
+    );
+    return MistakeRecord.fromJson(_extractDataMap(response));
+  }
+
+  Future<void> deleteMistake(String id) async {
+    await _request(method: 'DELETE', path: '/mistakes/$id');
+  }
+
+  Future<List<ResourceMaterial>> getResources({String? questionId}) async {
+    final query = <String, String>{};
+    if (questionId != null && questionId.trim().isNotEmpty) {
+      query['question_id'] = questionId.trim();
+    }
+    final response = await _request(
+      method: 'GET',
+      path: '/resources',
+      query: query,
+    );
+    return _extractDataList(response).map(ResourceMaterial.fromJson).toList();
+  }
+
+  Future<ResourceMaterial> getResourceById(String id) async {
+    final response = await _request(method: 'GET', path: '/resources/$id');
+    return ResourceMaterial.fromJson(_extractDataMap(response));
+  }
+
+  Future<ResourceMaterial> uploadResource({
+    required String filePath,
+    required String category,
+    required String tags,
+    String questionId = '',
+  }) async {
+    final traceId = newTraceId();
+    final uri = Uri.parse('$baseUrl/resources');
+    final request = http.MultipartRequest('POST', uri)
+      ..files.add(await http.MultipartFile.fromPath('file', filePath))
+      ..fields['category'] = category
+      ..fields['tags'] = tags;
+    if (questionId.trim().isNotEmpty) {
+      request.fields['question_id'] = questionId.trim();
+    }
+    request.headers['X-Trace-ID'] = traceId;
+
+    final start = DateTime.now();
+    _logger.info(
+      module: 'api',
+      event: 'api.call.start',
+      message: '上传资料请求开始',
+      data: {'method': 'POST', 'path': '/resources', 'trace_id': traceId},
+    );
+    final streamed = await request.send();
+    final response = await http.Response.fromStream(streamed);
+    final latency = DateTime.now().difference(start).inMilliseconds;
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final ex = _toApiException(response);
+      _logger.error(
+        module: 'api',
+        event: 'api.call.error',
+        message: '上传资料失败',
+        data: {
+          'method': 'POST',
+          'path': '/resources',
+          'status': response.statusCode,
+          'latency_ms': latency,
+          'trace_id': traceId,
+        },
+        error: ex.toString(),
+      );
+      throw ex;
     }
 
-    return PracticeAttempt.fromJson(_extractDataMap(response.body));
+    _logger.info(
+      module: 'api',
+      event: 'api.call.end',
+      message: '上传资料成功',
+      data: {
+        'method': 'POST',
+        'path': '/resources',
+        'status': response.statusCode,
+        'latency_ms': latency,
+        'trace_id': traceId,
+      },
+    );
+    return ResourceMaterial.fromJson(_extractDataMap(response));
   }
 
-  Future<List<PracticeAttempt>> getPracticeAttempts() async {
-    final response = await _client
-        .get(Uri.parse('$baseUrl/practice/attempts'))
-        .timeout(const Duration(seconds: 10));
-    _throwApiErrorIfNeeded(response, 'Failed to load practice attempts');
-
-    return _extractDataList(
-      response.body,
-    ).map(PracticeAttempt.fromJson).toList();
+  Future<DownloadedResource> downloadResource(String id) async {
+    final response = await _request(
+      method: 'GET',
+      path: '/resources/$id/download',
+      expectJson: false,
+    );
+    final contentType =
+        response.headers['content-type'] ?? 'application/octet-stream';
+    final disposition = response.headers['content-disposition'] ?? '';
+    final filename =
+        _filenameFromDisposition(disposition) ?? 'resource_$id.bin';
+    return DownloadedResource(
+      filename: filename,
+      contentType: contentType,
+      bytes: response.bodyBytes,
+    );
   }
 
-  Future<List<MistakeRecord>> getMistakes() async {
-    final response = await _client
-        .get(Uri.parse('$baseUrl/mistakes'))
-        .timeout(const Duration(seconds: 10));
-    _throwApiErrorIfNeeded(response, 'Failed to load mistakes');
-
-    return _extractDataList(response.body).map(MistakeRecord.fromJson).toList();
-  }
-
-  Future<List<ResourceMaterial>> getResources() async {
-    final response = await _client
-        .get(Uri.parse('$baseUrl/resources'))
-        .timeout(const Duration(seconds: 10));
-    _throwApiErrorIfNeeded(response, 'Failed to load resources');
-
-    return _extractDataList(
-      response.body,
-    ).map(ResourceMaterial.fromJson).toList();
-  }
-
-  Future<ResourceMaterial> uploadResource(
-    String filePath,
-    String category,
-    String tags,
-  ) async {
-    final request =
-        http.MultipartRequest('POST', Uri.parse('$baseUrl/resources'))
-          ..files.add(await http.MultipartFile.fromPath('file', filePath))
-          ..fields['category'] = category
-          ..fields['tags'] = tags;
-
-    final streamedResponse = await request.send();
-    final response = await http.Response.fromStream(streamedResponse);
-
-    if (response.statusCode != 200 && response.statusCode != 201) {
-      _throwApiErrorIfNeeded(response, 'Failed to upload resource');
-    }
-
-    return ResourceMaterial.fromJson(_extractDataMap(response.body));
+  Future<void> deleteResource(String id) async {
+    await _request(method: 'DELETE', path: '/resources/$id');
   }
 
   Future<List<PlanItem>> getPlans({String? planType}) async {
@@ -154,30 +279,39 @@ class ApiService {
     if (planType != null && planType.trim().isNotEmpty) {
       query['plan_type'] = planType.trim();
     }
+    final response = await _request(
+      method: 'GET',
+      path: '/plans',
+      query: query,
+    );
+    return _extractDataList(response).map(PlanItem.fromJson).toList();
+  }
 
-    final uri = Uri.parse('$baseUrl/plans').replace(queryParameters: query);
-    final response = await _client
-        .get(uri)
-        .timeout(const Duration(seconds: 10));
-    _throwApiErrorIfNeeded(response, 'Failed to load plans');
-
-    return _extractDataList(response.body).map(PlanItem.fromJson).toList();
+  Future<PlanItem> getPlanById(String id) async {
+    final response = await _request(method: 'GET', path: '/plans/$id');
+    return PlanItem.fromJson(_extractDataMap(response));
   }
 
   Future<PlanItem> createPlan(Map<String, dynamic> input) async {
-    final response = await _client
-        .post(
-          Uri.parse('$baseUrl/plans'),
-          headers: {'Content-Type': 'application/json'},
-          body: json.encode(input),
-        )
-        .timeout(const Duration(seconds: 10));
+    final response = await _request(
+      method: 'POST',
+      path: '/plans',
+      jsonBody: input,
+    );
+    return PlanItem.fromJson(_extractDataMap(response));
+  }
 
-    if (response.statusCode != 200 && response.statusCode != 201) {
-      _throwApiErrorIfNeeded(response, 'Failed to create plan');
-    }
+  Future<PlanItem> updatePlan(String id, Map<String, dynamic> input) async {
+    final response = await _request(
+      method: 'PUT',
+      path: '/plans/$id',
+      jsonBody: input,
+    );
+    return PlanItem.fromJson(_extractDataMap(response));
+  }
 
-    return PlanItem.fromJson(_extractDataMap(response.body));
+  Future<void> deletePlan(String id) async {
+    await _request(method: 'DELETE', path: '/plans/$id');
   }
 
   Future<List<PomodoroSession>> getPomodoroSessions({String? status}) async {
@@ -185,16 +319,12 @@ class ApiService {
     if (status != null && status.trim().isNotEmpty) {
       query['status'] = status.trim();
     }
-
-    final uri = Uri.parse('$baseUrl/pomodoro').replace(queryParameters: query);
-    final response = await _client
-        .get(uri)
-        .timeout(const Duration(seconds: 10));
-    _throwApiErrorIfNeeded(response, 'Failed to load pomodoro sessions');
-
-    return _extractDataList(
-      response.body,
-    ).map(PomodoroSession.fromJson).toList();
+    final response = await _request(
+      method: 'GET',
+      path: '/pomodoro',
+      query: query,
+    );
+    return _extractDataList(response).map(PomodoroSession.fromJson).toList();
   }
 
   Future<PomodoroSession> startPomodoro({
@@ -203,72 +333,242 @@ class ApiService {
     int durationMinutes = 25,
     int breakMinutes = 5,
   }) async {
-    final response = await _client
-        .post(
-          Uri.parse('$baseUrl/pomodoro/start'),
-          headers: {'Content-Type': 'application/json'},
-          body: json.encode({
-            'task_title': taskTitle,
-            'plan_id': planId,
-            'duration_minutes': durationMinutes,
-            'break_minutes': breakMinutes,
-          }),
-        )
-        .timeout(const Duration(seconds: 10));
-
-    if (response.statusCode != 200 && response.statusCode != 201) {
-      _throwApiErrorIfNeeded(response, 'Failed to start pomodoro');
-    }
-
-    return PomodoroSession.fromJson(_extractDataMap(response.body));
+    final response = await _request(
+      method: 'POST',
+      path: '/pomodoro/start',
+      jsonBody: {
+        'task_title': taskTitle,
+        'plan_id': planId,
+        'duration_minutes': durationMinutes,
+        'break_minutes': breakMinutes,
+      },
+    );
+    return PomodoroSession.fromJson(_extractDataMap(response));
   }
 
   Future<PomodoroSession> endPomodoro(
     String id, {
     String status = 'completed',
   }) async {
-    final response = await _client
-        .post(
-          Uri.parse('$baseUrl/pomodoro/$id/end'),
-          headers: {'Content-Type': 'application/json'},
-          body: json.encode({'status': status}),
-        )
-        .timeout(const Duration(seconds: 10));
+    final response = await _request(
+      method: 'POST',
+      path: '/pomodoro/$id/end',
+      jsonBody: {'status': status},
+    );
+    return PomodoroSession.fromJson(_extractDataMap(response));
+  }
 
-    if (response.statusCode != 200) {
-      _throwApiErrorIfNeeded(response, 'Failed to end pomodoro');
-    }
-
-    return PomodoroSession.fromJson(_extractDataMap(response.body));
+  Future<Map<String, dynamic>> getAIProviderStatus() async {
+    final response = await _request(method: 'GET', path: '/ai/provider');
+    return _extractDataMap(response);
   }
 
   Future<Map<String, dynamic>> buildLearningPlan(
     Map<String, dynamic> input,
   ) async {
-    final response = await _client
-        .post(
-          Uri.parse('$baseUrl/ai/learning'),
-          headers: {'Content-Type': 'application/json'},
-          body: json.encode(input),
-        )
-        .timeout(const Duration(seconds: 10));
-
-    _throwApiErrorIfNeeded(response, 'Failed to build learning plan');
-    return _extractDataMap(response.body);
+    final response = await _request(
+      method: 'POST',
+      path: '/ai/learning',
+      jsonBody: input,
+    );
+    return _extractDataMap(response);
   }
 
-  List<Map<String, dynamic>> _extractDataList(String body) {
-    final decoded = json.decode(body);
-    final list = decoded is Map<String, dynamic>
-        ? decoded['data'] as List<dynamic>? ?? []
-        : <dynamic>[];
+  Future<List<Question>> generateAIQuestions(
+    Map<String, dynamic> input, {
+    bool persist = false,
+  }) async {
+    final response = await _request(
+      method: 'POST',
+      path: '/ai/questions/generate',
+      query: {'persist': '$persist'},
+      jsonBody: input,
+    );
+    return _extractDataList(response).map(Question.fromJson).toList();
+  }
 
+  Future<List<Question>> searchAIQuestions({
+    required String topic,
+    String subject = '',
+    int count = 5,
+  }) async {
+    final response = await _request(
+      method: 'GET',
+      path: '/ai/questions/search',
+      query: {'topic': topic, 'subject': subject, 'count': '$count'},
+    );
+    return _extractDataList(response).map(Question.fromJson).toList();
+  }
+
+  Future<Map<String, dynamic>> gradeWithAI(Map<String, dynamic> input) async {
+    final response = await _request(
+      method: 'POST',
+      path: '/ai/grade',
+      jsonBody: input,
+    );
+    return _extractDataMap(response);
+  }
+
+  Future<Map<String, dynamic>> evaluateWithAI(
+    Map<String, dynamic> input,
+  ) async {
+    final response = await _request(
+      method: 'POST',
+      path: '/ai/evaluate',
+      jsonBody: input,
+    );
+    return _extractDataMap(response);
+  }
+
+  Future<Map<String, dynamic>> scoreWithAI(Map<String, dynamic> input) async {
+    final response = await _request(
+      method: 'POST',
+      path: '/ai/score',
+      jsonBody: input,
+    );
+    return _extractDataMap(response);
+  }
+
+  Future<http.Response> _request({
+    required String method,
+    required String path,
+    Map<String, String>? query,
+    Map<String, dynamic>? jsonBody,
+    Duration timeout = const Duration(seconds: 15),
+    bool expectJson = true,
+  }) async {
+    final traceId = newTraceId();
+    final uri = Uri.parse('$baseUrl$path').replace(queryParameters: query);
+    final started = DateTime.now();
+    final payload = jsonBody == null ? null : jsonEncode(jsonBody);
+
+    _logger.info(
+      module: 'api',
+      event: 'api.call.start',
+      message: '请求开始',
+      data: {
+        'method': method,
+        'path': path,
+        'query': query,
+        'trace_id': traceId,
+        'payload_size': payload?.length ?? 0,
+      },
+    );
+
+    late http.Response response;
+    try {
+      switch (method.toUpperCase()) {
+        case 'GET':
+          response = await _client
+              .get(uri, headers: {'X-Trace-ID': traceId})
+              .timeout(timeout);
+          break;
+        case 'DELETE':
+          response = await _client
+              .delete(uri, headers: {'X-Trace-ID': traceId})
+              .timeout(timeout);
+          break;
+        case 'PUT':
+          response = await _client
+              .put(
+                uri,
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-Trace-ID': traceId,
+                },
+                body: payload,
+              )
+              .timeout(timeout);
+          break;
+        default:
+          response = await _client
+              .post(
+                uri,
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-Trace-ID': traceId,
+                },
+                body: payload,
+              )
+              .timeout(timeout);
+          break;
+      }
+    } catch (e) {
+      final latency = DateTime.now().difference(started).inMilliseconds;
+      _logger.error(
+        module: 'api',
+        event: 'api.call.error',
+        message: '请求异常',
+        data: {
+          'method': method,
+          'path': path,
+          'query': query,
+          'latency_ms': latency,
+          'trace_id': traceId,
+        },
+        error: e.toString(),
+      );
+      rethrow;
+    }
+
+    final latency = DateTime.now().difference(started).inMilliseconds;
+    final responseTraceId = response.headers['x-trace-id'];
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final ex = _toApiException(response);
+      _logger.error(
+        module: 'api',
+        event: 'api.call.error',
+        message: '请求失败',
+        data: {
+          'method': method,
+          'path': path,
+          'query': query,
+          'status': response.statusCode,
+          'latency_ms': latency,
+          'trace_id': traceId,
+          'response_trace_id': responseTraceId,
+        },
+        error: ex.toString(),
+      );
+      throw ex;
+    }
+
+    _logger.info(
+      module: 'api',
+      event: 'api.call.end',
+      message: '请求成功',
+      data: {
+        'method': method,
+        'path': path,
+        'query': query,
+        'status': response.statusCode,
+        'latency_ms': latency,
+        'trace_id': traceId,
+        'response_trace_id': responseTraceId,
+        'response_size': response.bodyBytes.length,
+      },
+    );
+
+    if (expectJson && response.body.isEmpty) {
+      throw ApiException(
+        code: 'empty_body',
+        message: '接口返回为空',
+        statusCode: response.statusCode,
+      );
+    }
+    return response;
+  }
+
+  List<Map<String, dynamic>> _extractDataList(http.Response response) {
+    final decoded = jsonDecode(response.body);
+    final list = decoded is Map<String, dynamic>
+        ? decoded['data'] as List<dynamic>? ?? <dynamic>[]
+        : <dynamic>[];
     return list.whereType<Map<String, dynamic>>().toList(growable: false);
   }
 
-  Map<String, dynamic> _extractDataMap(String body) {
-    final decoded = json.decode(body);
-
+  Map<String, dynamic> _extractDataMap(http.Response response) {
+    final decoded = jsonDecode(response.body);
     if (decoded is Map<String, dynamic>) {
       final data = decoded['data'];
       if (data is Map<String, dynamic>) {
@@ -276,29 +576,39 @@ class ApiService {
       }
       return decoded;
     }
-
     return <String, dynamic>{};
   }
 
-  void _throwApiErrorIfNeeded(http.Response response, String fallbackMessage) {
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      return;
-    }
-
+  ApiException _toApiException(http.Response response) {
     try {
-      final decoded = json.decode(response.body);
-      final errorObj = decoded is Map<String, dynamic>
-          ? decoded['error'] as Map<String, dynamic>?
-          : null;
-      final message = errorObj?['message']?.toString();
-
-      if (message != null && message.isNotEmpty) {
-        throw Exception(message);
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map<String, dynamic>) {
+        final errorObj = decoded['error'];
+        if (errorObj is Map<String, dynamic>) {
+          return ApiException(
+            code: errorObj['code']?.toString() ?? 'api_error',
+            message: errorObj['message']?.toString() ?? '请求失败',
+            statusCode: response.statusCode,
+          );
+        }
       }
     } catch (_) {
-      // fallback below
+      // ignore parse error and fallback
     }
+    return ApiException(
+      code: 'http_${response.statusCode}',
+      message: '请求失败',
+      statusCode: response.statusCode,
+    );
+  }
 
-    throw Exception('$fallbackMessage (HTTP ${response.statusCode})');
+  String? _filenameFromDisposition(String raw) {
+    final marker = 'filename=';
+    final idx = raw.toLowerCase().indexOf(marker);
+    if (idx < 0) {
+      return null;
+    }
+    final value = raw.substring(idx + marker.length).trim();
+    return value.replaceAll('"', '').trim();
   }
 }

@@ -4,8 +4,21 @@ import 'package:provider/provider.dart';
 import '../models/mistake.dart';
 import '../providers/app_provider.dart';
 
-class MistakesScreen extends StatelessWidget {
+class MistakesScreen extends StatefulWidget {
   const MistakesScreen({super.key});
+
+  @override
+  State<MistakesScreen> createState() => _MistakesScreenState();
+}
+
+class _MistakesScreenState extends State<MistakesScreen> {
+  final _questionIdFilter = TextEditingController();
+
+  @override
+  void dispose() {
+    _questionIdFilter.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -15,7 +28,7 @@ class MistakesScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Wrong Question Book'),
+        title: const Text('错题本'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -23,9 +36,42 @@ class MistakesScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: () => provider.fetchMistakes(force: true),
-        child: _buildBody(provider, mistakes, loading),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _questionIdFilter,
+                    decoration: const InputDecoration(
+                      labelText: '按题目ID筛选',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: () {
+                    provider.fetchMistakes(
+                      force: true,
+                      questionId: _questionIdFilter.text.trim(),
+                    );
+                  },
+                  child: const Text('筛选'),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: () => provider.fetchMistakes(force: true),
+              child: _buildBody(provider, mistakes, loading),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -43,7 +89,7 @@ class MistakesScreen extends StatelessWidget {
       return ListView(
         children: [
           const SizedBox(height: 96),
-          Center(child: Text('Load failed: ${provider.errorMessage}')),
+          Center(child: Text('加载失败：${provider.errorMessage}')),
         ],
       );
     }
@@ -52,7 +98,7 @@ class MistakesScreen extends StatelessWidget {
       return ListView(
         children: const [
           SizedBox(height: 96),
-          Center(child: Text('No mistake records.')),
+          Center(child: Text('暂无错题记录')),
         ],
       );
     }
@@ -69,23 +115,35 @@ class MistakesScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Question ID: ${m.questionId}',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '题目ID: ${m.questionId}',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () async {
+                        await context.read<AppProvider>().deleteMistake(m.id);
+                      },
+                      icon: const Icon(Icons.delete_outline),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 6),
-                Text('Subject: ${m.subject} | Difficulty: ${m.difficulty}/5'),
-                Text('Mastery: ${m.masteryLevel}%'),
+                Text('科目: ${m.subject} | 难度: ${m.difficulty}/5'),
+                Text('掌握度: ${m.masteryLevel}%'),
                 const SizedBox(height: 8),
-                Text('Your answer: ${m.userAnswer.join(", ")}'),
+                Text('你的答案: ${m.userAnswer.join(", ")}'),
                 const SizedBox(height: 8),
                 Text(
-                  'Feedback: ${m.feedback}',
+                  '反馈: ${m.feedback}',
                   style: const TextStyle(color: Colors.red),
                 ),
                 if (m.reason.isNotEmpty) ...[
                   const SizedBox(height: 8),
-                  Text('Reason: ${m.reason}'),
+                  Text('错因: ${m.reason}'),
                 ],
               ],
             ),

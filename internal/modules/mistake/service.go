@@ -44,6 +44,20 @@ func (s *Service) List(ctx context.Context, questionID string) ([]Record, error)
 	return s.repo.ListByQuestionID(ctx, questionID)
 }
 
+func (s *Service) GetByID(ctx context.Context, id string) (Record, error) {
+	if strings.TrimSpace(id) == "" {
+		return Record{}, errs.BadRequest("mistake id is required")
+	}
+	return s.repo.GetByID(ctx, strings.TrimSpace(id))
+}
+
+func (s *Service) Delete(ctx context.Context, id string) error {
+	if strings.TrimSpace(id) == "" {
+		return errs.BadRequest("mistake id is required")
+	}
+	return s.repo.Delete(ctx, strings.TrimSpace(id))
+}
+
 func normalizeSubject(v string) string {
 	t := strings.TrimSpace(v)
 	if t == "" {

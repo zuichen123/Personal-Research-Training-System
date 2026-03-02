@@ -46,6 +46,22 @@ func (r *SQLiteRepository) Create(ctx context.Context, item Record) (Record, err
 	return item, nil
 }
 
+func (r *SQLiteRepository) GetByID(ctx context.Context, id string) (Record, error) {
+	row := r.db.QueryRowContext(ctx, `
+		SELECT id, question_id, subject, difficulty, mastery_level, user_answer_json, feedback, reason, created_at
+		FROM mistakes
+		WHERE id = ?
+	`, id)
+	item, err := scanMistake(row)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return Record{}, errs.NotFound("mistake not found")
+		}
+		return Record{}, errs.Internal(fmt.Sprintf("failed to get mistake: %v", err))
+	}
+	return item, nil
+}
+
 func (r *SQLiteRepository) List(ctx context.Context) ([]Record, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, question_id, subject, difficulty, mastery_level, user_answer_json, feedback, reason, created_at
@@ -99,6 +115,18 @@ func (r *SQLiteRepository) ListByQuestionID(ctx context.Context, questionID stri
 	}
 
 	return result, nil
+}
+
+func (r *SQLiteRepository) Delete(ctx context.Context, id string) error {
+	res, err := r.db.ExecContext(ctx, `DELETE FROM mistakes WHERE id = ?`, id)
+	if err != nil {
+		return errs.Internal(fmt.Sprintf("failed to delete mistake: %v", err))
+	}
+	affected, _ := res.RowsAffected()
+	if affected == 0 {
+		return errs.NotFound("mistake not found")
+	}
+	return nil
 }
 
 type mistakeScanner interface {

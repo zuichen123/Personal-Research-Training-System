@@ -18,6 +18,18 @@ func NewMockClient(latency time.Duration) *MockClient {
 	return &MockClient{latency: latency}
 }
 
+func (m *MockClient) ProviderName() string {
+	return "mock"
+}
+
+func (m *MockClient) ModelName() string {
+	return "mock-v1"
+}
+
+func (m *MockClient) IsReady() bool {
+	return true
+}
+
 func (m *MockClient) GenerateQuestions(ctx context.Context, req GenerateRequest) ([]question.CreateInput, error) {
 	if req.Count <= 0 {
 		req.Count = 3

@@ -80,5 +80,23 @@ func (s *Service) Submit(ctx context.Context, in SubmitInput) (Attempt, error) {
 }
 
 func (s *Service) ListAttempts(ctx context.Context) ([]Attempt, error) {
-	return s.repo.List(ctx)
+	return s.ListAttemptsByQuestionID(ctx, "")
+}
+
+func (s *Service) ListAttemptsByQuestionID(ctx context.Context, questionID string) ([]Attempt, error) {
+	items, err := s.repo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	questionID = strings.TrimSpace(questionID)
+	if questionID == "" {
+		return items, nil
+	}
+	filtered := make([]Attempt, 0, len(items))
+	for _, item := range items {
+		if item.QuestionID == questionID {
+			filtered = append(filtered, item)
+		}
+	}
+	return filtered, nil
 }
