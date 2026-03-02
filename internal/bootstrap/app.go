@@ -13,6 +13,8 @@ import (
 	"self-study-tool/internal/config"
 	"self-study-tool/internal/modules/ai"
 	"self-study-tool/internal/modules/mistake"
+	"self-study-tool/internal/modules/plan"
+	"self-study-tool/internal/modules/pomodoro"
 	"self-study-tool/internal/modules/practice"
 	"self-study-tool/internal/modules/question"
 	"self-study-tool/internal/modules/resource"
@@ -42,11 +44,15 @@ func NewApp(cfg config.Config) (*App, error) {
 
 	questionRepo := question.NewSQLiteRepository(db)
 	mistakeRepo := mistake.NewSQLiteRepository(db)
+	planRepo := plan.NewSQLiteRepository(db)
+	pomodoroRepo := pomodoro.NewSQLiteRepository(db)
 	practiceRepo := practice.NewSQLiteRepository(db)
 	resourceRepo := resource.NewSQLiteRepository(db)
 
 	questionService := question.NewService(questionRepo)
 	mistakeService := mistake.NewService(mistakeRepo)
+	planService := plan.NewService(planRepo)
+	pomodoroService := pomodoro.NewService(pomodoroRepo)
 	resourceService := resource.NewService(resourceRepo, questionService)
 
 	var aiClient ai.Client
@@ -63,6 +69,8 @@ func NewApp(cfg config.Config) (*App, error) {
 
 	questionHandler := question.NewHandler(questionService)
 	mistakeHandler := mistake.NewHandler(mistakeService)
+	planHandler := plan.NewHandler(planService)
+	pomodoroHandler := pomodoro.NewHandler(pomodoroService)
 	aiHandler := ai.NewHandler(aiService)
 	practiceHandler := practice.NewHandler(practiceService)
 	resourceHandler := resource.NewHandler(resourceService, cfg.UploadMaxBytes)
@@ -77,6 +85,8 @@ func NewApp(cfg config.Config) (*App, error) {
 			systemHandler.RegisterRoutes(r)
 			questionHandler.RegisterRoutes(r)
 			mistakeHandler.RegisterRoutes(r)
+			planHandler.RegisterRoutes(r)
+			pomodoroHandler.RegisterRoutes(r)
 			aiHandler.RegisterRoutes(r)
 			practiceHandler.RegisterRoutes(r)
 			resourceHandler.RegisterRoutes(r)

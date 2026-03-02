@@ -28,9 +28,8 @@ class ResourceMaterial {
       contentType: json['content_type'] ?? '',
       sizeBytes: json['size_bytes'] ?? 0,
       category: json['category'] ?? '',
-      tags: (json['tags'] as List<dynamic>?)
-              ?.map((e) => e.toString())
-              .toList() ??
+      tags:
+          (json['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ??
           [],
       questionId: json['question_id'] ?? '',
       uploadedAt: json['uploaded_at'] != null

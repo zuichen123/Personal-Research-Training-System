@@ -1,8 +1,7 @@
-package question
+package plan
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"self-study-tool/internal/shared/httpx"
@@ -17,7 +16,7 @@ func NewHandler(service *Service) *Handler {
 }
 
 func (h *Handler) RegisterRoutes(r chi.Router) {
-	r.Route("/questions", func(r chi.Router) {
+	r.Route("/plans", func(r chi.Router) {
 		r.Post("/", h.create)
 		r.Get("/", h.list)
 		r.Get("/{id}", h.getByID)
@@ -42,30 +41,12 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
-	items, err := h.service.List(r.Context())
+	items, err := h.service.List(r.Context(), r.URL.Query().Get("plan_type"))
 	if err != nil {
 		httpx.WriteError(w, err)
 		return
 	}
-
-	subjectFilter := strings.TrimSpace(r.URL.Query().Get("subject"))
-	sourceFilter := strings.TrimSpace(r.URL.Query().Get("source"))
-	if subjectFilter == "" && sourceFilter == "" {
-		httpx.WriteJSON(w, http.StatusOK, items)
-		return
-	}
-
-	filtered := make([]Question, 0, len(items))
-	for _, item := range items {
-		if subjectFilter != "" && !strings.EqualFold(item.Subject, subjectFilter) {
-			continue
-		}
-		if sourceFilter != "" && !strings.EqualFold(string(item.Source), sourceFilter) {
-			continue
-		}
-		filtered = append(filtered, item)
-	}
-	httpx.WriteJSON(w, http.StatusOK, filtered)
+	httpx.WriteJSON(w, http.StatusOK, items)
 }
 
 func (h *Handler) getByID(w http.ResponseWriter, r *http.Request) {

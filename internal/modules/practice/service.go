@@ -66,10 +66,13 @@ func (s *Service) Submit(ctx context.Context, in SubmitInput) (Attempt, error) {
 
 	if !gradeResult.Correct {
 		_, _ = s.mistakeService.Create(ctx, mistake.CreateInput{
-			QuestionID: q.ID,
-			UserAnswer: in.UserAnswer,
-			Feedback:   gradeResult.Feedback,
-			Reason:     gradeResult.WrongReason,
+			QuestionID:   q.ID,
+			Subject:      q.Subject,
+			Difficulty:   q.Difficulty,
+			MasteryLevel: q.MasteryLevel,
+			UserAnswer:   in.UserAnswer,
+			Feedback:     gradeResult.Feedback,
+			Reason:       gradeResult.WrongReason,
 		})
 	}
 

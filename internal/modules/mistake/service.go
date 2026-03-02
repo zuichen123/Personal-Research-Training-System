@@ -23,12 +23,15 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (Record, error) {
 	}
 
 	item := Record{
-		ID:         uuid.NewString(),
-		QuestionID: strings.TrimSpace(in.QuestionID),
-		UserAnswer: in.UserAnswer,
-		Feedback:   strings.TrimSpace(in.Feedback),
-		Reason:     strings.TrimSpace(in.Reason),
-		CreatedAt:  time.Now().UTC(),
+		ID:           uuid.NewString(),
+		QuestionID:   strings.TrimSpace(in.QuestionID),
+		Subject:      normalizeSubject(in.Subject),
+		Difficulty:   normalizeDifficulty(in.Difficulty),
+		MasteryLevel: normalizeMastery(in.MasteryLevel),
+		UserAnswer:   in.UserAnswer,
+		Feedback:     strings.TrimSpace(in.Feedback),
+		Reason:       strings.TrimSpace(in.Reason),
+		CreatedAt:    time.Now().UTC(),
 	}
 
 	return s.repo.Create(ctx, item)
@@ -39,4 +42,32 @@ func (s *Service) List(ctx context.Context, questionID string) ([]Record, error)
 		return s.repo.List(ctx)
 	}
 	return s.repo.ListByQuestionID(ctx, questionID)
+}
+
+func normalizeSubject(v string) string {
+	t := strings.TrimSpace(v)
+	if t == "" {
+		return "general"
+	}
+	return t
+}
+
+func normalizeDifficulty(v int) int {
+	if v < 1 {
+		return 1
+	}
+	if v > 5 {
+		return 5
+	}
+	return v
+}
+
+func normalizeMastery(v int) int {
+	if v < 0 {
+		return 0
+	}
+	if v > 100 {
+		return 100
+	}
+	return v
 }

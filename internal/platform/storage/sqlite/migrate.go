@@ -4,25 +4,32 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 )
 
 func Migrate(ctx context.Context, db *sql.DB) error {
-	stmts := []string{
+	baseStmts := []string{
 		`CREATE TABLE IF NOT EXISTS questions (
 			id TEXT PRIMARY KEY,
 			title TEXT NOT NULL,
 			stem TEXT NOT NULL,
 			type TEXT NOT NULL,
+			subject TEXT NOT NULL DEFAULT 'general',
+			source TEXT NOT NULL DEFAULT 'unit_test',
 			options_json TEXT NOT NULL,
 			answer_key_json TEXT NOT NULL,
 			tags_json TEXT NOT NULL,
 			difficulty INTEGER NOT NULL,
+			mastery_level INTEGER NOT NULL DEFAULT 0,
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL
 		);`,
 		`CREATE TABLE IF NOT EXISTS mistakes (
 			id TEXT PRIMARY KEY,
 			question_id TEXT NOT NULL,
+			subject TEXT NOT NULL DEFAULT 'general',
+			difficulty INTEGER NOT NULL DEFAULT 1,
+			mastery_level INTEGER NOT NULL DEFAULT 0,
 			user_answer_json TEXT NOT NULL,
 			feedback TEXT NOT NULL,
 			reason TEXT NOT NULL,
@@ -52,16 +59,67 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 			data BLOB NOT NULL,
 			FOREIGN KEY(question_id) REFERENCES questions(id) ON DELETE SET NULL
 		);`,
+		`CREATE TABLE IF NOT EXISTS plans (
+			id TEXT PRIMARY KEY,
+			plan_type TEXT NOT NULL,
+			title TEXT NOT NULL,
+			content TEXT NOT NULL,
+			target_date TEXT,
+			status TEXT NOT NULL,
+			priority INTEGER NOT NULL,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		);`,
+		`CREATE TABLE IF NOT EXISTS pomodoro_sessions (
+			id TEXT PRIMARY KEY,
+			task_title TEXT NOT NULL,
+			plan_id TEXT,
+			duration_minutes INTEGER NOT NULL,
+			break_minutes INTEGER NOT NULL,
+			status TEXT NOT NULL,
+			started_at TEXT NOT NULL,
+			ended_at TEXT,
+			FOREIGN KEY(plan_id) REFERENCES plans(id) ON DELETE SET NULL
+		);`,
 		`CREATE INDEX IF NOT EXISTS idx_mistakes_question_id ON mistakes(question_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_practice_attempts_question_id ON practice_attempts(question_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_resources_question_id ON resources(question_id);`,
+		`CREATE INDEX IF NOT EXISTS idx_plans_type_date ON plans(plan_type, target_date);`,
+		`CREATE INDEX IF NOT EXISTS idx_pomodoro_status_start ON pomodoro_sessions(status, started_at);`,
 	}
 
-	for _, stmt := range stmts {
+	for _, stmt := range baseStmts {
 		if _, err := db.ExecContext(ctx, stmt); err != nil {
 			return fmt.Errorf("migrate sqlite: %w", err)
 		}
 	}
 
+	optionalStmts := []string{
+		`ALTER TABLE questions ADD COLUMN subject TEXT NOT NULL DEFAULT 'general';`,
+		`ALTER TABLE questions ADD COLUMN source TEXT NOT NULL DEFAULT 'unit_test';`,
+		`ALTER TABLE questions ADD COLUMN mastery_level INTEGER NOT NULL DEFAULT 0;`,
+		`ALTER TABLE mistakes ADD COLUMN subject TEXT NOT NULL DEFAULT 'general';`,
+		`ALTER TABLE mistakes ADD COLUMN difficulty INTEGER NOT NULL DEFAULT 1;`,
+		`ALTER TABLE mistakes ADD COLUMN mastery_level INTEGER NOT NULL DEFAULT 0;`,
+	}
+
+	for _, stmt := range optionalStmts {
+		if err := execOptional(ctx, db, stmt); err != nil {
+			return err
+		}
+	}
+
 	return nil
+}
+
+func execOptional(ctx context.Context, db *sql.DB, stmt string) error {
+	_, err := db.ExecContext(ctx, stmt)
+	if err == nil {
+		return nil
+	}
+	msg := strings.ToLower(err.Error())
+	if strings.Contains(msg, "duplicate column name") || strings.Contains(msg, "already exists") {
+		return nil
+	}
+	return fmt.Errorf("optional migrate sqlite: %w", err)
 }

@@ -21,7 +21,8 @@ class PracticeAttempt {
     return PracticeAttempt(
       id: json['id'] ?? '',
       questionId: json['question_id'] ?? '',
-      userAnswer: (json['user_answer'] as List<dynamic>?)
+      userAnswer:
+          (json['user_answer'] as List<dynamic>?)
               ?.map((e) => e.toString())
               .toList() ??
           [],

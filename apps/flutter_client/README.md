@@ -1,16 +1,32 @@
-# flutter_client
+﻿# Flutter Client
 
-A new Flutter project.
+Self Study Tool 的 Flutter 客户端。
 
-## Getting Started
+## 功能页
 
-This project is a starting point for a Flutter application.
+- Question Bank（题库）
+- Wrong Question Book（错题本）
+- Practice（做题与批阅）
+- Resources（学习资料）
+- Plans（计划管理）
+- Focus（番茄钟）
 
-A few resources to get you started if this is your first Flutter project:
+## 运行
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+```bash
+flutter pub get
+flutter run
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## 后端地址
+
+默认自动按平台选择：
+
+- Android 模拟器：`http://10.0.2.2:8080/api/v1`
+- 其他平台：`http://127.0.0.1:8080/api/v1`
+
+请先启动后端：
+
+```bash
+go run ./cmd/server
+```

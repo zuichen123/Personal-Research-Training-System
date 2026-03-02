@@ -34,18 +34,21 @@ func (r *SQLiteRepository) Create(ctx context.Context, item Question) (Question,
 
 	_, err = r.db.ExecContext(ctx, `
 		INSERT INTO questions (
-			id, title, stem, type, options_json, answer_key_json, tags_json,
-			difficulty, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			id, title, stem, type, subject, source, options_json, answer_key_json, tags_json,
+			difficulty, mastery_level, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		item.ID,
 		item.Title,
 		item.Stem,
 		string(item.Type),
+		item.Subject,
+		string(item.Source),
 		string(optionsJSON),
 		string(answerJSON),
 		string(tagsJSON),
 		item.Difficulty,
+		item.MasteryLevel,
 		item.CreatedAt.Format(time.RFC3339Nano),
 		item.UpdatedAt.Format(time.RFC3339Nano),
 	)
@@ -57,8 +60,8 @@ func (r *SQLiteRepository) Create(ctx context.Context, item Question) (Question,
 
 func (r *SQLiteRepository) GetByID(ctx context.Context, id string) (Question, error) {
 	row := r.db.QueryRowContext(ctx, `
-		SELECT id, title, stem, type, options_json, answer_key_json, tags_json,
-			difficulty, created_at, updated_at
+		SELECT id, title, stem, type, subject, source, options_json, answer_key_json, tags_json,
+			difficulty, mastery_level, created_at, updated_at
 		FROM questions WHERE id = ?
 	`, id)
 
@@ -75,8 +78,8 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, id string) (Question, er
 
 func (r *SQLiteRepository) List(ctx context.Context) ([]Question, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, title, stem, type, options_json, answer_key_json, tags_json,
-			difficulty, created_at, updated_at
+		SELECT id, title, stem, type, subject, source, options_json, answer_key_json, tags_json,
+			difficulty, mastery_level, created_at, updated_at
 		FROM questions
 		ORDER BY created_at DESC
 	`)
@@ -117,17 +120,20 @@ func (r *SQLiteRepository) Update(ctx context.Context, item Question) (Question,
 
 	res, err := r.db.ExecContext(ctx, `
 		UPDATE questions
-		SET title = ?, stem = ?, type = ?, options_json = ?, answer_key_json = ?, tags_json = ?,
-			difficulty = ?, updated_at = ?
+		SET title = ?, stem = ?, type = ?, subject = ?, source = ?, options_json = ?,
+			answer_key_json = ?, tags_json = ?, difficulty = ?, mastery_level = ?, updated_at = ?
 		WHERE id = ?
 	`,
 		item.Title,
 		item.Stem,
 		string(item.Type),
+		item.Subject,
+		string(item.Source),
 		string(optionsJSON),
 		string(answerJSON),
 		string(tagsJSON),
 		item.Difficulty,
+		item.MasteryLevel,
 		item.UpdatedAt.Format(time.RFC3339Nano),
 		item.ID,
 	)
@@ -165,6 +171,7 @@ func scanQuestion(s questionScanner) (Question, error) {
 	var (
 		item       Question
 		typeValue  string
+		source     string
 		optionsRaw string
 		answerRaw  string
 		tagsRaw    string
@@ -177,10 +184,13 @@ func scanQuestion(s questionScanner) (Question, error) {
 		&item.Title,
 		&item.Stem,
 		&typeValue,
+		&item.Subject,
+		&source,
 		&optionsRaw,
 		&answerRaw,
 		&tagsRaw,
 		&item.Difficulty,
+		&item.MasteryLevel,
 		&createdRaw,
 		&updatedRaw,
 	); err != nil {
@@ -188,6 +198,7 @@ func scanQuestion(s questionScanner) (Question, error) {
 	}
 
 	item.Type = QuestionType(typeValue)
+	item.Source = QuestionSource(source)
 	if err := json.Unmarshal([]byte(optionsRaw), &item.Options); err != nil {
 		return Question{}, err
 	}

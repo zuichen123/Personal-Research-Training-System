@@ -2,20 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'providers/app_provider.dart';
-import 'screens/questions_screen.dart';
 import 'screens/mistakes_screen.dart';
+import 'screens/plans_screen.dart';
+import 'screens/pomodoro_screen.dart';
 import 'screens/practice_screen.dart';
+import 'screens/questions_screen.dart';
 import 'screens/resources_screen.dart';
 
 void main() {
-  runApp(
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => AppProvider()),
-      ],
-      child: const MyApp(),
-    ),
-  );
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
@@ -23,25 +18,28 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: '自学工具',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6750A4),
-          brightness: Brightness.light,
+    return MultiProvider(
+      providers: [ChangeNotifierProvider(create: (_) => AppProvider())],
+      child: MaterialApp(
+        title: 'Self Study Tool',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          useMaterial3: true,
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color(0xFF0D47A1),
+            brightness: Brightness.light,
+          ),
         ),
-      ),
-      darkTheme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6750A4),
-          brightness: Brightness.dark,
+        darkTheme: ThemeData(
+          useMaterial3: true,
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color(0xFF0D47A1),
+            brightness: Brightness.dark,
+          ),
         ),
+        themeMode: ThemeMode.system,
+        home: const MainScreen(),
       ),
-      themeMode: ThemeMode.system,
-      home: const MainScreen(),
     );
   }
 }
@@ -56,53 +54,68 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
 
-  final List<Widget> _screens = [
-    const QuestionsScreen(),
-    const MistakesScreen(),
-    const PracticeScreen(),
-    const ResourcesScreen(),
+  final List<Widget> _screens = const [
+    QuestionsScreen(),
+    MistakesScreen(),
+    PracticeScreen(),
+    ResourcesScreen(),
+    PlansScreen(),
+    PomodoroScreen(),
   ];
 
   @override
   void initState() {
     super.initState();
-    // Fetch initial data
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<AppProvider>().loadAllData();
+      context.read<AppProvider>().ensureDataForTab(_currentIndex);
     });
+  }
+
+  void _onDestinationSelected(int index) {
+    setState(() {
+      _currentIndex = index;
+    });
+
+    context.read<AppProvider>().ensureDataForTab(index);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _screens[_currentIndex],
+      body: IndexedStack(index: _currentIndex, children: _screens),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
-        onDestinationSelected: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
-        },
+        onDestinationSelected: _onDestinationSelected,
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.question_answer_outlined),
             selectedIcon: Icon(Icons.question_answer),
-            label: '题库',
+            label: 'Questions',
           ),
           NavigationDestination(
             icon: Icon(Icons.menu_book_outlined),
             selectedIcon: Icon(Icons.menu_book),
-            label: '错题本',
+            label: 'Mistakes',
           ),
           NavigationDestination(
             icon: Icon(Icons.edit_note_outlined),
             selectedIcon: Icon(Icons.edit_note),
-            label: '练习',
+            label: 'Practice',
           ),
           NavigationDestination(
             icon: Icon(Icons.folder_outlined),
             selectedIcon: Icon(Icons.folder),
-            label: '资源',
+            label: 'Resources',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.event_note_outlined),
+            selectedIcon: Icon(Icons.event_note),
+            label: 'Plans',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.timer_outlined),
+            selectedIcon: Icon(Icons.timer),
+            label: 'Focus',
           ),
         ],
       ),

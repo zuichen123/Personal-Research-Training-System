@@ -19,7 +19,11 @@ func NewHandler(service *Service) *Handler {
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Route("/ai", func(r chi.Router) {
 		r.Post("/questions/generate", h.generate)
+		r.Get("/questions/search", h.searchOnline)
 		r.Post("/grade", h.grade)
+		r.Post("/learning", h.learning)
+		r.Post("/evaluate", h.evaluate)
+		r.Post("/score", h.score)
 	})
 }
 
@@ -47,6 +51,67 @@ func (h *Handler) grade(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, err := h.service.Grade(r.Context(), req)
+	if err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, result)
+}
+
+func (h *Handler) searchOnline(w http.ResponseWriter, r *http.Request) {
+	topic := r.URL.Query().Get("topic")
+	subject := r.URL.Query().Get("subject")
+	count, _ := strconv.Atoi(r.URL.Query().Get("count"))
+	if count <= 0 {
+		count = 5
+	}
+
+	items, err := h.service.SearchOnlineQuestions(r.Context(), topic, subject, count)
+	if err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, items)
+}
+
+func (h *Handler) learning(w http.ResponseWriter, r *http.Request) {
+	var req LearnRequest
+	if err := httpx.DecodeJSON(r, &req); err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+
+	result, err := h.service.Learn(r.Context(), req)
+	if err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, result)
+}
+
+func (h *Handler) evaluate(w http.ResponseWriter, r *http.Request) {
+	var req EvaluateRequest
+	if err := httpx.DecodeJSON(r, &req); err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+
+	result, err := h.service.Evaluate(r.Context(), req)
+	if err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, result)
+}
+
+func (h *Handler) score(w http.ResponseWriter, r *http.Request) {
+	var req ScoreRequest
+	if err := httpx.DecodeJSON(r, &req); err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+
+	result, err := h.service.Score(r.Context(), req)
 	if err != nil {
 		httpx.WriteError(w, err)
 		return
