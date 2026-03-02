@@ -95,6 +95,9 @@ class PracticeScreen extends StatelessWidget {
     final provider = context.read<AppProvider>();
     if (provider.questions.isEmpty) {
       await provider.fetchQuestions(force: true);
+      if (!context.mounted) {
+        return;
+      }
     }
     String? selectedQuestionId = provider.questions.isEmpty
         ? null
