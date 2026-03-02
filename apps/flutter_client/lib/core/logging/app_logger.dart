@@ -3,7 +3,9 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'file_persist_stub.dart' if (dart.library.io) 'file_persist_io.dart';
+import 'file_persist_base.dart';
+import 'file_persist_factory_stub.dart'
+    if (dart.library.io) 'file_persist_factory_io.dart';
 import 'log_level.dart';
 import 'log_record.dart';
 import 'trace_id.dart';

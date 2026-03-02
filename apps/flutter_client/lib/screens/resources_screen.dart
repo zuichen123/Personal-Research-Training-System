@@ -107,6 +107,9 @@ class ResourcesScreen extends StatelessWidget {
   Future<void> _uploadResource(BuildContext context) async {
     final provider = context.read<AppProvider>();
     final picked = await FilePicker.platform.pickFiles(withData: false);
+    if (!context.mounted) {
+      return;
+    }
     if (picked == null ||
         picked.files.isEmpty ||
         picked.files.single.path == null) {
@@ -171,7 +174,7 @@ class ResourcesScreen extends StatelessWidget {
       final file = await provider.downloadResource(id);
       await FileSaver.instance.saveFile(
         name: file.filename.split('.').first,
-        ext: file.filename.contains('.')
+        fileExtension: file.filename.contains('.')
             ? file.filename.split('.').last
             : 'bin',
         bytes: Uint8List.fromList(file.bytes),

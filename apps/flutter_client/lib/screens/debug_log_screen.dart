@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
@@ -158,7 +157,7 @@ class _DebugLogScreenState extends State<DebugLogScreen> {
     await FileSaver.instance.saveFile(
       name: 'self_study_debug_logs',
       bytes: Uint8List.fromList(utf8.encode(content)),
-      ext: 'log',
+      fileExtension: 'log',
       mimeType: MimeType.text,
     );
     if (mounted) {

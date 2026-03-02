@@ -2,9 +2,9 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
-import 'file_persist_stub.dart';
+import 'file_persist_base.dart';
 
-class _IOPersist extends LogFilePersist {
+class IoLogFilePersist extends LogFilePersist {
   File? _file;
   String? _path;
 
@@ -49,5 +49,3 @@ class _IOPersist extends LogFilePersist {
     await _file!.writeAsString('', mode: FileMode.write, flush: true);
   }
 }
-
-LogFilePersist createLogFilePersist() => _IOPersist();
