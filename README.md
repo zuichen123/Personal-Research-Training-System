@@ -9,6 +9,7 @@
 - AI 自动出题（Mock Provider，可替换真实 LLM）
 - 做题并 AI 批阅（错题自动沉淀）
 - 学习资料管理（图片/文本/PDF 等文件上传、存储、下载）
+- 跨平台客户端骨架（Fyne：桌面 + Android）
 
 ## 存储方案
 
@@ -16,7 +17,7 @@
 - 文件：统一存储在 SQLite `BLOB` 字段
 - 元数据：文件名、MIME、大小、标签、关联题目、SHA256
 
-## 快速启动
+## 快速启动后端
 
 ```bash
 go run ./cmd/server
@@ -24,10 +25,23 @@ go run ./cmd/server
 
 默认端口：`8080`
 
+## 跨平台客户端（桌面/安卓）
+
+客户端位于：`apps/fyne-client`
+
+```bash
+cd apps/fyne-client
+go mod tidy
+go run ./cmd/client
+```
+
+更多打包说明见：[apps/fyne-client/README.md](apps/fyne-client/README.md)
+
 ## 目录结构
 
 ```text
 cmd/server
+apps/fyne-client
 internal/bootstrap
 internal/config
 internal/platform
@@ -81,3 +95,8 @@ curl -X POST "http://localhost:8080/api/v1/resources" \
 - `AI_MOCK_LATENCY` 默认 `200ms`
 - `SQLITE_PATH` 默认 `./data/self-study.db`
 - `UPLOAD_MAX_BYTES` 默认 `20971520`（20MB）
+
+## 构建脚本
+
+- 后端跨平台构建：`scripts/build-cross.ps1` / `scripts/build-cross.sh`
+- 客户端构建与安卓打包：`scripts/build-client.ps1`
