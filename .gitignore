@@ -1,0 +1,26 @@
+﻿# Binaries
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Dependency directories
+vendor/
+
+# Environment
+.env
+
+# IDE
+.vscode/
+.idea/
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+
+dist/
