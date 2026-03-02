@@ -26,12 +26,12 @@
 ### 本次快照性质
 1. 这是“可续做快照”，包含：
    - 已完成的大量后端与前端改造
-   - 明确记录但尚未修复的 Flutter 编译/分析阻塞
+   - 已修复并验证通过的 Flutter 编译/分析阻塞
 2. 本次提交后，下一窗口按本文档直接继续即可。
 
 ### 关键事实
 1. 后端：`go test ./...` 已通过（本窗口前已验证）。
-2. 前端：`flutter analyze` 与 `flutter test` 当前未通过（见第 5 节原始报错）。
+2. 前端：`flutter analyze` 与 `flutter test` 已通过（见第 5 节修复与验证记录）。
 
 ---
 
@@ -93,7 +93,7 @@
    - `AppLogger`
    - `LogRecord`
    - `TraceId`
-   - 条件导入的文件持久化实现（当前仍有类型可见性问题，见第 5 节）
+   - 条件导入的文件持久化实现（已通过 base+factory 拆分修复类型可见性问题）
 3. 已新增错误映射：`apps/flutter_client/lib/i18n/error_mapper.dart`
 
 ### 主入口与导航
@@ -127,9 +127,9 @@
 
 ---
 
-## 5. 已识别阻塞（必须含原始报错）
+## 5. 已修复阻塞（保留原始报错与修复记录）
 
-### 当前阻塞错误（原文）
+### 原始阻塞错误（历史记录）
 
 #### A. `flutter analyze` 阻塞
 ```text
@@ -163,56 +163,37 @@ lib/screens/resources_screen.dart:174:9: Error: No named parameter with the name
         ^^^
 ```
 
-### 根因定位与明确修复方案
+### 修复完成状态（2026-03-03）
+1. `debug_log_screen.dart` 与 `resources_screen.dart` 的 `FileSaver.saveFile` 参数已由 `ext` 改为 `fileExtension`。
+2. 日志持久化类型组织已重构：
+   - 新增 `file_persist_base.dart` 承载 `LogFilePersist`
+   - 新增 `file_persist_factory_stub.dart` / `file_persist_factory_io.dart` 作为条件导入工厂入口
+   - `file_persist_stub.dart` / `file_persist_io.dart` 仅保留具体实现类
+   - `app_logger.dart` 固定依赖 `file_persist_base.dart` 类型并按平台导入 factory
+3. analyze 次级清理项已处理：
+   - 删除 `debug_log_screen.dart` 与 `api_service.dart` 的多余 `dart:typed_data` 导入
+   - 在 `practice_screen.dart` 与 `resources_screen.dart` 的异步间隙后增加 `if (!context.mounted) return;`
 
-#### 1) `file_saver` 参数名错误
-1. 当前代码误用 `ext`。
-2. `file_saver 0.3.1` 正确参数是 `fileExtension`。
-3. 参考本地源码（已确认）：
-   - `C:\Users\62758\AppData\Local\Pub\Cache\hosted\pub.flutter-io.cn\file_saver-0.3.1\lib\file_saver.dart`
-
-#### 2) `LogFilePersist` 类型在条件导入下不可见
-1. 当前 `app_logger.dart` 通过条件导入直接引用 `file_persist_stub.dart if (dart.library.io) file_persist_io.dart`。
-2. 由于类型定义放在 stub 文件，`io` 分支下该类型不可见，导致 `flutter test` 编译失败。
-3. 固定修复方案（必须按此做）：
-   - 新增 `file_persist_base.dart`，只放 `abstract class LogFilePersist`
-   - `app_logger.dart` 只依赖：
-     - `file_persist_base.dart`（类型）
-     - 条件导入 `file_persist_factory_*.dart`（工厂）
-   - `file_persist_stub.dart`、`file_persist_io.dart` 只实现工厂和具体类，不再承载公共类型定义
-
-#### 3) 次级清理项
-1. `unnecessary_import`
-2. `use_build_context_synchronously`
-3. 这些不影响核心架构，但应在 `flutter analyze` 收口时一并处理。
+### 自动化验证结果（2026-03-03）
+1. `go test ./...`：通过。
+2. `cd apps/flutter_client && flutter analyze`：`No issues found!`
+3. `cd apps/flutter_client && flutter test`：通过。
+4. 非 `io` 条件导入编译验证：
+   - `flutter test --platform chrome test/widget_test.dart` 因本机缺少 Chrome 可执行文件失败（环境问题）
+   - 已 fallback 执行 `flutter build web --debug`，通过。
 
 ---
 
-## 6. 下一窗口执行顺序（命令级）
+## 6. 后续执行顺序（命令级）
 
-### Step 0: 环境与现状确认
-1. `git status --short`
-2. `go test ./...`
-3. `cd apps/flutter_client && flutter analyze`
-4. `flutter test`
+### Step 0-3 状态（2026-03-03）
+1. `git status --short`：已确认基线。
+2. `go test ./...`：已通过。
+3. `cd apps/flutter_client && flutter analyze`：已通过。
+4. `flutter test`：已通过。
+5. `flutter build web --debug`：已通过（用于补足无 Chrome 环境下的 web 编译验证）。
 
-### Step 1: 先修编译阻塞（必须优先）
-1. 修 `debug_log_screen.dart` 和 `resources_screen.dart`：
-   - `ext` -> `fileExtension`
-2. 重构日志持久化类型组织：
-   - 新增 `file_persist_base.dart`
-   - 调整 `app_logger.dart` 条件导入路径，确保 `LogFilePersist` 类型稳定可见
-
-### Step 2: 处理 analyze 剩余告警
-1. 清理不必要 import
-2. 修复 async gap 上下文使用（`mounted` 判定/局部 context）
-
-### Step 3: 回归验证
-1. `flutter analyze`
-2. `flutter test`
-3. `go test ./...`
-
-### Step 4: 联调验证
+### Step 4: 联调验证（待执行）
 1. 后端：`go run ./cmd/server`
 2. 前端：`flutter run`
 3. 按第 8 节验收清单逐项验证
@@ -249,9 +230,10 @@ lib/screens/resources_screen.dart:174:9: Error: No named parameter with the name
 ## 8. 测试与验收清单
 
 ### 自动化
-1. 后端回归：`go test ./...` 必须通过。
-2. 前端静态检查：`flutter analyze` 零 error。
-3. 前端测试：`flutter test` 通过。
+1. 后端回归：`go test ./...` 已通过（2026-03-03）。
+2. 前端静态检查：`flutter analyze` 已 `No issues found`（2026-03-03）。
+3. 前端测试：`flutter test` 已通过（2026-03-03）。
+4. Web 编译校验：`flutter build web --debug` 已通过（2026-03-03）。
 
 ### 联调验收
 1. 前端 8 个导航页可打开：
@@ -290,20 +272,23 @@ lib/screens/resources_screen.dart:174:9: Error: No named parameter with the name
 ## 10. 提交说明与后续提交策略
 
 ### 本次提交说明
-1. 提交类型：WIP 快照。
+1. 提交类型：修复收口（Flutter 阻塞修复 + analyze 清理 + 验证回写）。
 2. 包含内容：
-   - 大量已完成改造（后端对齐 + 日志底座 + 前端重构）
-   - 尚未修复的 Flutter 阻塞（已在第 5 节具名记录）
+   - `file_saver` 参数名修复（`ext` -> `fileExtension`）
+   - 条件导入类型可见性修复（`file_persist_base.dart + file_persist_factory_*`）
+   - analyze 告警清理（import + async gap）
+   - 测试用例同步到当前导航结构（`widget_test.dart`）
+   - 自动化验证结果回写到 TODO
 
 ### 当前提交命令（本窗口执行）
 1. `git add -A`
-2. `git commit -m "wip: align backend/flutter features and logging foundation with detailed handoff todo"`
-3. `git show --stat -1`
+2. `git commit -m "fix(flutter): fix file_saver params and log persist conditional import typing"`
+3. `git commit -m "fix(flutter): clean analyze warnings and sync widget test"`
+4. `git commit -m "chore(docs): update todo with closure status and verification results"`
 
 ### 后续提交策略（下一窗口）
-1. `fix:` 提交修复 Flutter 阻塞（`ext` 参数 + 条件导入类型可见性）。
-2. `fix:` 提交 analyze 次级清理（import 与 async gap）。
-3. `chore/docs:` 提交联调与验收文档收口。
+1. `chore:` 联调验收记录（第 8 节逐项补证）。
+2. `docs:` 补充运行截图/日志路径等交付材料（如需要）。
 
 ---
 
