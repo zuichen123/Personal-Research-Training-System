@@ -84,18 +84,26 @@ func validateInput(planType PlanType, title string) error {
 	if strings.TrimSpace(title) == "" {
 		return errs.BadRequest("title is required")
 	}
-	if normalizeType(planType) == "" {
+	normalizedType := normalizeType(planType)
+	if normalizedType == "" {
 		return errs.BadRequest("plan_type is required")
+	}
+	if !isValidPlanType(normalizedType) {
+		return errs.BadRequest("plan_type must be one of: month_goal/month_plan/day_goal/day_plan/current_phase")
 	}
 	return nil
 }
 
 func normalizeType(planType PlanType) PlanType {
+	return PlanType(strings.TrimSpace(string(planType)))
+}
+
+func isValidPlanType(planType PlanType) bool {
 	switch planType {
 	case MonthGoal, MonthPlan, DayGoal, DayPlan, CurrentPhase:
-		return planType
+		return true
 	default:
-		return DayPlan
+		return false
 	}
 }
 

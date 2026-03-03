@@ -38,3 +38,18 @@ func TestService_CreateValidation(t *testing.T) {
 		t.Fatal("expected validation error, got nil")
 	}
 }
+
+func TestService_CreateValidation_InvalidQuestionType(t *testing.T) {
+	repo := NewMemoryRepository()
+	svc := NewService(repo)
+
+	_, err := svc.Create(context.Background(), CreateInput{
+		Title:     "t",
+		Stem:      "s",
+		Type:      QuestionType("weird"),
+		AnswerKey: []string{"a"},
+	})
+	if err == nil {
+		t.Fatal("expected validation error, got nil")
+	}
+}

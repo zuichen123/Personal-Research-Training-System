@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 
 	"self-study-tool/internal/platform/observability/logx"
@@ -39,6 +40,9 @@ func DecodeJSON(r *http.Request, out any) error {
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(out); err != nil {
+		return errs.BadRequest("invalid json payload")
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
 		return errs.BadRequest("invalid json payload")
 	}
 	return nil

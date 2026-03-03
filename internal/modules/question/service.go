@@ -27,7 +27,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (Question, error) 
 		ID:           uuid.NewString(),
 		Title:        strings.TrimSpace(in.Title),
 		Stem:         strings.TrimSpace(in.Stem),
-		Type:         in.Type,
+		Type:         normalizeQuestionType(in.Type),
 		Subject:      normalizeSubject(in.Subject),
 		Source:       normalizeSource(in.Source),
 		Options:      in.Options,
@@ -68,7 +68,7 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (Questi
 
 	oldItem.Title = strings.TrimSpace(in.Title)
 	oldItem.Stem = strings.TrimSpace(in.Stem)
-	oldItem.Type = in.Type
+	oldItem.Type = normalizeQuestionType(in.Type)
 	oldItem.Subject = normalizeSubject(in.Subject)
 	oldItem.Source = normalizeSource(in.Source)
 	oldItem.Options = in.Options
@@ -95,13 +95,30 @@ func validateInput(title, stem string, qType QuestionType, answerKey []string) e
 	if strings.TrimSpace(stem) == "" {
 		return errs.BadRequest("stem is required")
 	}
-	if qType == "" {
+	normalizedType := normalizeQuestionType(qType)
+	if normalizedType == "" {
 		return errs.BadRequest("question type is required")
+	}
+	if !isValidQuestionType(normalizedType) {
+		return errs.BadRequest("question type must be one of: single_choice/multi_choice/short_answer")
 	}
 	if len(answerKey) == 0 {
 		return errs.BadRequest("answer_key is required")
 	}
 	return nil
+}
+
+func normalizeQuestionType(qType QuestionType) QuestionType {
+	return QuestionType(strings.TrimSpace(string(qType)))
+}
+
+func isValidQuestionType(qType QuestionType) bool {
+	switch qType {
+	case SingleChoice, MultiChoice, ShortAnswer:
+		return true
+	default:
+		return false
+	}
 }
 
 func normalizeDifficulty(v int) int {
