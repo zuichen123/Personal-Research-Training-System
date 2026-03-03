@@ -1,4 +1,4 @@
-﻿import 'dart:ui';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -22,7 +22,7 @@ Future<void> main() async {
     AppLogger.instance.error(
       module: 'app',
       event: 'flutter.error',
-      message: 'Flutter寮傚父',
+      message: 'Flutter异常',
       error: details.exceptionAsString(),
       stack: details.stack.toString(),
     );
@@ -33,7 +33,7 @@ Future<void> main() async {
     AppLogger.instance.error(
       module: 'app',
       event: 'platform.error',
-      message: '骞冲彴寮傚父',
+      message: '平台异常',
       error: error.toString(),
       stack: stack.toString(),
     );
@@ -43,7 +43,7 @@ Future<void> main() async {
   runApp(const MyApp());
 }
 
-// 鈹€鈹€鈹€ 閫氱敤涓婚閰嶇疆 鈹€鈹€鈹€
+// 通用主题配置
 
 CardThemeData _cardTheme(ColorScheme cs) => CardThemeData(
   elevation: 0.5,
@@ -87,7 +87,7 @@ class MyApp extends StatelessWidget {
     return MultiProvider(
       providers: [ChangeNotifierProvider(create: (_) => AppProvider())],
       child: MaterialApp(
-        title: '鑷宸ュ叿',
+        title: '自学工具',
         debugShowCheckedModeBanner: false,
         theme: _buildTheme(Brightness.light),
         darkTheme: _buildTheme(Brightness.dark),
@@ -116,7 +116,7 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// 鈹€鈹€鈹€ 涓诲鑸細5 涓富 tab 鈹€鈹€鈹€
+// 主导航：5 个主 Tab
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -128,7 +128,7 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
 
-  // 5 涓富灞忓箷
+  // 5 个主页面
   final List<Widget> _screens = const [
     QuestionsScreen(),
     MistakesScreen(),
@@ -141,22 +141,22 @@ class _MainScreenState extends State<MainScreen> {
     _NavItem(
       icon: Icons.question_answer_outlined,
       selectedIcon: Icons.question_answer,
-      label: '棰樺簱',
+      label: '题库',
     ),
     _NavItem(
       icon: Icons.menu_book_outlined,
       selectedIcon: Icons.menu_book,
-      label: '閿欓',
+      label: '错题',
     ),
     _NavItem(
       icon: Icons.edit_note_outlined,
       selectedIcon: Icons.edit_note,
-      label: '缁冧範',
+      label: '练习',
     ),
     _NavItem(
       icon: Icons.timer_outlined,
       selectedIcon: Icons.timer,
-      label: '涓撴敞',
+      label: '专注',
     ),
     _NavItem(
       icon: Icons.psychology_outlined,
@@ -165,22 +165,22 @@ class _MainScreenState extends State<MainScreen> {
     ),
   ];
 
-  // Drawer 鏉＄洰 鈫?鍏ㄥ睆 push
+  // Drawer 条目 -> 全屏 push
   static const _drawerItems = [
     _NavItem(
       icon: Icons.folder_outlined,
       selectedIcon: Icons.folder,
-      label: '瀛︿範璧勬枡',
+      label: '学习资料',
     ),
     _NavItem(
       icon: Icons.event_note_outlined,
       selectedIcon: Icons.event_note,
-      label: '璁″垝绠＄悊',
+      label: '计划管理',
     ),
     _NavItem(
       icon: Icons.settings_outlined,
       selectedIcon: Icons.settings,
-      label: '璁剧疆',
+      label: '设置',
     ),
   ];
 
@@ -200,9 +200,9 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _openDrawerScreen(BuildContext context, int drawerIndex) {
-    Navigator.of(context).pop(); // 鍏抽棴 Drawer
+    Navigator.of(context).pop(); // 关闭 Drawer
 
-    // 鏍规嵁 drawerIndex 纭繚瀵瑰簲鏁版嵁鍔犺浇
+    // 根据 drawerIndex 确保对应数据加载
     final provider = context.read<AppProvider>();
     Widget screen;
     switch (drawerIndex) {
@@ -247,7 +247,7 @@ class _MainScreenState extends State<MainScreen> {
                 Icon(Icons.school, size: 32, color: cs.primary),
                 const SizedBox(width: 12),
                 Text(
-                  '鑷宸ュ叿',
+                  '自学工具',
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
