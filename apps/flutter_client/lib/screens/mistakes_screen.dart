@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/mistake.dart';
 import '../models/question.dart';
 import '../providers/app_provider.dart';
+import 'mistake_detail_screen.dart';
 
 class MistakesScreen extends StatefulWidget {
   const MistakesScreen({super.key});
@@ -21,6 +22,7 @@ class _MistakesScreenState extends State<MistakesScreen> {
     final mistakes = provider.mistakes;
     final loading = provider.isSectionLoading(DataSection.mistakes);
     final questions = provider.questions;
+    _ensureQuestionsLoaded(context, provider);
 
     return Scaffold(
       appBar: AppBar(
@@ -80,7 +82,13 @@ class _MistakesScreenState extends State<MistakesScreen> {
           Expanded(
             child: RefreshIndicator(
               onRefresh: () => provider.fetchMistakes(force: true),
-              child: _buildBody(provider, mistakes, loading, questions),
+              child: _buildBody(
+                context,
+                provider,
+                mistakes,
+                loading,
+                questions,
+              ),
             ),
           ),
         ],
@@ -94,11 +102,15 @@ class _MistakesScreenState extends State<MistakesScreen> {
   }
 
   Widget _buildBody(
+    BuildContext context,
     AppProvider provider,
     List<MistakeRecord> mistakes,
     bool loading,
     List<Question> questions,
   ) {
+    final latestMistakes = _latestMistakesByQuestion(mistakes);
+    final countByQuestion = _mistakeCountByQuestion(mistakes);
+
     if (loading && mistakes.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -119,15 +131,21 @@ class _MistakesScreenState extends State<MistakesScreen> {
           Center(
             child: Column(
               children: [
-                Icon(Icons.check_circle_outline,
-                    size: 64,
-                    color: Colors.green.withValues(alpha: 0.5)),
+                Icon(
+                  Icons.check_circle_outline,
+                  size: 64,
+                  color: Colors.green.withValues(alpha: 0.5),
+                ),
                 const SizedBox(height: 16),
-                const Text('暂无错题记录',
-                    style: TextStyle(fontSize: 16, color: Colors.grey)),
+                const Text(
+                  '暂无错题记录',
+                  style: TextStyle(fontSize: 16, color: Colors.grey),
+                ),
                 const SizedBox(height: 8),
-                const Text('做题后答错的题目会自动出现在这里',
-                    style: TextStyle(fontSize: 13, color: Colors.grey)),
+                const Text(
+                  '做题后答错的题目会自动出现在这里',
+                  style: TextStyle(fontSize: 13, color: Colors.grey),
+                ),
               ],
             ),
           ),
@@ -137,78 +155,90 @@ class _MistakesScreenState extends State<MistakesScreen> {
 
     return ListView.builder(
       physics: const AlwaysScrollableScrollPhysics(),
-      itemCount: mistakes.length,
+      itemCount: latestMistakes.length,
       itemBuilder: (context, index) {
-        final m = mistakes[index];
-        // Try to find the question title
-        String questionLabel = '题目ID: ${m.questionId}';
-        for (final q in questions) {
-          if (q.id == m.questionId) {
-            questionLabel = q.title.isNotEmpty ? q.title : q.stem;
-            break;
-          }
-        }
+        final m = latestMistakes[index];
+        final question = _questionById(questions, m.questionId);
+        final stem = (question?.stem ?? '').trim();
+        final subject = (question?.subject ?? m.subject).trim();
+        final type = _questionTypeZh(question?.type ?? '');
+        final count = countByQuestion[m.questionId] ?? 1;
 
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          child: ListTile(
+            onTap: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => MistakeDetailScreen(
+                    mistake: m,
+                    question: question,
+                    allMistakes: provider.mistakes,
+                  ),
+                ),
+              );
+              if (!context.mounted) return;
+              await provider.fetchMistakes(
+                force: true,
+                questionId: _selectedQuestionId,
+              );
+            },
+            leading: CircleAvatar(
+              backgroundColor: _difficultyColor(m.difficulty),
+              child: Text(
+                '${m.difficulty}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            title: Row(
               children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: _difficultyColor(m.difficulty),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        '难度 ${m.difficulty}',
-                        style: const TextStyle(
-                            fontSize: 11, color: Colors.white),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Chip(
-                      label: Text(m.subject, style: const TextStyle(fontSize: 11)),
-                      visualDensity: VisualDensity.compact,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      onPressed: () async {
-                        await context.read<AppProvider>().deleteMistake(m.id);
-                      },
-                      icon: const Icon(Icons.delete_outline, size: 20),
-                    ),
-                  ],
+                Expanded(
+                  child: Text(
+                    stem.isEmpty ? '题干未加载或已删除' : stem,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(width: 8),
+                Chip(
+                  label: Text(
+                    '历史$count次',
+                    style: const TextStyle(fontSize: 11),
+                  ),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ],
+            ),
+            subtitle: Text(
+              '科目: ${subject.isEmpty ? '-' : subject}  类型: $type\n反馈: ${m.feedback}',
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
+            trailing: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
                 Text(
-                  questionLabel,
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                  m.createdAt.toLocal().toString().split(' ')[0],
+                  style: const TextStyle(fontSize: 12),
                 ),
-                const SizedBox(height: 6),
-                Text('掌握度: ${m.masteryLevel}%'),
-                const SizedBox(height: 6),
-                Text('你的答案: ${m.userAnswer.join(", ")}'),
-                const SizedBox(height: 6),
-                Text(
-                  '反馈: ${m.feedback}',
-                  style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                      fontSize: 13),
+                const SizedBox(height: 4),
+                IconButton(
+                  tooltip: '删除',
+                  onPressed: () async {
+                    await _deleteMistake(context, m.id);
+                  },
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  visualDensity: VisualDensity.compact,
+                  constraints: const BoxConstraints(
+                    minWidth: 32,
+                    minHeight: 32,
+                  ),
+                  padding: EdgeInsets.zero,
                 ),
-                if (m.reason.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Text('错因: ${m.reason}',
-                      style: const TextStyle(fontSize: 13)),
-                ],
               ],
             ),
           ),
@@ -225,6 +255,101 @@ class _MistakesScreenState extends State<MistakesScreen> {
     return Colors.red;
   }
 
+  Question? _questionById(List<Question> questions, String questionId) {
+    for (final q in questions) {
+      if (q.id == questionId) {
+        return q;
+      }
+    }
+    return null;
+  }
+
+  List<MistakeRecord> _latestMistakesByQuestion(List<MistakeRecord> mistakes) {
+    final seen = <String>{};
+    final result = <MistakeRecord>[];
+    for (final item in mistakes) {
+      if (seen.contains(item.questionId)) continue;
+      seen.add(item.questionId);
+      result.add(item);
+    }
+    return result;
+  }
+
+  Map<String, int> _mistakeCountByQuestion(List<MistakeRecord> mistakes) {
+    final counts = <String, int>{};
+    for (final item in mistakes) {
+      counts[item.questionId] = (counts[item.questionId] ?? 0) + 1;
+    }
+    return counts;
+  }
+
+  String _questionTypeZh(String type) {
+    switch (type) {
+      case 'single_choice':
+        return '单选';
+      case 'multi_choice':
+        return '多选';
+      case 'short_answer':
+        return '简答';
+      default:
+        return type.trim().isEmpty ? '-' : type;
+    }
+  }
+
+  void _ensureQuestionsLoaded(BuildContext context, AppProvider provider) {
+    if (provider.questions.isNotEmpty) return;
+    if (provider.isSectionLoaded(DataSection.questions) ||
+        provider.isSectionLoading(DataSection.questions)) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) return;
+      context.read<AppProvider>().fetchQuestions();
+    });
+  }
+
+  Future<void> _deleteMistake(BuildContext context, String id) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('删除错题记录'),
+          content: const Text('确认删除这条错题记录？'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('删除'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true || !context.mounted) {
+      return;
+    }
+    try {
+      await context.read<AppProvider>().deleteMistake(id);
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已删除错题记录')));
+    } catch (_) {
+      if (!context.mounted) {
+        return;
+      }
+      final message = context.read<AppProvider>().errorMessage ?? '删除失败';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
+
   Future<void> _showCreateDialog(BuildContext context) async {
     final provider = context.read<AppProvider>();
     if (provider.questions.isEmpty) {
@@ -232,8 +357,9 @@ class _MistakesScreenState extends State<MistakesScreen> {
       if (!context.mounted) return;
     }
 
-    String? selectedQuestionId =
-        provider.questions.isNotEmpty ? provider.questions.first.id : null;
+    String? selectedQuestionId = provider.questions.isNotEmpty
+        ? provider.questions.first.id
+        : null;
     final feedbackController = TextEditingController();
     final reasonController = TextEditingController();
     final answerController = TextEditingController();
@@ -252,8 +378,7 @@ class _MistakesScreenState extends State<MistakesScreen> {
                     if (provider.questions.isNotEmpty)
                       DropdownButtonFormField<String>(
                         value: selectedQuestionId,
-                        decoration:
-                            const InputDecoration(labelText: '选择题目'),
+                        decoration: const InputDecoration(labelText: '选择题目'),
                         items: provider.questions
                             .map(
                               (Question q) => DropdownMenuItem(
@@ -284,9 +409,9 @@ class _MistakesScreenState extends State<MistakesScreen> {
                   onPressed: () async {
                     if (selectedQuestionId == null ||
                         selectedQuestionId!.isEmpty) {
-                      ScaffoldMessenger.of(ctx).showSnackBar(
-                        const SnackBar(content: Text('请选择题目')),
-                      );
+                      ScaffoldMessenger.of(
+                        ctx,
+                      ).showSnackBar(const SnackBar(content: Text('请选择题目')));
                       return;
                     }
                     // Find the question to get its fields
@@ -314,15 +439,15 @@ class _MistakesScreenState extends State<MistakesScreen> {
                       await provider.createMistake(input);
                       if (ctx.mounted) {
                         Navigator.of(ctx).pop();
-                        ScaffoldMessenger.of(ctx).showSnackBar(
-                          const SnackBar(content: Text('错题已添加')),
-                        );
+                        ScaffoldMessenger.of(
+                          ctx,
+                        ).showSnackBar(const SnackBar(content: Text('错题已添加')));
                       }
                     } catch (e) {
                       if (ctx.mounted) {
-                        ScaffoldMessenger.of(ctx).showSnackBar(
-                          SnackBar(content: Text('添加失败：$e')),
-                        );
+                        ScaffoldMessenger.of(
+                          ctx,
+                        ).showSnackBar(SnackBar(content: Text('添加失败：$e')));
                       }
                     }
                   },
