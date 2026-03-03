@@ -10,8 +10,10 @@ import (
 )
 
 type testConfigStore struct {
-	last  ProviderConfigRecord
-	saved bool
+	last          ProviderConfigRecord
+	saved         bool
+	promptRecords []PromptTemplateRecord
+	savePromptErr error
 }
 
 func (s *testConfigStore) LoadProviderConfig(context.Context) (ProviderConfigRecord, bool, error) {
@@ -21,6 +23,26 @@ func (s *testConfigStore) LoadProviderConfig(context.Context) (ProviderConfigRec
 func (s *testConfigStore) SaveProviderConfig(_ context.Context, cfg ProviderConfigRecord) error {
 	s.last = cfg
 	s.saved = true
+	return nil
+}
+
+func (s *testConfigStore) LoadPromptTemplates(context.Context) ([]PromptTemplateRecord, error) {
+	out := make([]PromptTemplateRecord, 0, len(s.promptRecords))
+	out = append(out, s.promptRecords...)
+	return out, nil
+}
+
+func (s *testConfigStore) SavePromptTemplate(_ context.Context, cfg PromptTemplateRecord) error {
+	if s.savePromptErr != nil {
+		return s.savePromptErr
+	}
+	for i := range s.promptRecords {
+		if s.promptRecords[i].PromptKey == cfg.PromptKey {
+			s.promptRecords[i] = cfg
+			return nil
+		}
+	}
+	s.promptRecords = append(s.promptRecords, cfg)
 	return nil
 }
 
@@ -287,5 +309,114 @@ func TestService_OptimizeLearningPlan_Success(t *testing.T) {
 	}
 	if result.UpdatedPlan.PlanEndDate != "2026-06-04" {
 		t.Fatalf("unexpected shifted end date: %s", result.UpdatedPlan.PlanEndDate)
+	}
+}
+
+func TestService_LoadPromptTemplates_AppliesOverrides(t *testing.T) {
+	store := &testConfigStore{
+		promptRecords: []PromptTemplateRecord{
+			{
+				PromptKey:          PromptKeyGenerateQuestions,
+				CustomPrompt:       "custom generate",
+				OutputFormatPrompt: "custom output",
+				UpdatedAt:          "2026-03-04T00:00:00Z",
+			},
+		},
+	}
+	svc := NewServiceWithStore(
+		NewMockClient(0),
+		newQuestionServiceForTest(),
+		false,
+		RuntimeConfig{Provider: "mock"},
+		store,
+	)
+
+	if err := svc.LoadPromptTemplates(context.Background()); err != nil {
+		t.Fatalf("load prompt templates error: %v", err)
+	}
+	list := svc.ListPromptTemplates()
+	if len(list) == 0 {
+		t.Fatal("expected prompt template list")
+	}
+	var found *PromptTemplateConfig
+	for i := range list {
+		if list[i].Key == PromptKeyGenerateQuestions {
+			found = &list[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatal("expected generate_questions prompt config")
+	}
+	if found.CustomPrompt != "custom generate" {
+		t.Fatalf("unexpected custom prompt: %s", found.CustomPrompt)
+	}
+	if found.EffectivePrompt != "custom generate" {
+		t.Fatalf("unexpected effective prompt: %s", found.EffectivePrompt)
+	}
+	if found.EffectiveOutputFormatPrompt != "custom output" {
+		t.Fatalf("unexpected effective output prompt: %s", found.EffectiveOutputFormatPrompt)
+	}
+}
+
+func TestService_UpdatePromptTemplate_PersistsAndHotUpdates(t *testing.T) {
+	store := &testConfigStore{}
+	svc := NewServiceWithStore(
+		NewMockClient(0),
+		newQuestionServiceForTest(),
+		false,
+		RuntimeConfig{Provider: "mock"},
+		store,
+	)
+
+	custom := "new custom prompt"
+	output := "new output prompt"
+	updated, err := svc.UpdatePromptTemplate(context.Background(), PromptKeyScoreLearning, UpdatePromptTemplateRequest{
+		CustomPrompt:       &custom,
+		OutputFormatPrompt: &output,
+	})
+	if err != nil {
+		t.Fatalf("update prompt template error: %v", err)
+	}
+	if updated.EffectivePrompt != custom {
+		t.Fatalf("unexpected effective prompt: %s", updated.EffectivePrompt)
+	}
+	if updated.EffectiveOutputFormatPrompt != output {
+		t.Fatalf("unexpected effective output prompt: %s", updated.EffectiveOutputFormatPrompt)
+	}
+	if len(store.promptRecords) != 1 {
+		t.Fatalf("expected one saved prompt record, got %d", len(store.promptRecords))
+	}
+	if store.promptRecords[0].PromptKey != PromptKeyScoreLearning {
+		t.Fatalf("unexpected prompt key: %s", store.promptRecords[0].PromptKey)
+	}
+}
+
+func TestService_UpdatePromptTemplate_RollsBackOnPersistError(t *testing.T) {
+	store := &testConfigStore{
+		savePromptErr: context.DeadlineExceeded,
+	}
+	svc := NewServiceWithStore(
+		NewMockClient(0),
+		newQuestionServiceForTest(),
+		false,
+		RuntimeConfig{Provider: "mock"},
+		store,
+	)
+
+	custom := "should fail"
+	_, err := svc.UpdatePromptTemplate(context.Background(), PromptKeyGradeAnswer, UpdatePromptTemplateRequest{
+		CustomPrompt: &custom,
+	})
+	if err == nil {
+		t.Fatal("expected persist error")
+	}
+
+	cfg, ok := svc.promptRuntime.Get(PromptKeyGradeAnswer)
+	if !ok {
+		t.Fatal("expected grade prompt config")
+	}
+	if cfg.CustomPrompt != "" {
+		t.Fatalf("expected rollback to no custom prompt, got: %s", cfg.CustomPrompt)
 	}
 }

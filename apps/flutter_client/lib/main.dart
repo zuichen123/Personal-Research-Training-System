@@ -43,8 +43,6 @@ Future<void> main() async {
   runApp(const MyApp());
 }
 
-// 通用主题配置
-
 CardThemeData _cardTheme(ColorScheme cs) => CardThemeData(
   elevation: 0.5,
   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -116,8 +114,6 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// 主导航：5 个主 Tab
-
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
@@ -128,7 +124,6 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
 
-  // 5 个主页面
   final List<Widget> _screens = const [
     QuestionsScreen(),
     MistakesScreen(),
@@ -165,7 +160,6 @@ class _MainScreenState extends State<MainScreen> {
     ),
   ];
 
-  // Drawer 条目 -> 全屏 push
   static const _drawerItems = [
     _NavItem(
       icon: Icons.folder_outlined,
@@ -200,9 +194,8 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _openDrawerScreen(BuildContext context, int drawerIndex) {
-    Navigator.of(context).pop(); // 关闭 Drawer
+    Navigator.of(context).pop();
 
-    // 根据 drawerIndex 确保对应数据加载
     final provider = context.read<AppProvider>();
     Widget screen;
     switch (drawerIndex) {
@@ -223,9 +216,7 @@ class _MainScreenState extends State<MainScreen> {
         return;
     }
 
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => screen),
-    );
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
   }
 
   Widget _buildDrawer(BuildContext context) {
@@ -236,7 +227,10 @@ class _MainScreenState extends State<MainScreen> {
           DrawerHeader(
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [cs.primaryContainer, cs.primary.withValues(alpha: 0.15)],
+                colors: [
+                  cs.primaryContainer,
+                  cs.primary.withValues(alpha: 0.15),
+                ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),

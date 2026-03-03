@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 
 	"self-study-tool/internal/modules/question"
 	"self-study-tool/internal/shared/errs"
@@ -19,6 +20,13 @@ type Service struct {
 	fallbackEnabled bool
 	runtime         RuntimeConfig
 	configStore     ProviderConfigStore
+
+	promptStore   PromptTemplateStore
+	promptRuntime *PromptTemplateRuntime
+}
+
+type promptTemplateRuntimeAware interface {
+	SetPromptTemplateRuntime(runtime *PromptTemplateRuntime)
 }
 
 func NewService(client Client, questionService *question.Service, fallbackEnabled bool, runtime RuntimeConfig) *Service {
@@ -32,13 +40,27 @@ func NewServiceWithStore(
 	runtime RuntimeConfig,
 	configStore ProviderConfigStore,
 ) *Service {
+	var promptStore PromptTemplateStore
+	if s, ok := configStore.(PromptTemplateStore); ok {
+		promptStore = s
+	}
 	runtime.Provider = strings.ToLower(strings.TrimSpace(runtime.Provider))
-	return &Service{
+	service := &Service{
 		client:          client,
 		questionService: questionService,
 		fallbackEnabled: fallbackEnabled,
 		runtime:         runtime,
 		configStore:     configStore,
+		promptStore:     promptStore,
+		promptRuntime:   NewPromptTemplateRuntime(),
+	}
+	service.bindPromptRuntimeLocked()
+	return service
+}
+
+func (s *Service) bindPromptRuntimeLocked() {
+	if aware, ok := s.client.(promptTemplateRuntimeAware); ok {
+		aware.SetPromptTemplateRuntime(s.promptRuntime)
 	}
 }
 
@@ -123,6 +145,75 @@ func (s *Service) UpdateProviderConfig(req UpdateProviderConfigRequest) (Provide
 	return s.providerStatusLocked(), nil
 }
 
+func (s *Service) LoadPromptTemplates(ctx context.Context) error {
+	if s.promptStore == nil {
+		return nil
+	}
+	records, err := s.promptStore.LoadPromptTemplates(ctx)
+	if err != nil {
+		return errs.Internal(fmt.Sprintf("load ai prompt templates: %v", err))
+	}
+	s.promptRuntime.ReplaceAll(records)
+	return nil
+}
+
+func (s *Service) ReloadPromptTemplates(ctx context.Context) ([]PromptTemplateConfig, error) {
+	if err := s.LoadPromptTemplates(ctx); err != nil {
+		return nil, err
+	}
+	return s.promptRuntime.List(), nil
+}
+
+func (s *Service) ListPromptTemplates() []PromptTemplateConfig {
+	return s.promptRuntime.List()
+}
+
+func (s *Service) UpdatePromptTemplate(
+	ctx context.Context,
+	key string,
+	req UpdatePromptTemplateRequest,
+) (PromptTemplateConfig, error) {
+	normalizedKey := normalizePromptKey(key)
+	if !isSupportedPromptKey(normalizedKey) {
+		return PromptTemplateConfig{}, errs.BadRequest("prompt key must be one of: " + supportedPromptKeysText())
+	}
+	if req.CustomPrompt == nil && req.OutputFormatPrompt == nil {
+		return PromptTemplateConfig{}, errs.BadRequest("custom_prompt or output_format_prompt is required")
+	}
+
+	prevOverride, hadPrevOverride := s.promptRuntime.getOverride(normalizedKey)
+	nextOverride := prevOverride
+	if req.CustomPrompt != nil {
+		nextOverride.CustomPrompt = strings.TrimSpace(*req.CustomPrompt)
+	}
+	if req.OutputFormatPrompt != nil {
+		nextOverride.OutputFormatPrompt = strings.TrimSpace(*req.OutputFormatPrompt)
+	}
+	nextOverride.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+
+	cfg, ok := s.promptRuntime.setOverride(normalizedKey, nextOverride)
+	if !ok {
+		return PromptTemplateConfig{}, errs.BadRequest("prompt key must be one of: " + supportedPromptKeysText())
+	}
+
+	if s.promptStore != nil {
+		if err := s.promptStore.SavePromptTemplate(ctx, PromptTemplateRecord{
+			PromptKey:          normalizedKey,
+			CustomPrompt:       cfg.CustomPrompt,
+			OutputFormatPrompt: cfg.OutputFormatPrompt,
+			UpdatedAt:          cfg.UpdatedAt,
+		}); err != nil {
+			if hadPrevOverride {
+				s.promptRuntime.setOverride(normalizedKey, prevOverride)
+			} else {
+				s.promptRuntime.deleteOverride(normalizedKey)
+			}
+			return PromptTemplateConfig{}, errs.Internal(fmt.Sprintf("persist ai prompt template: %v", err))
+		}
+	}
+	return cfg, nil
+}
+
 func (s *Service) providerConfigSnapshotLocked() ProviderConfigRecord {
 	return ProviderConfigRecord{
 		Provider:      strings.ToLower(strings.TrimSpace(s.runtime.Provider)),
@@ -174,6 +265,7 @@ func (s *Service) applyProviderConfigLocked(provider string) error {
 	case "mock":
 		s.client = NewMockClient(s.runtime.MockLatency)
 		s.fallbackEnabled = false
+		s.bindPromptRuntimeLocked()
 		return nil
 	case "openai":
 		client := NewOpenAIClient(OpenAIConfig{
@@ -185,11 +277,13 @@ func (s *Service) applyProviderConfigLocked(provider string) error {
 		if client.IsReady() {
 			s.client = client
 			s.fallbackEnabled = false
+			s.bindPromptRuntimeLocked()
 			return nil
 		}
 		if s.runtime.FallbackToMock {
 			s.client = NewMockClient(s.runtime.MockLatency)
 			s.fallbackEnabled = true
+			s.bindPromptRuntimeLocked()
 			return nil
 		}
 		return errs.BadRequest("openai provider is not ready, check api key/model")
@@ -202,11 +296,13 @@ func (s *Service) applyProviderConfigLocked(provider string) error {
 		if client.IsReady() {
 			s.client = client
 			s.fallbackEnabled = false
+			s.bindPromptRuntimeLocked()
 			return nil
 		}
 		if s.runtime.FallbackToMock {
 			s.client = NewMockClient(s.runtime.MockLatency)
 			s.fallbackEnabled = true
+			s.bindPromptRuntimeLocked()
 			return nil
 		}
 		return errs.BadRequest("gemini provider is not ready, check api key/model")
@@ -219,11 +315,13 @@ func (s *Service) applyProviderConfigLocked(provider string) error {
 		if client.IsReady() {
 			s.client = client
 			s.fallbackEnabled = false
+			s.bindPromptRuntimeLocked()
 			return nil
 		}
 		if s.runtime.FallbackToMock {
 			s.client = NewMockClient(s.runtime.MockLatency)
 			s.fallbackEnabled = true
+			s.bindPromptRuntimeLocked()
 			return nil
 		}
 		return errs.BadRequest("claude provider is not ready, check api key/model")

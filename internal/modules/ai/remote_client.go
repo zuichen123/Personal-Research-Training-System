@@ -21,6 +21,8 @@ type remoteLLMClient struct {
 	model    string
 	ready    bool
 	invoke   promptInvoker
+
+	promptRuntime *PromptTemplateRuntime
 }
 
 func newRemoteLLMClient(provider, model string, ready bool, invoke promptInvoker) *remoteLLMClient {
@@ -29,6 +31,8 @@ func newRemoteLLMClient(provider, model string, ready bool, invoke promptInvoker
 		model:    model,
 		ready:    ready,
 		invoke:   invoke,
+
+		promptRuntime: NewPromptTemplateRuntime(),
 	}
 }
 
@@ -42,6 +46,20 @@ func (c *remoteLLMClient) ModelName() string {
 
 func (c *remoteLLMClient) IsReady() bool {
 	return c.ready
+}
+
+func (c *remoteLLMClient) SetPromptTemplateRuntime(runtime *PromptTemplateRuntime) {
+	if runtime == nil {
+		return
+	}
+	c.promptRuntime = runtime
+}
+
+func (c *remoteLLMClient) buildOperationPrompt(operation, userInput string) string {
+	if c.promptRuntime == nil {
+		return strings.TrimSpace(userInput)
+	}
+	return c.promptRuntime.Compose(operation, userInput)
 }
 
 func (c *remoteLLMClient) GenerateQuestions(ctx context.Context, req GenerateRequest) ([]question.CreateInput, error) {
@@ -61,32 +79,19 @@ func (c *remoteLLMClient) GenerateQuestions(ctx context.Context, req GenerateReq
 		req.Subject = "general"
 	}
 
-	prompt := fmt.Sprintf(
-		`You are an exam question generator.
-Return ONLY valid JSON object with this schema:
-{
-  "items":[
-    {
-      "title":"string",
-      "stem":"string",
-      "type":"single_choice|multi_choice|short_answer",
-      "subject":"string",
-      "source":"ai_generated",
-      "options":[{"key":"A","text":"...","score":0}],
-      "answer_key":["string"],
-      "tags":["string"],
-      "difficulty":1-5,
-      "mastery_level":0-100
-    }
-  ]
-}
-Generate %d items for topic "%s", subject "%s", scope "%s", difficulty %d.`,
+	userInput := fmt.Sprintf(
+		`Generate %d items.
+topic=%s
+subject=%s
+scope=%s
+difficulty=%d`,
 		req.Count,
 		req.Topic,
 		req.Subject,
 		req.Scope,
 		req.Difficulty,
 	)
+	prompt := c.buildOperationPrompt(PromptKeyGenerateQuestions, userInput)
 
 	var payload struct {
 		Items []question.CreateInput `json:"items"`
@@ -119,24 +124,17 @@ func (c *remoteLLMClient) GradeAnswer(ctx context.Context, req GradeRequest) (Gr
 	if !c.ready {
 		return GradeResult{}, errs.BadRequest("ai provider is not ready")
 	}
-	prompt := fmt.Sprintf(
-		`You are a strict grader.
-Question title: %s
-Question stem: %s
-Answer key: %v
-User answer: %v
-Return ONLY JSON:
-{
-  "score":0-100,
-  "correct":true|false,
-  "feedback":"string",
-  "wrong_reason":"string"
-}`,
+	userInput := fmt.Sprintf(
+		`question_title=%s
+question_stem=%s
+answer_key=%v
+user_answer=%v`,
 		req.Question.Title,
 		req.Question.Stem,
 		req.Question.AnswerKey,
 		req.UserAnswer,
 	)
+	prompt := c.buildOperationPrompt(PromptKeyGradeAnswer, userInput)
 	var out GradeResult
 	if err := c.invokeJSON(ctx, "grade_answer", prompt, &out); err != nil {
 		return GradeResult{}, err
@@ -155,10 +153,8 @@ func (c *remoteLLMClient) BuildLearningPlan(ctx context.Context, req LearnReques
 	if !c.ready {
 		return LearnResult{}, errs.BadRequest("ai provider is not ready")
 	}
-	prompt := fmt.Sprintf(
-		`Build a long-term study plan in JSON only.
-Input:
-mode=%s
+	userInput := fmt.Sprintf(
+		`mode=%s
 subject=%s
 unit=%s
 current_stage=%s
@@ -170,55 +166,12 @@ end_date=%s
 current_status=%s
 themes=%v
 supplement=%s
-profile_summary=%s
-Output schema:
-{
-  "mode":"string",
-  "subject":"string",
-  "unit":"string",
-  "created_at":"RFC3339 string",
-  "final_goal":"string",
-  "current_status":"string",
-  "plan_start_date":"YYYY-MM-DD",
-  "plan_end_date":"YYYY-MM-DD",
-  "study_outline":["string"],
-  "review_checklist":["string"],
-  "stage_suggestion":"string",
-  "missing_fields":["string"],
-  "follow_up_questions":["string"],
-  "themes":[
-    {
-      "name":"string",
-      "estimated_hours":number,
-      "children":[
-        {
-          "level":"year|month|week|day|task",
-          "title":"string",
-          "estimated_hours":number,
-          "start_date":"YYYY-MM-DD",
-          "end_date":"YYYY-MM-DD",
-          "details":["string"],
-          "children":[]
-        }
-      ]
-    }
-  ],
-  "plan_items":[
-    {
-      "plan_type":"year_plan|month_plan|week_plan|day_plan|current_phase",
-      "title":"string",
-      "content":"string",
-      "target_date":"YYYY-MM-DD",
-      "status":"pending|in_progress|done|rescheduled",
-      "priority":1
-    }
-  ],
-  "optimization_hints":["string"]
-}`,
+profile_summary=%s`,
 		req.Mode, req.Subject, req.Unit, req.CurrentStage, req.Goals,
 		req.FinalGoal, req.TotalHours, req.StartDate, req.EndDate, req.CurrentStatus,
 		req.Themes, req.Supplement, req.ProfileSummary,
 	)
+	prompt := c.buildOperationPrompt(PromptKeyBuildLearningPlan, userInput)
 	var out LearnResult
 	if err := c.invokeJSON(ctx, "build_learning_plan", prompt, &out); err != nil {
 		return LearnResult{}, err
@@ -231,68 +184,19 @@ func (c *remoteLLMClient) OptimizeLearningPlan(ctx context.Context, req Optimize
 		return OptimizeLearnResult{}, errs.BadRequest("ai provider is not ready")
 	}
 	planJSON, _ := json.Marshal(req.Plan)
-	prompt := fmt.Sprintf(
-		`Optimize the given study plan in JSON only.
-action=%s
+	userInput := fmt.Sprintf(
+		`action=%s
 days=%d
 reason=%s
 supplement=%s
-plan=%s
-
-Output schema:
-{
-  "action":"postpone|advance|complete_early",
-  "change_summary":["string"],
-  "updated_plan":{
-    "mode":"string",
-    "subject":"string",
-    "unit":"string",
-    "created_at":"RFC3339 string",
-    "final_goal":"string",
-    "current_status":"string",
-    "plan_start_date":"YYYY-MM-DD",
-    "plan_end_date":"YYYY-MM-DD",
-    "study_outline":["string"],
-    "review_checklist":["string"],
-    "stage_suggestion":"string",
-    "missing_fields":["string"],
-    "follow_up_questions":["string"],
-    "themes":[
-      {
-        "name":"string",
-        "estimated_hours":number,
-        "children":[
-          {
-            "level":"year|month|week|day|task",
-            "title":"string",
-            "estimated_hours":number,
-            "start_date":"YYYY-MM-DD",
-            "end_date":"YYYY-MM-DD",
-            "details":["string"],
-            "children":[]
-          }
-        ]
-      }
-    ],
-    "plan_items":[
-      {
-        "plan_type":"year_plan|month_plan|week_plan|day_plan|current_phase",
-        "title":"string",
-        "content":"string",
-        "target_date":"YYYY-MM-DD",
-        "status":"pending|in_progress|done|rescheduled",
-        "priority":1
-      }
-    ],
-    "optimization_hints":["string"]
-  }
-}`,
+plan=%s`,
 		req.Action,
 		req.Days,
 		req.Reason,
 		req.Supplement,
 		string(planJSON),
 	)
+	prompt := c.buildOperationPrompt(PromptKeyOptimizeLearning, userInput)
 	var out OptimizeLearnResult
 	if err := c.invokeJSON(ctx, "optimize_learning_plan", prompt, &out); err != nil {
 		return OptimizeLearnResult{}, err
@@ -304,41 +208,19 @@ func (c *remoteLLMClient) EvaluateLearning(ctx context.Context, req EvaluateRequ
 	if !c.ready {
 		return EvaluateResult{}, errs.BadRequest("ai provider is not ready")
 	}
-	prompt := fmt.Sprintf(
-		`Evaluate learning result.
-mode=%s
+	userInput := fmt.Sprintf(
+		`mode=%s
 question=%s
 answer_key=%v
 user_answer=%v
-context=%s
-Return ONLY JSON:
-{
-  "score":0-100,
-  "single_evaluation":"string",
-  "comprehensive_evaluation":"string",
-  "single_explanation":"string",
-  "comprehensive_explanation":"string",
-  "knowledge_supplements":["string"],
-  "retest_questions":[
-    {
-      "title":"string",
-      "stem":"string",
-      "type":"short_answer",
-      "subject":"string",
-      "source":"wrong_book",
-      "answer_key":["string"],
-      "tags":["retest"],
-      "difficulty":1-5,
-      "mastery_level":0
-    }
-  ]
-}`,
+context=%s`,
 		req.Mode,
 		req.Question.Stem,
 		req.Question.AnswerKey,
 		req.UserAnswer,
 		req.Context,
 	)
+	prompt := c.buildOperationPrompt(PromptKeyEvaluateLearning, userInput)
 	var out EvaluateResult
 	if err := c.invokeJSON(ctx, "evaluate_learning", prompt, &out); err != nil {
 		return EvaluateResult{}, err
@@ -357,17 +239,14 @@ func (c *remoteLLMClient) ScoreLearning(ctx context.Context, req ScoreRequest) (
 	if !c.ready {
 		return ScoreResult{}, errs.BadRequest("ai provider is not ready")
 	}
-	prompt := fmt.Sprintf(
-		`You are a learning score assistant.
-topic=%s accuracy=%.1f stability=%.1f speed=%.1f
-Return ONLY JSON:
-{
-  "score":0-100,
-  "grade":"A|B|C|D|E",
-  "advice":["string"]
-}`,
+	userInput := fmt.Sprintf(
+		`topic=%s
+accuracy=%.1f
+stability=%.1f
+speed=%.1f`,
 		req.Topic, req.Accuracy, req.Stability, req.Speed,
 	)
+	prompt := c.buildOperationPrompt(PromptKeyScoreLearning, userInput)
 	var out ScoreResult
 	if err := c.invokeJSON(ctx, "score_learning", prompt, &out); err != nil {
 		return ScoreResult{}, err

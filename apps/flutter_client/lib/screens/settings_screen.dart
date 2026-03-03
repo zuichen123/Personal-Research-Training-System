@@ -35,12 +35,23 @@ class _SettingsScreenState extends State<SettingsScreen>
   final _targetDestinationController = TextEditingController();
   final _notesController = TextEditingController();
 
+  final _customPromptController = TextEditingController();
+  final _outputPromptController = TextEditingController();
+  final _customPromptFocusNode = FocusNode();
+  final _outputPromptFocusNode = FocusNode();
+
   bool _profileDirty = false;
   bool _syncingProfileForm = false;
   String _selectedAcademicPreset = _customAcademicStatus;
+
+  String? _selectedPromptKey;
+  bool _promptDirty = false;
+  bool _syncingPromptForm = false;
+
   bool? _backendHealthy;
   bool _checkingHealth = false;
 
+  static const String _customAcademicStatus = '自定义';
   static const List<String> _academicStatusPresets = [
     '初中',
     '高中',
@@ -53,12 +64,12 @@ class _SettingsScreenState extends State<SettingsScreen>
     '备考',
     _customAcademicStatus,
   ];
-  static const String _customAcademicStatus = '自定义';
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+
     _bindProfileDirtyListener(_nicknameController);
     _bindProfileDirtyListener(_ageController);
     _bindProfileDirtyListener(_academicStatusController);
@@ -68,17 +79,23 @@ class _SettingsScreenState extends State<SettingsScreen>
     _bindProfileDirtyListener(_weakSubjectsController);
     _bindProfileDirtyListener(_targetDestinationController);
     _bindProfileDirtyListener(_notesController);
+
+    _bindPromptDirtyListener(_customPromptController);
+    _bindPromptDirtyListener(_outputPromptController);
+
     _checkBackendHealth();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+
     _modelController.dispose();
     _modelFocusNode.dispose();
     _openAIBaseURLController.dispose();
     _openAIBaseURLFocusNode.dispose();
     _apiKeyController.dispose();
+
     _nicknameController.dispose();
     _ageController.dispose();
     _academicStatusController.dispose();
@@ -88,6 +105,12 @@ class _SettingsScreenState extends State<SettingsScreen>
     _weakSubjectsController.dispose();
     _targetDestinationController.dispose();
     _notesController.dispose();
+
+    _customPromptController.dispose();
+    _outputPromptController.dispose();
+    _customPromptFocusNode.dispose();
+    _outputPromptFocusNode.dispose();
+
     super.dispose();
   }
 
@@ -96,13 +119,18 @@ class _SettingsScreenState extends State<SettingsScreen>
     setState(() => _checkingHealth = true);
     try {
       final provider = context.read<AppProvider>();
-      final api = provider.apiService;
-      final healthy = await api.checkHealth();
-      if (mounted) setState(() => _backendHealthy = healthy);
+      final healthy = await provider.apiService.checkHealth();
+      if (mounted) {
+        setState(() => _backendHealthy = healthy);
+      }
     } catch (_) {
-      if (mounted) setState(() => _backendHealthy = false);
+      if (mounted) {
+        setState(() => _backendHealthy = false);
+      }
     } finally {
-      if (mounted) setState(() => _checkingHealth = false);
+      if (mounted) {
+        setState(() => _checkingHealth = false);
+      }
     }
   }
 
@@ -116,16 +144,20 @@ class _SettingsScreenState extends State<SettingsScreen>
           tabs: const [
             Tab(icon: Icon(Icons.person_outline), text: '用户信息'),
             Tab(icon: Icon(Icons.settings_outlined), text: 'AI设置'),
-            Tab(icon: Icon(Icons.bug_report), text: '调试日志'),
+            Tab(icon: Icon(Icons.bug_report_outlined), text: '调试日志'),
           ],
         ),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
+            tooltip: '刷新',
             onPressed: () async {
               final app = context.read<AppProvider>();
               await app.fetchUserProfile(force: true);
               await app.fetchAIProviderStatus(force: true);
+              if (!mounted) return;
+              _syncPromptTemplate(app.aiPromptTemplates);
+              setState(() {});
             },
           ),
         ],
@@ -170,7 +202,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 child: DropdownButtonFormField<String>(
                   value: _selectedAcademicPreset,
                   decoration: const InputDecoration(
-                    labelText: '学业状态（快捷选项）',
+                    labelText: '学业状态（快捷选择）',
                     border: OutlineInputBorder(),
                     isDense: true,
                   ),
@@ -236,7 +268,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               ),
               _input(
                 _dailyStudyMinutesController,
-                '每日学习时长（分钟，可填 0）',
+                '每日学习时长（分钟，可填0）',
                 keyboardType: TextInputType.number,
               ),
               _input(
@@ -274,7 +306,12 @@ class _SettingsScreenState extends State<SettingsScreen>
   Widget _aiSettingsBody(BuildContext context) {
     final provider = context.watch<AppProvider>();
     final status = provider.aiProviderStatus;
+    final templates = provider.aiPromptTemplates;
+
     _syncProviderConfig(status);
+    _syncPromptTemplate(templates);
+
+    final selectedPrompt = _currentPromptConfig(templates);
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -291,7 +328,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               _statusRow('当前生效模型', status['model']),
               _statusRow('已配置模型', status['configured_model']),
               _statusRow('可用', '${status['ready'] ?? false}'),
-              _statusRow('降级到Mock', '${status['fallback'] ?? false}'),
+              _statusRow('是否降级Mock', '${status['fallback'] ?? false}'),
               _statusRow(
                 '密钥状态',
                 (status['has_api_key'] ?? false) ? '已配置' : '未配置',
@@ -380,8 +417,9 @@ class _SettingsScreenState extends State<SettingsScreen>
                             ? Icons.visibility_off_outlined
                             : Icons.visibility_outlined,
                       ),
-                      onPressed: () =>
-                          setState(() => _showApiKey = !_showApiKey),
+                      onPressed: () {
+                        setState(() => _showApiKey = !_showApiKey);
+                      },
                     ),
                   ),
                 ),
@@ -399,6 +437,113 @@ class _SettingsScreenState extends State<SettingsScreen>
             ],
           ),
         ),
+        _section(
+          title: '高级功能：Prompt 模板配置',
+          icon: Icons.auto_awesome,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '构建规则：定制Prompt/预置Prompt + 输出格式说明Prompt + 用户输入',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+              const SizedBox(height: 8),
+              if (templates.isEmpty)
+                const Text('暂无模板，请先点击右上角刷新。')
+              else ...[
+                DropdownButtonFormField<String>(
+                  value: _selectedPromptKey,
+                  decoration: const InputDecoration(
+                    labelText: 'AI功能项',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  items: templates
+                      .map(
+                        (item) => DropdownMenuItem<String>(
+                          value: (item['key'] ?? '').toString(),
+                          child: Text(
+                            '${item['name'] ?? item['key'] ?? ''} (${item['key'] ?? ''})',
+                          ),
+                        ),
+                      )
+                      .toList(growable: false),
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setState(() {
+                      _selectedPromptKey = value;
+                      _promptDirty = false;
+                      _applyPromptForm(_currentPromptConfig(templates));
+                    });
+                  },
+                ),
+                const SizedBox(height: 8),
+                _readonlyMultiline(
+                  label: '预置 Prompt（保底）',
+                  value: (selectedPrompt?['preset_prompt'] ?? '').toString(),
+                ),
+                _readonlyMultiline(
+                  label: '预置输出格式说明 Prompt（保底）',
+                  value: (selectedPrompt?['preset_output_format_prompt'] ?? '')
+                      .toString(),
+                ),
+                _input(
+                  _customPromptController,
+                  '定制 Prompt（留空则使用预置）',
+                  focusNode: _customPromptFocusNode,
+                  maxLines: 6,
+                  minLines: 4,
+                ),
+                _input(
+                  _outputPromptController,
+                  '输出格式说明 Prompt（留空则使用预置）',
+                  focusNode: _outputPromptFocusNode,
+                  maxLines: 6,
+                  minLines: 4,
+                ),
+                _readonlyMultiline(
+                  label: '当前生效 Prompt',
+                  value: (selectedPrompt?['effective_prompt'] ?? '').toString(),
+                ),
+                _readonlyMultiline(
+                  label: '当前生效输出格式 Prompt',
+                  value:
+                      (selectedPrompt?['effective_output_format_prompt'] ?? '')
+                          .toString(),
+                ),
+                const SizedBox(height: 4),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    FilledButton.icon(
+                      onPressed: () => _savePromptTemplate(context, provider),
+                      icon: const Icon(Icons.save),
+                      label: const Text('保存并热更新'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _customPromptController.clear();
+                          _outputPromptController.clear();
+                          _promptDirty = true;
+                        });
+                      },
+                      icon: const Icon(Icons.restart_alt),
+                      label: const Text('清空为预置'),
+                    ),
+                    TextButton.icon(
+                      onPressed: () =>
+                          _reloadPromptTemplates(context, provider),
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('从数据库重载'),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
         if (provider.errorMessage != null)
           Padding(
             padding: const EdgeInsets.only(top: 8),
@@ -411,13 +556,27 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
   }
 
+  Widget _readonlyMultiline({required String label, required String value}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+          isDense: true,
+        ),
+        child: SelectableText(value.isEmpty ? '-' : value),
+      ),
+    );
+  }
+
   Widget _statusRow(String label, dynamic value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         children: [
           SizedBox(
-            width: 120,
+            width: 140,
             child: Text(
               label,
               style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
@@ -505,6 +664,13 @@ class _SettingsScreenState extends State<SettingsScreen>
     });
   }
 
+  void _bindPromptDirtyListener(TextEditingController controller) {
+    controller.addListener(() {
+      if (_syncingPromptForm) return;
+      _promptDirty = true;
+    });
+  }
+
   void _syncProfileForm(UserProfile? profile) {
     if (profile == null || _profileDirty) {
       return;
@@ -524,6 +690,51 @@ class _SettingsScreenState extends State<SettingsScreen>
         ? profile.academicStatus
         : _customAcademicStatus;
     _syncingProfileForm = false;
+  }
+
+  void _syncPromptTemplate(List<Map<String, dynamic>> templates) {
+    if (templates.isEmpty) {
+      _selectedPromptKey = null;
+      _applyPromptForm(null);
+      return;
+    }
+
+    final keyExists = templates.any(
+      (item) => (item['key'] ?? '').toString() == _selectedPromptKey,
+    );
+    if (_selectedPromptKey == null || !keyExists) {
+      _selectedPromptKey = (templates.first['key'] ?? '').toString();
+      _promptDirty = false;
+    }
+
+    if (_promptDirty) return;
+    if (_customPromptFocusNode.hasFocus || _outputPromptFocusNode.hasFocus) {
+      return;
+    }
+    _applyPromptForm(_currentPromptConfig(templates));
+  }
+
+  Map<String, dynamic>? _currentPromptConfig(
+    List<Map<String, dynamic>> templates,
+  ) {
+    final key = _selectedPromptKey;
+    if (key == null || key.isEmpty) {
+      return null;
+    }
+    for (final item in templates) {
+      if ((item['key'] ?? '').toString() == key) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  void _applyPromptForm(Map<String, dynamic>? config) {
+    _syncingPromptForm = true;
+    _customPromptController.text = (config?['custom_prompt'] ?? '').toString();
+    _outputPromptController.text = (config?['output_format_prompt'] ?? '')
+        .toString();
+    _syncingPromptForm = false;
   }
 
   List<String> _splitLines(String raw) {
@@ -609,6 +820,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       _providerDirty = false;
       _apiKeyController.clear();
       if (!mounted) return;
+
       final updated = provider.aiProviderStatus;
       final activeProvider = (updated['provider'] ?? '')
           .toString()
@@ -619,6 +831,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           .trim()
           .toLowerCase();
       final fallback = updated['fallback'] == true;
+
       if (configuredProvider.isNotEmpty &&
           activeProvider.isNotEmpty &&
           configuredProvider != activeProvider) {
@@ -644,6 +857,53 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
   }
 
+  Future<void> _savePromptTemplate(
+    BuildContext context,
+    AppProvider provider,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final key = _selectedPromptKey;
+    if (key == null || key.isEmpty) {
+      messenger.showSnackBar(const SnackBar(content: Text('请先选择AI功能项')));
+      return;
+    }
+    try {
+      await provider.updateAIPromptTemplate(
+        key: key,
+        customPrompt: _customPromptController.text,
+        outputFormatPrompt: _outputPromptController.text,
+      );
+      _promptDirty = false;
+      if (!mounted) return;
+      messenger.showSnackBar(const SnackBar(content: Text('Prompt已保存并热更新')));
+    } catch (_) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text(provider.errorMessage ?? '保存失败')),
+      );
+    }
+  }
+
+  Future<void> _reloadPromptTemplates(
+    BuildContext context,
+    AppProvider provider,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await provider.reloadAIPromptTemplates();
+      if (!mounted) return;
+      _promptDirty = false;
+      _syncPromptTemplate(provider.aiPromptTemplates);
+      setState(() {});
+      messenger.showSnackBar(const SnackBar(content: Text('Prompt模板已从数据库重载')));
+    } catch (_) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text(provider.errorMessage ?? '重载失败')),
+      );
+    }
+  }
+
   Future<void> _autoFetchModel(
     BuildContext context,
     AppProvider provider,
@@ -651,10 +911,12 @@ class _SettingsScreenState extends State<SettingsScreen>
     final messenger = ScaffoldMessenger.of(context);
     await provider.fetchAIProviderStatus(force: true);
     if (!mounted) return;
+
     if (provider.errorMessage != null) {
       messenger.showSnackBar(SnackBar(content: Text(provider.errorMessage!)));
       return;
     }
+
     final status = provider.aiProviderStatus;
     final configuredProvider = (status['configured_provider'] ?? '')
         .toString()
@@ -669,18 +931,21 @@ class _SettingsScreenState extends State<SettingsScreen>
         .trim();
     final activeModel = (status['model'] ?? '').toString().trim();
     final model = configuredModel.isNotEmpty ? configuredModel : activeModel;
+
     if (model.isEmpty) {
       messenger.showSnackBar(const SnackBar(content: Text('未获取到模型名称，请手动填写')));
       return;
     }
+
     if (model == 'mock-v1' &&
         configuredProvider.isNotEmpty &&
         configuredProvider != 'mock') {
       messenger.showSnackBar(
-        const SnackBar(content: Text('当前处于 mock 回退，无法自动获取目标供应商模型，请手动填写')),
+        const SnackBar(content: Text('当前处于mock回退，无法自动获取目标供应商模型，请手动填写')),
       );
       return;
     }
+
     _modelController.text = model;
     if (configuredProvider.isNotEmpty &&
         activeProvider.isNotEmpty &&
@@ -733,7 +998,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     if (_checkingHealth) {
       color = Colors.grey;
       icon = Icons.sync;
-      label = '检查中…';
+      label = '检查中...';
     } else if (_backendHealthy == true) {
       color = Colors.green;
       icon = Icons.cloud_done;
@@ -753,7 +1018,10 @@ class _SettingsScreenState extends State<SettingsScreen>
       margin: const EdgeInsets.only(bottom: 12),
       child: ListTile(
         leading: Icon(icon, color: color),
-        title: Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w600)),
+        title: Text(
+          label,
+          style: TextStyle(color: color, fontWeight: FontWeight.w600),
+        ),
         trailing: IconButton(
           icon: Icon(Icons.refresh, color: cs.outline),
           tooltip: '重新检测',

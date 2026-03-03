@@ -448,6 +448,36 @@ class ApiService {
     return _extractDataMap(response);
   }
 
+  Future<List<Map<String, dynamic>>> getAIPromptTemplates() async {
+    final response = await _request(method: 'GET', path: '/ai/prompts');
+    return _extractDataList(response);
+  }
+
+  Future<Map<String, dynamic>> updateAIPromptTemplate({
+    required String key,
+    String? customPrompt,
+    String? outputFormatPrompt,
+  }) async {
+    final body = <String, dynamic>{};
+    if (customPrompt != null) {
+      body['custom_prompt'] = customPrompt;
+    }
+    if (outputFormatPrompt != null) {
+      body['output_format_prompt'] = outputFormatPrompt;
+    }
+    final response = await _request(
+      method: 'PUT',
+      path: '/ai/prompts/$key',
+      jsonBody: body,
+    );
+    return _extractDataMap(response);
+  }
+
+  Future<List<Map<String, dynamic>>> reloadAIPromptTemplates() async {
+    final response = await _request(method: 'POST', path: '/ai/prompts/reload');
+    return _extractDataList(response);
+  }
+
   Future<Map<String, dynamic>> buildLearningPlan(
     Map<String, dynamic> input,
   ) async {

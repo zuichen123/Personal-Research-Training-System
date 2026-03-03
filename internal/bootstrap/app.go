@@ -78,6 +78,10 @@ func NewApp(cfg config.Config) (*App, error) {
 	}
 
 	aiService := ai.NewServiceWithStore(aiClient, questionService, fallbackUsed, aiRuntime, aiConfigRepo)
+	if err := aiService.LoadPromptTemplates(context.Background()); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	practiceService := practice.NewService(practiceRepo, questionService, aiService, mistakeService)
 
 	questionHandler := question.NewHandler(questionService)

@@ -26,6 +26,9 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Route("/ai", func(r chi.Router) {
 		r.Get("/provider", h.providerStatus)
 		r.Put("/provider/config", h.updateProviderConfig)
+		r.Get("/prompts", h.listPromptTemplates)
+		r.Put("/prompts/{key}", h.updatePromptTemplate)
+		r.Post("/prompts/reload", h.reloadPromptTemplates)
 		r.Post("/questions/generate", h.generate)
 		r.Get("/questions/search", h.searchOnline)
 		r.Post("/grade", h.grade)
@@ -245,4 +248,36 @@ func (h *Handler) updateProviderConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, status)
+}
+
+func (h *Handler) listPromptTemplates(w http.ResponseWriter, _ *http.Request) {
+	httpx.WriteJSON(w, http.StatusOK, h.service.ListPromptTemplates())
+}
+
+func (h *Handler) updatePromptTemplate(w http.ResponseWriter, r *http.Request) {
+	key := strings.TrimSpace(chi.URLParam(r, "key"))
+	if key == "" {
+		httpx.WriteError(w, errs.BadRequest("prompt key is required"))
+		return
+	}
+	var req UpdatePromptTemplateRequest
+	if err := httpx.DecodeJSON(r, &req); err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	config, err := h.service.UpdatePromptTemplate(r.Context(), key, req)
+	if err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, config)
+}
+
+func (h *Handler) reloadPromptTemplates(w http.ResponseWriter, r *http.Request) {
+	configs, err := h.service.ReloadPromptTemplates(r.Context())
+	if err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, configs)
 }

@@ -176,6 +176,23 @@ type UpdateProviderConfigRequest struct {
 	OpenAIBaseURL string `json:"openai_base_url"`
 }
 
+type PromptTemplateConfig struct {
+	Key                         string `json:"key"`
+	Name                        string `json:"name"`
+	PresetPrompt                string `json:"preset_prompt"`
+	PresetOutputFormatPrompt    string `json:"preset_output_format_prompt"`
+	CustomPrompt                string `json:"custom_prompt"`
+	OutputFormatPrompt          string `json:"output_format_prompt"`
+	EffectivePrompt             string `json:"effective_prompt"`
+	EffectiveOutputFormatPrompt string `json:"effective_output_format_prompt"`
+	UpdatedAt                   string `json:"updated_at,omitempty"`
+}
+
+type UpdatePromptTemplateRequest struct {
+	CustomPrompt       *string `json:"custom_prompt"`
+	OutputFormatPrompt *string `json:"output_format_prompt"`
+}
+
 type Client interface {
 	GenerateQuestions(ctx context.Context, req GenerateRequest) ([]question.CreateInput, error)
 	GradeAnswer(ctx context.Context, req GradeRequest) (GradeResult, error)

@@ -76,3 +76,53 @@ func (r *SQLiteProviderConfigRepository) SaveProviderConfig(ctx context.Context,
 	}
 	return nil
 }
+
+func (r *SQLiteProviderConfigRepository) LoadPromptTemplates(ctx context.Context) ([]PromptTemplateRecord, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT prompt_key, custom_prompt, output_format_prompt, updated_at
+		FROM ai_prompt_templates
+	`)
+	if err != nil {
+		return nil, errs.Internal(fmt.Sprintf("failed to load ai prompt templates: %v", err))
+	}
+	defer rows.Close()
+
+	out := make([]PromptTemplateRecord, 0, len(promptTemplatePresetList))
+	for rows.Next() {
+		var item PromptTemplateRecord
+		if err := rows.Scan(
+			&item.PromptKey,
+			&item.CustomPrompt,
+			&item.OutputFormatPrompt,
+			&item.UpdatedAt,
+		); err != nil {
+			return nil, errs.Internal(fmt.Sprintf("failed to scan ai prompt templates: %v", err))
+		}
+		item.PromptKey = normalizePromptKey(item.PromptKey)
+		out = append(out, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, errs.Internal(fmt.Sprintf("failed to read ai prompt templates: %v", err))
+	}
+	return out, nil
+}
+
+func (r *SQLiteProviderConfigRepository) SavePromptTemplate(ctx context.Context, cfg PromptTemplateRecord) error {
+	_, err := r.db.ExecContext(ctx, `
+		INSERT INTO ai_prompt_templates (prompt_key, custom_prompt, output_format_prompt, updated_at)
+		VALUES (?, ?, ?, ?)
+		ON CONFLICT(prompt_key) DO UPDATE SET
+			custom_prompt = excluded.custom_prompt,
+			output_format_prompt = excluded.output_format_prompt,
+			updated_at = excluded.updated_at
+	`,
+		normalizePromptKey(cfg.PromptKey),
+		strings.TrimSpace(cfg.CustomPrompt),
+		strings.TrimSpace(cfg.OutputFormatPrompt),
+		strings.TrimSpace(cfg.UpdatedAt),
+	)
+	if err != nil {
+		return errs.Internal(fmt.Sprintf("failed to save ai prompt template: %v", err))
+	}
+	return nil
+}

@@ -13,7 +13,19 @@ type ProviderConfigRecord struct {
 	ClaudeModel   string
 }
 
+type PromptTemplateRecord struct {
+	PromptKey          string
+	CustomPrompt       string
+	OutputFormatPrompt string
+	UpdatedAt          string
+}
+
 type ProviderConfigStore interface {
 	LoadProviderConfig(ctx context.Context) (ProviderConfigRecord, bool, error)
 	SaveProviderConfig(ctx context.Context, cfg ProviderConfigRecord) error
+}
+
+type PromptTemplateStore interface {
+	LoadPromptTemplates(ctx context.Context) ([]PromptTemplateRecord, error)
+	SavePromptTemplate(ctx context.Context, cfg PromptTemplateRecord) error
 }

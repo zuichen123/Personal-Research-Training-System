@@ -84,6 +84,9 @@ class AppProvider with ChangeNotifier {
   Map<String, dynamic> _aiProviderStatus = {};
   Map<String, dynamic> get aiProviderStatus => _aiProviderStatus;
 
+  List<Map<String, dynamic>> _aiPromptTemplates = [];
+  List<Map<String, dynamic>> get aiPromptTemplates => _aiPromptTemplates;
+
   Map<String, dynamic>? _aiLearningPlan;
   Map<String, dynamic>? get aiLearningPlan => _aiLearningPlan;
 
@@ -421,6 +424,7 @@ class AppProvider with ChangeNotifier {
     }
     await _runSection(DataSection.ai, () async {
       _aiProviderStatus = await _api.getAIProviderStatus();
+      _aiPromptTemplates = await _api.getAIPromptTemplates();
       _isSectionLoaded[DataSection.ai] = true;
     });
   }
@@ -481,6 +485,39 @@ class AppProvider with ChangeNotifier {
         model: model,
         openAIBaseURL: openAIBaseURL,
       );
+      _isSectionLoaded[DataSection.ai] = true;
+      notifyListeners();
+    });
+  }
+
+  Future<void> fetchAIPromptTemplates() async {
+    await _runAction('刷新AI Prompt配置', () async {
+      _aiPromptTemplates = await _api.getAIPromptTemplates();
+      _isSectionLoaded[DataSection.ai] = true;
+      notifyListeners();
+    });
+  }
+
+  Future<void> reloadAIPromptTemplates() async {
+    await _runAction('热更新AI Prompt配置', () async {
+      _aiPromptTemplates = await _api.reloadAIPromptTemplates();
+      _isSectionLoaded[DataSection.ai] = true;
+      notifyListeners();
+    });
+  }
+
+  Future<void> updateAIPromptTemplate({
+    required String key,
+    String? customPrompt,
+    String? outputFormatPrompt,
+  }) async {
+    await _runAction('更新AI Prompt配置', () async {
+      final updated = await _api.updateAIPromptTemplate(
+        key: key,
+        customPrompt: customPrompt,
+        outputFormatPrompt: outputFormatPrompt,
+      );
+      _upsertPromptTemplate(updated);
       _isSectionLoaded[DataSection.ai] = true;
       notifyListeners();
     });
@@ -690,5 +727,20 @@ class AppProvider with ChangeNotifier {
   void clearError() {
     _errorMessage = null;
     notifyListeners();
+  }
+
+  void _upsertPromptTemplate(Map<String, dynamic> template) {
+    final key = (template['key'] ?? '').toString().trim();
+    if (key.isEmpty) {
+      return;
+    }
+    final index = _aiPromptTemplates.indexWhere(
+      (item) => (item['key'] ?? '').toString().trim() == key,
+    );
+    if (index >= 0) {
+      _aiPromptTemplates[index] = template;
+      return;
+    }
+    _aiPromptTemplates.add(template);
   }
 }

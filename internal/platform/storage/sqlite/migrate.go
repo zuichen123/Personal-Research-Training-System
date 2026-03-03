@@ -93,6 +93,12 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 			claude_model TEXT NOT NULL DEFAULT 'claude-3-5-sonnet-20241022',
 			updated_at TEXT NOT NULL
 		);`,
+		`CREATE TABLE IF NOT EXISTS ai_prompt_templates (
+			prompt_key TEXT PRIMARY KEY,
+			custom_prompt TEXT NOT NULL DEFAULT '',
+			output_format_prompt TEXT NOT NULL DEFAULT '',
+			updated_at TEXT NOT NULL
+		);`,
 		`CREATE TABLE IF NOT EXISTS user_profiles (
 			user_id TEXT PRIMARY KEY,
 			nickname TEXT NOT NULL DEFAULT '',
