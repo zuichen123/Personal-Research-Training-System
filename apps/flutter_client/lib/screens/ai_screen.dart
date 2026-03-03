@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../models/question.dart';
 import '../providers/app_provider.dart';
 
 class AIScreen extends StatefulWidget {
@@ -56,6 +57,10 @@ class _AIScreenState extends State<AIScreen> {
   final _evaluateContextController = TextEditingController(text: '错题复盘');
 
   final Map<String, bool> _expanded = {};
+  final Map<String, Set<String>> _generatedSelections = {};
+  final Map<String, TextEditingController> _generatedSupplementControllers = {};
+  final Map<String, Map<String, dynamic>> _generatedGradeResults = {};
+  final Map<String, bool> _generatedSubmitting = {};
 
   @override
   void initState() {
@@ -99,6 +104,7 @@ class _AIScreenState extends State<AIScreen> {
     _evaluateQuestionIdController.dispose();
     _evaluateAnswerController.dispose();
     _evaluateContextController.dispose();
+    _clearGeneratedPracticeState();
     super.dispose();
   }
 
@@ -363,15 +369,241 @@ class _AIScreenState extends State<AIScreen> {
                       int.tryParse(_genDifficultyController.text.trim()) ?? 3,
                 }, persist: _persist);
               });
+              if (!mounted) return;
+              setState(_clearGeneratedPracticeState);
             },
             icon: const Icon(Icons.auto_fix_high),
             label: const Text('开始出题'),
           ),
           const SizedBox(height: 8),
           Text('生成题目数量: ${provider.aiGeneratedQuestions.length}'),
+          _generatedPracticeSection(provider),
         ],
       ),
     );
+  }
+
+  Widget _generatedPracticeSection(AppProvider provider) {
+    final questions = provider.aiGeneratedQuestions;
+    if (questions.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      children: [
+        const SizedBox(height: 8),
+        const Divider(),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'AI题目实战',
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        ...List.generate(
+          questions.length,
+          (index) => _generatedQuestionCard(provider, questions[index], index),
+        ),
+      ],
+    );
+  }
+
+  Widget _generatedQuestionCard(
+    AppProvider provider,
+    Question question,
+    int index,
+  ) {
+    final qKey = _generatedQuestionKey(index);
+    final selected = _generatedSelections[qKey] ?? <String>{};
+    final noteController = _generatedSupplementControllers[qKey] ??=
+        TextEditingController();
+    final result = _generatedGradeResults[qKey];
+    final submitting = _generatedSubmitting[qKey] == true;
+
+    return Card(
+      margin: const EdgeInsets.only(top: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${index + 1}. ${question.title.isEmpty ? question.stem : question.title}',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            if (question.title.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(question.stem),
+            ],
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Chip(
+                  label: Text(
+                    question.type,
+                    style: const TextStyle(fontSize: 11),
+                  ),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    '答案关键点: ${question.answerKey.join(', ')}',
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ),
+              ],
+            ),
+            if (_isSingleChoice(question) || _isMultiChoice(question))
+              const Padding(
+                padding: EdgeInsets.only(top: 6, bottom: 2),
+                child: Text(
+                  '请选择答案：',
+                  style: TextStyle(fontWeight: FontWeight.w500),
+                ),
+              ),
+            if (_isSingleChoice(question))
+              ...question.options.map((option) {
+                final groupValue = selected.isEmpty ? null : selected.first;
+                return RadioListTile<String>(
+                  dense: true,
+                  value: option.key,
+                  groupValue: groupValue,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('${option.key}. ${option.text}'),
+                  onChanged: submitting
+                      ? null
+                      : (value) {
+                          if (value == null) return;
+                          setState(() {
+                            _generatedSelections[qKey] = {value};
+                          });
+                        },
+                );
+              }),
+            if (_isMultiChoice(question))
+              ...question.options.map((option) {
+                return CheckboxListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  value: selected.contains(option.key),
+                  title: Text('${option.key}. ${option.text}'),
+                  onChanged: submitting
+                      ? null
+                      : (checked) {
+                          setState(() {
+                            final next = <String>{...selected};
+                            if (checked == true) {
+                              next.add(option.key);
+                            } else {
+                              next.remove(option.key);
+                            }
+                            _generatedSelections[qKey] = next;
+                          });
+                        },
+                );
+              }),
+            const SizedBox(height: 4),
+            _input(
+              noteController,
+              _isSingleChoice(question) || _isMultiChoice(question)
+                  ? '做题时遇到的问题/想法补充（可选）'
+                  : '作答内容 / 问题补充',
+            ),
+            if (_isSingleChoice(question) || _isMultiChoice(question))
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  selected.isEmpty
+                      ? '当前未选择答案'
+                      : '当前已选: ${selected.toList()..sort()}',
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ),
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              onPressed: submitting
+                  ? null
+                  : () => _submitGeneratedQuestion(provider, question, index),
+              icon: submitting
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.send),
+              label: Text(submitting ? '提交中...' : '提交批阅'),
+            ),
+            if (result != null) _jsonBox('generated-$qKey', result),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _submitGeneratedQuestion(
+    AppProvider provider,
+    Question question,
+    int index,
+  ) async {
+    final qKey = _generatedQuestionKey(index);
+    final selected = _generatedSelections[qKey] ?? <String>{};
+    final note = _generatedSupplementControllers[qKey]?.text.trim() ?? '';
+
+    final userAnswers = <String>[];
+    if (_isSingleChoice(question) || _isMultiChoice(question)) {
+      if (selected.isEmpty) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('请选择答案后再提交')));
+        return;
+      }
+      for (final option in question.options) {
+        if (selected.contains(option.key)) {
+          userAnswers.add(option.key);
+        }
+      }
+      if (note.isNotEmpty) {
+        userAnswers.add('note:$note');
+      }
+    } else {
+      if (note.isEmpty) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('请填写作答内容后再提交')));
+        return;
+      }
+      userAnswers.add(note);
+    }
+
+    setState(() => _generatedSubmitting[qKey] = true);
+    try {
+      await provider.gradeWithAI({
+        'question': _questionPayloadFromQuestion(question),
+        'user_answer': userAnswers,
+      });
+      if (!mounted) return;
+      setState(() {
+        _generatedGradeResults[qKey] = provider.aiGradeResult ?? {};
+      });
+    } catch (_) {
+      if (!mounted) return;
+      final message = provider.errorMessage ?? '提交失败';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    } finally {
+      if (mounted) {
+        setState(() => _generatedSubmitting[qKey] = false);
+      }
+    }
   }
 
   Widget _searchSection(AppProvider provider) {
@@ -674,24 +906,44 @@ class _AIScreenState extends State<AIScreen> {
     }
   }
 
+  String _generatedQuestionKey(int index) => 'generated_$index';
+
+  bool _isSingleChoice(Question question) => question.type == 'single_choice';
+
+  bool _isMultiChoice(Question question) => question.type == 'multi_choice';
+
+  void _clearGeneratedPracticeState() {
+    for (final controller in _generatedSupplementControllers.values) {
+      controller.dispose();
+    }
+    _generatedSupplementControllers.clear();
+    _generatedSelections.clear();
+    _generatedGradeResults.clear();
+    _generatedSubmitting.clear();
+  }
+
   Map<String, dynamic>? _questionPayloadById(AppProvider provider, String id) {
     if (id.isEmpty) return null;
     for (final q in provider.questions) {
       if (q.id != id) continue;
-      return {
-        'id': q.id,
-        'title': q.title,
-        'stem': q.stem,
-        'type': q.type,
-        'subject': q.subject,
-        'source': q.source,
-        'options': q.options.map((e) => e.toJson()).toList(),
-        'answer_key': q.answerKey,
-        'tags': q.tags,
-        'difficulty': q.difficulty,
-        'mastery_level': q.masteryLevel,
-      };
+      return _questionPayloadFromQuestion(q);
     }
     return null;
+  }
+
+  Map<String, dynamic> _questionPayloadFromQuestion(Question q) {
+    return {
+      'id': q.id,
+      'title': q.title,
+      'stem': q.stem,
+      'type': q.type,
+      'subject': q.subject,
+      'source': q.source,
+      'options': q.options.map((e) => e.toJson()).toList(),
+      'answer_key': q.answerKey,
+      'tags': q.tags,
+      'difficulty': q.difficulty,
+      'mastery_level': q.masteryLevel,
+    };
   }
 }
