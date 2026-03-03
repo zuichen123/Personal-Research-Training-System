@@ -99,19 +99,26 @@ func (s *Service) UpdateProviderConfig(req UpdateProviderConfigRequest) (Provide
 func (s *Service) providerStatusLocked() ProviderStatus {
 	configuredProvider := strings.ToLower(strings.TrimSpace(s.runtime.Provider))
 	hasAPIKey := false
+	configuredModel := ""
 	switch configuredProvider {
 	case "openai":
 		hasAPIKey = strings.TrimSpace(s.runtime.OpenAIAPIKey) != ""
+		configuredModel = strings.TrimSpace(s.runtime.OpenAIModel)
 	case "gemini":
 		hasAPIKey = strings.TrimSpace(s.runtime.GeminiAPIKey) != ""
+		configuredModel = strings.TrimSpace(s.runtime.GeminiModel)
 	case "claude":
 		hasAPIKey = strings.TrimSpace(s.runtime.ClaudeAPIKey) != ""
+		configuredModel = strings.TrimSpace(s.runtime.ClaudeModel)
+	case "mock":
+		configuredModel = "mock-v1"
 	}
 
 	status := ProviderStatus{
 		Provider:           s.client.ProviderName(),
 		ConfiguredProvider: configuredProvider,
 		Model:              s.client.ModelName(),
+		ConfiguredModel:    configuredModel,
 		Ready:              s.client.IsReady(),
 		Fallback:           s.fallbackEnabled,
 		HasAPIKey:          hasAPIKey,

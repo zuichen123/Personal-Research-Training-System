@@ -25,6 +25,7 @@ class _AIScreenState extends State<AIScreen>
   final _openAIBaseURLFocusNode = FocusNode();
   final _apiKeyController = TextEditingController();
   String _selectedProvider = 'mock';
+  bool _providerDirty = false;
   bool _showApiKey = false;
 
   // ---- AI学习计划（独立控制器） ----
@@ -124,10 +125,7 @@ class _AIScreenState extends State<AIScreen>
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [
-          _aiBody(context),
-          const DebugLogScreen(embedded: true),
-        ],
+        children: [_aiBody(context), const DebugLogScreen(embedded: true)],
       ),
     );
   }
@@ -148,11 +146,14 @@ class _AIScreenState extends State<AIScreen>
             children: [
               _statusRow('当前生效服务商', status['provider']),
               _statusRow('已配置服务商', status['configured_provider']),
-              _statusRow('模型', status['model']),
+              _statusRow('当前生效模型', status['model']),
+              _statusRow('已配置模型', status['configured_model']),
               _statusRow('可用', '${status['ready'] ?? false}'),
               _statusRow('降级到Mock', '${status['fallback'] ?? false}'),
-              _statusRow('密钥状态',
-                  (status['has_api_key'] ?? false) ? '已配置' : '未配置'),
+              _statusRow(
+                '密钥状态',
+                (status['has_api_key'] ?? false) ? '已配置' : '未配置',
+              ),
               _statusRow('OpenAI Base URL', status['openai_base_url']),
             ],
           ),
@@ -178,16 +179,50 @@ class _AIScreenState extends State<AIScreen>
                 ],
                 onChanged: (value) {
                   if (value == null) return;
-                  setState(() => _selectedProvider = value);
+                  setState(() {
+                    _selectedProvider = value;
+                    _providerDirty = true;
+                  });
                 },
               ),
               const SizedBox(height: 8),
-              _input(_modelController, '模型名称（可选）',
-                  focusNode: _modelFocusNode),
-              if (_selectedProvider == 'openai')
-                _input(
-                    _openAIBaseURLController, 'OpenAI 兼容 API 地址（可选）',
-                    focusNode: _openAIBaseURLFocusNode),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: TextField(
+                  focusNode: _modelFocusNode,
+                  controller: _modelController,
+                  decoration: InputDecoration(
+                    labelText: '模型名称（自动获取/手动填写）',
+                    border: const OutlineInputBorder(),
+                    isDense: true,
+                    suffixIcon: IconButton(
+                      tooltip: '自动获取当前模型',
+                      onPressed: () => _autoFetchModel(context, provider),
+                      icon: const Icon(Icons.download_outlined),
+                    ),
+                  ),
+                ),
+              ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => _autoFetchModel(context, provider),
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('自动获取当前模型'),
+                ),
+              ),
+              _input(
+                _openAIBaseURLController,
+                'OpenAI 兼容 Base URL（可选）',
+                focusNode: _openAIBaseURLFocusNode,
+              ),
+              const Padding(
+                padding: EdgeInsets.only(bottom: 8),
+                child: Text(
+                  '提示：Base URL 在 provider=openai 时生效。',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ),
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: TextField(
@@ -198,17 +233,21 @@ class _AIScreenState extends State<AIScreen>
                     border: const OutlineInputBorder(),
                     isDense: true,
                     suffixIcon: IconButton(
-                      icon: Icon(_showApiKey
-                          ? Icons.visibility_off_outlined
-                          : Icons.visibility_outlined),
+                      icon: Icon(
+                        _showApiKey
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                      ),
                       onPressed: () =>
                           setState(() => _showApiKey = !_showApiKey),
                     ),
                   ),
                 ),
               ),
-              const Text('提示：token 不会在状态接口中回显。',
-                  style: TextStyle(fontSize: 12, color: Colors.grey)),
+              const Text(
+                '提示：token 不会在状态接口中回显。',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
               const SizedBox(height: 8),
               FilledButton.icon(
                 onPressed: () => _saveProviderConfig(context, provider),
@@ -230,16 +269,18 @@ class _AIScreenState extends State<AIScreen>
               const SizedBox(height: 8),
               FilledButton.icon(
                 onPressed: () async {
-                  await provider.buildLearningPlan({
-                    'mode': _learnModeController.text.trim(),
-                    'subject': _learnSubjectController.text.trim(),
-                    'unit': _learnUnitController.text.trim(),
-                    'current_stage': 'pending',
-                    'goals': _learnGoalsController.text
-                        .split(',')
-                        .map((e) => e.trim())
-                        .where((e) => e.isNotEmpty)
-                        .toList(),
+                  await _runProviderAction(() {
+                    return provider.buildLearningPlan({
+                      'mode': _learnModeController.text.trim(),
+                      'subject': _learnSubjectController.text.trim(),
+                      'unit': _learnUnitController.text.trim(),
+                      'current_stage': 'pending',
+                      'goals': _learnGoalsController.text
+                          .split(',')
+                          .map((e) => e.trim())
+                          .where((e) => e.isNotEmpty)
+                          .toList(),
+                    });
                   });
                 },
                 icon: const Icon(Icons.auto_awesome),
@@ -267,16 +308,18 @@ class _AIScreenState extends State<AIScreen>
               ),
               FilledButton.icon(
                 onPressed: () async {
-                  await provider.generateAIQuestions({
-                    'topic': _genTopicController.text.trim(),
-                    'subject': _genSubjectController.text.trim(),
-                    'scope': 'unit',
-                    'count':
-                        int.tryParse(_genCountController.text.trim()) ?? 3,
-                    'difficulty':
-                        int.tryParse(_genDifficultyController.text.trim()) ??
-                            3,
-                  }, persist: _persist);
+                  await _runProviderAction(() {
+                    return provider.generateAIQuestions({
+                      'topic': _genTopicController.text.trim(),
+                      'subject': _genSubjectController.text.trim(),
+                      'scope': 'unit',
+                      'count':
+                          int.tryParse(_genCountController.text.trim()) ?? 3,
+                      'difficulty':
+                          int.tryParse(_genDifficultyController.text.trim()) ??
+                          3,
+                    }, persist: _persist);
+                  });
                 },
                 icon: const Icon(Icons.auto_fix_high),
                 label: const Text('开始出题'),
@@ -296,12 +339,14 @@ class _AIScreenState extends State<AIScreen>
               _input(_searchCountController, '数量'),
               FilledButton.icon(
                 onPressed: () async {
-                  await provider.searchAIQuestions(
-                    topic: _searchTopicController.text.trim(),
-                    subject: _searchSubjectController.text.trim(),
-                    count:
-                        int.tryParse(_searchCountController.text.trim()) ?? 5,
-                  );
+                  await _runProviderAction(() {
+                    return provider.searchAIQuestions(
+                      topic: _searchTopicController.text.trim(),
+                      subject: _searchSubjectController.text.trim(),
+                      count:
+                          int.tryParse(_searchCountController.text.trim()) ?? 5,
+                    );
+                  });
                 },
                 icon: const Icon(Icons.search),
                 label: const Text('联网搜题'),
@@ -322,14 +367,17 @@ class _AIScreenState extends State<AIScreen>
               _input(_speedController, '速度(0-100)'),
               FilledButton.icon(
                 onPressed: () async {
-                  await provider.scoreWithAI({
-                    'topic': _scoreTopicController.text.trim(),
-                    'accuracy':
-                        double.tryParse(_accuracyController.text.trim()) ?? 0,
-                    'stability':
-                        double.tryParse(_stabilityController.text.trim()) ?? 0,
-                    'speed':
-                        double.tryParse(_speedController.text.trim()) ?? 0,
+                  await _runProviderAction(() {
+                    return provider.scoreWithAI({
+                      'topic': _scoreTopicController.text.trim(),
+                      'accuracy':
+                          double.tryParse(_accuracyController.text.trim()) ?? 0,
+                      'stability':
+                          double.tryParse(_stabilityController.text.trim()) ??
+                          0,
+                      'speed':
+                          double.tryParse(_speedController.text.trim()) ?? 0,
+                    });
                   });
                 },
                 icon: const Icon(Icons.calculate),
@@ -361,13 +409,15 @@ class _AIScreenState extends State<AIScreen>
                     }
                     return;
                   }
-                  await provider.gradeWithAI({
-                    'question': questionPayload,
-                    'user_answer': _gradeAnswerController.text
-                        .split(',')
-                        .map((e) => e.trim())
-                        .where((e) => e.isNotEmpty)
-                        .toList(),
+                  await _runProviderAction(() {
+                    return provider.gradeWithAI({
+                      'question': questionPayload,
+                      'user_answer': _gradeAnswerController.text
+                          .split(',')
+                          .map((e) => e.trim())
+                          .where((e) => e.isNotEmpty)
+                          .toList(),
+                    });
                   });
                 },
                 icon: const Icon(Icons.rate_review),
@@ -393,15 +443,17 @@ class _AIScreenState extends State<AIScreen>
                     provider,
                     _evaluateQuestionIdController.text.trim(),
                   );
-                  await provider.evaluateWithAI({
-                    'mode': _evaluateModeController.text.trim(),
-                    'question': questionPayload ?? <String, dynamic>{},
-                    'user_answer': _evaluateAnswerController.text
-                        .split(',')
-                        .map((e) => e.trim())
-                        .where((e) => e.isNotEmpty)
-                        .toList(),
-                    'context': _evaluateContextController.text.trim(),
+                  await _runProviderAction(() {
+                    return provider.evaluateWithAI({
+                      'mode': _evaluateModeController.text.trim(),
+                      'question': questionPayload ?? <String, dynamic>{},
+                      'user_answer': _evaluateAnswerController.text
+                          .split(',')
+                          .map((e) => e.trim())
+                          .where((e) => e.isNotEmpty)
+                          .toList(),
+                      'context': _evaluateContextController.text.trim(),
+                    });
                   });
                 },
                 icon: const Icon(Icons.fact_check),
@@ -433,13 +485,16 @@ class _AIScreenState extends State<AIScreen>
         children: [
           SizedBox(
             width: 120,
-            child: Text(label,
-                style: const TextStyle(
-                    fontWeight: FontWeight.w500, fontSize: 13)),
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+            ),
           ),
           Expanded(
-            child: Text('${value ?? '-'}',
-                style: const TextStyle(fontSize: 13)),
+            child: Text(
+              '${value ?? '-'}',
+              style: const TextStyle(fontSize: 13),
+            ),
           ),
         ],
       ),
@@ -461,12 +516,20 @@ class _AIScreenState extends State<AIScreen>
             Row(
               children: [
                 if (icon != null) ...[
-                  Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
+                  Icon(
+                    icon,
+                    size: 20,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
                   const SizedBox(width: 8),
                 ],
-                Text(title,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 15)),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 10),
@@ -510,29 +573,27 @@ class _AIScreenState extends State<AIScreen>
         children: [
           InkWell(
             onTap: () => setState(() => _expanded[key] = !isExpanded),
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(8)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               child: Row(
                 children: [
                   Icon(
-                    isExpanded
-                        ? Icons.expand_less
-                        : Icons.expand_more,
+                    isExpanded ? Icons.expand_less : Icons.expand_more,
                     size: 18,
                   ),
                   const SizedBox(width: 4),
-                  const Text('返回结果',
-                      style:
-                          TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                  const Text(
+                    '返回结果',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                  ),
                   const Spacer(),
                   InkWell(
                     onTap: () {
                       Clipboard.setData(ClipboardData(text: jsonStr));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('已复制到剪贴板')),
-                      );
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(const SnackBar(content: Text('已复制到剪贴板')));
                     },
                     child: const Padding(
                       padding: EdgeInsets.all(4),
@@ -556,8 +617,18 @@ class _AIScreenState extends State<AIScreen>
     );
   }
 
+  Future<void> _runProviderAction(Future<void> Function() action) async {
+    try {
+      await action();
+    } catch (_) {
+      // AppProvider already records and exposes errorMessage.
+    }
+  }
+
   Future<void> _saveProviderConfig(
-      BuildContext context, AppProvider provider) async {
+    BuildContext context,
+    AppProvider provider,
+  ) async {
     final messenger = ScaffoldMessenger.of(context);
     final token = _apiKeyController.text.trim();
     final model = _modelController.text.trim();
@@ -571,17 +642,91 @@ class _AIScreenState extends State<AIScreen>
             ? (baseURL.isEmpty ? null : baseURL)
             : null,
       );
+      _providerDirty = false;
       _apiKeyController.clear();
       if (!mounted) return;
-      messenger.showSnackBar(
-        const SnackBar(content: Text('模型配置已更新')),
-      );
+      final updated = provider.aiProviderStatus;
+      final activeProvider = (updated['provider'] ?? '')
+          .toString()
+          .trim()
+          .toLowerCase();
+      final configuredProvider = (updated['configured_provider'] ?? '')
+          .toString()
+          .trim()
+          .toLowerCase();
+      final fallback = updated['fallback'] == true;
+      if (configuredProvider.isNotEmpty &&
+          activeProvider.isNotEmpty &&
+          configuredProvider != activeProvider) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              '配置已保存（$configuredProvider），但当前生效是 $activeProvider；请检查 API Key/模型是否可用',
+            ),
+          ),
+        );
+      } else if (fallback) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('配置已保存，但当前处于 fallback 模式')),
+        );
+      } else {
+        messenger.showSnackBar(const SnackBar(content: Text('模型配置已更新')));
+      }
     } catch (_) {
       if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(content: Text(provider.errorMessage ?? '更新失败')),
       );
     }
+  }
+
+  Future<void> _autoFetchModel(
+    BuildContext context,
+    AppProvider provider,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    await provider.fetchAIProviderStatus(force: true);
+    if (!mounted) return;
+    if (provider.errorMessage != null) {
+      messenger.showSnackBar(SnackBar(content: Text(provider.errorMessage!)));
+      return;
+    }
+    final status = provider.aiProviderStatus;
+    final configuredProvider = (status['configured_provider'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+    final activeProvider = (status['provider'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+    final configuredModel = (status['configured_model'] ?? '')
+        .toString()
+        .trim();
+    final activeModel = (status['model'] ?? '').toString().trim();
+    final model = configuredModel.isNotEmpty ? configuredModel : activeModel;
+    if (model.isEmpty) {
+      messenger.showSnackBar(const SnackBar(content: Text('未获取到模型名称，请手动填写')));
+      return;
+    }
+    if (model == 'mock-v1' &&
+        configuredProvider.isNotEmpty &&
+        configuredProvider != 'mock') {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('当前处于 mock 回退，无法自动获取目标供应商模型，请手动填写')),
+      );
+      return;
+    }
+    _modelController.text = model;
+    if (configuredProvider.isNotEmpty &&
+        activeProvider.isNotEmpty &&
+        configuredProvider != activeProvider) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('已读取已配置模型：$model（当前生效供应商：$activeProvider）')),
+      );
+      return;
+    }
+    messenger.showSnackBar(SnackBar(content: Text('已自动获取模型：$model')));
   }
 
   void _syncProviderConfig(Map<String, dynamic> status) {
@@ -592,6 +737,7 @@ class _AIScreenState extends State<AIScreen>
             .toLowerCase();
     if (configuredProvider.isNotEmpty &&
         configuredProvider != _selectedProvider &&
+        !_providerDirty &&
         (configuredProvider == 'mock' ||
             configuredProvider == 'openai' ||
             configuredProvider == 'gemini' ||
@@ -599,8 +745,10 @@ class _AIScreenState extends State<AIScreen>
       _selectedProvider = configuredProvider;
     }
     if (!_modelFocusNode.hasFocus) {
-      final model = (status['model'] ?? '').toString().trim();
-      if (model.isNotEmpty && _modelController.text.trim() != model) {
+      final model = (status['configured_model'] ?? status['model'] ?? '')
+          .toString()
+          .trim();
+      if (model.isNotEmpty && _modelController.text.trim().isEmpty) {
         _modelController.text = model;
       }
     }
@@ -615,7 +763,20 @@ class _AIScreenState extends State<AIScreen>
   Map<String, dynamic>? _questionPayloadById(AppProvider provider, String id) {
     if (id.isEmpty) return null;
     for (final q in provider.questions) {
-      if (q.id == id) return q.toJson();
+      if (q.id != id) continue;
+      return {
+        'id': q.id,
+        'title': q.title,
+        'stem': q.stem,
+        'type': q.type,
+        'subject': q.subject,
+        'source': q.source,
+        'options': q.options.map((e) => e.toJson()).toList(),
+        'answer_key': q.answerKey,
+        'tags': q.tags,
+        'difficulty': q.difficulty,
+        'mastery_level': q.masteryLevel,
+      };
     }
     return null;
   }

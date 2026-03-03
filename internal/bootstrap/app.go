@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"self-study-tool/internal/config"
@@ -88,8 +89,19 @@ func NewApp(cfg config.Config) (*App, error) {
 	resourceHandler := resource.NewHandler(resourceService, cfg.UploadMaxBytes)
 	systemHandler := system.NewHandler()
 
+	effectiveWriteTimeout := cfg.WriteTimeout
+	minWriteTimeout := cfg.AIHTTPTimeout + 5*time.Second
+	if effectiveWriteTimeout < minWriteTimeout {
+		effectiveWriteTimeout = minWriteTimeout
+		logx.L().Warn("http write timeout increased to align with ai timeout",
+			slog.Int64("http_write_timeout_ms", cfg.WriteTimeout.Milliseconds()),
+			slog.Int64("ai_http_timeout_ms", cfg.AIHTTPTimeout.Milliseconds()),
+			slog.Int64("effective_write_timeout_ms", effectiveWriteTimeout.Milliseconds()),
+		)
+	}
+
 	router := httpserver.NewRouter(httpserver.MiddlewareConfig{
-		Timeout:          cfg.WriteTimeout,
+		Timeout:          effectiveWriteTimeout,
 		HTTPBodyEnabled:  cfg.LogHTTPBodyEnabled,
 		HTTPBodyMaxBytes: cfg.LogHTTPBodyMaxBytes,
 		RedactionMode:    cfg.LogRedactionMode,
@@ -114,7 +126,7 @@ func NewApp(cfg config.Config) (*App, error) {
 	addr := ":" + cfg.HTTPPort
 	server := httpserver.New(addr, httpserver.Config{
 		ReadTimeout:  cfg.ReadTimeout,
-		WriteTimeout: cfg.WriteTimeout,
+		WriteTimeout: effectiveWriteTimeout,
 	}, router)
 
 	return &App{server: server, db: db}, nil

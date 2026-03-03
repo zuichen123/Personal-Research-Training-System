@@ -1,10 +1,16 @@
 package ai
 
 import (
+	"bytes"
+	"encoding/json"
+	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"self-study-tool/internal/modules/question"
+	"self-study-tool/internal/shared/errs"
 	"self-study-tool/internal/shared/httpx"
 )
 
@@ -46,8 +52,8 @@ func (h *Handler) generate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) grade(w http.ResponseWriter, r *http.Request) {
-	var req GradeRequest
-	if err := httpx.DecodeJSON(r, &req); err != nil {
+	req, err := decodeGradeRequest(r)
+	if err != nil {
 		httpx.WriteError(w, err)
 		return
 	}
@@ -58,6 +64,92 @@ func (h *Handler) grade(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, result)
+}
+
+func decodeGradeRequest(r *http.Request) (GradeRequest, error) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		return GradeRequest{}, errs.BadRequest("invalid json payload")
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return GradeRequest{}, errs.BadRequest("invalid json payload")
+	}
+
+	var req GradeRequest
+
+	questionRaw, ok := raw["question"]
+	if !ok {
+		return GradeRequest{}, errs.BadRequest("question is required")
+	}
+	trimmedQuestion := bytes.TrimSpace(questionRaw)
+	if len(trimmedQuestion) == 0 || bytes.Equal(trimmedQuestion, []byte("null")) {
+		return GradeRequest{}, errs.BadRequest("question is required")
+	}
+	switch trimmedQuestion[0] {
+	case '{':
+		if err := json.Unmarshal(trimmedQuestion, &req.Question); err != nil {
+			return GradeRequest{}, errs.BadRequest("invalid question payload")
+		}
+	case '"':
+		var stem string
+		if err := json.Unmarshal(trimmedQuestion, &stem); err != nil {
+			return GradeRequest{}, errs.BadRequest("invalid question payload")
+		}
+		req.Question.Stem = strings.TrimSpace(stem)
+	default:
+		return GradeRequest{}, errs.BadRequest("invalid question payload")
+	}
+
+	if v, ok := raw["question_id"]; ok {
+		var questionID string
+		if err := json.Unmarshal(v, &questionID); err == nil {
+			req.Question.ID = strings.TrimSpace(questionID)
+		}
+	}
+	if v, ok := raw["answer_key"]; ok {
+		var answerKey []string
+		if err := json.Unmarshal(v, &answerKey); err == nil {
+			req.Question.AnswerKey = answerKey
+		}
+	}
+	if v, ok := raw["question_type"]; ok {
+		var questionType string
+		if err := json.Unmarshal(v, &questionType); err == nil {
+			req.Question.Type = question.QuestionType(strings.TrimSpace(questionType))
+		}
+	}
+
+	userAnswerRaw, ok := raw["user_answer"]
+	if !ok {
+		return GradeRequest{}, errs.BadRequest("user_answer is required")
+	}
+	trimmedAnswer := bytes.TrimSpace(userAnswerRaw)
+	if len(trimmedAnswer) == 0 || bytes.Equal(trimmedAnswer, []byte("null")) {
+		return GradeRequest{}, errs.BadRequest("user_answer is required")
+	}
+	switch trimmedAnswer[0] {
+	case '[':
+		if err := json.Unmarshal(trimmedAnswer, &req.UserAnswer); err != nil {
+			return GradeRequest{}, errs.BadRequest("invalid user_answer payload")
+		}
+	case '"':
+		var answer string
+		if err := json.Unmarshal(trimmedAnswer, &answer); err != nil {
+			return GradeRequest{}, errs.BadRequest("invalid user_answer payload")
+		}
+		answer = strings.TrimSpace(answer)
+		if answer != "" {
+			req.UserAnswer = []string{answer}
+		}
+	default:
+		return GradeRequest{}, errs.BadRequest("invalid user_answer payload")
+	}
+	if len(req.UserAnswer) == 0 {
+		return GradeRequest{}, errs.BadRequest("user_answer is required")
+	}
+
+	return req, nil
 }
 
 func (h *Handler) searchOnline(w http.ResponseWriter, r *http.Request) {

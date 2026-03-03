@@ -127,3 +127,42 @@ func TestService_UpdateProviderConfig_SwitchToGemini(t *testing.T) {
 	}
 
 }
+
+func TestService_UpdateProviderConfig_ConfiguredModelWhenFallbackToMock(t *testing.T) {
+	svc := NewService(
+		NewMockClient(0),
+		newQuestionServiceForTest(),
+		true,
+		RuntimeConfig{
+			Provider:       "mock",
+			FallbackToMock: true,
+			MockLatency:    0,
+			AIHTTPTimeout:  5 * time.Second,
+			OpenAIBaseURL:  "https://api.openai.com/v1",
+			OpenAIModel:    "gpt-4o-mini",
+		},
+	)
+
+	status, err := svc.UpdateProviderConfig(UpdateProviderConfigRequest{
+		Provider: "openai",
+		Model:    "gpt-4.1-mini",
+	})
+	if err != nil {
+		t.Fatalf("switch to openai with fallback error: %v", err)
+	}
+	if status.ConfiguredProvider != "openai" {
+		t.Fatalf("unexpected configured provider: %s", status.ConfiguredProvider)
+	}
+	if status.Provider != "mock" {
+		t.Fatalf("unexpected active provider: %s", status.Provider)
+	}
+	if status.Model != "mock-v1" {
+		t.Fatalf("unexpected active model: %s", status.Model)
+	}
+	if status.ConfiguredModel != "gpt-4.1-mini" {
+		t.Fatalf("unexpected configured model: %s", status.ConfiguredModel)
+	}
+	if !status.Fallback {
+		t.Fatal("expected fallback=true when openai is not ready")
+	}
+}

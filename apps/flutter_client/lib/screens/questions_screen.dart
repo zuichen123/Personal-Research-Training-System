@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../models/question.dart';
 import '../providers/app_provider.dart';
+import 'question_detail_screen.dart';
 
 class QuestionsScreen extends StatefulWidget {
   const QuestionsScreen({super.key});
@@ -178,6 +179,16 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           child: ListTile(
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => QuestionDetailScreen(
+                    question: q,
+                    questionNumber: index + 1,
+                  ),
+                ),
+              );
+            },
             leading: CircleAvatar(
               backgroundColor: _difficultyColor(q.difficulty),
               radius: 18,

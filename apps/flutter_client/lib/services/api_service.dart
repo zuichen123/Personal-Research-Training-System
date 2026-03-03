@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -43,6 +45,9 @@ class ApiService {
   ApiService({String? baseUrl, http.Client? client})
     : baseUrl = baseUrl ?? _defaultBaseUrl(),
       _client = client ?? http.Client();
+
+  static const Duration _defaultRequestTimeout = Duration(seconds: 15);
+  static const Duration _aiRequestTimeout = Duration(seconds: 60);
 
   final String baseUrl;
   final http.Client _client;
@@ -393,6 +398,7 @@ class ApiService {
       method: 'POST',
       path: '/ai/learning',
       jsonBody: input,
+      timeout: _aiRequestTimeout,
     );
     return _extractDataMap(response);
   }
@@ -406,6 +412,7 @@ class ApiService {
       path: '/ai/questions/generate',
       query: {'persist': '$persist'},
       jsonBody: input,
+      timeout: _aiRequestTimeout,
     );
     return _extractDataList(response).map(Question.fromJson).toList();
   }
@@ -419,6 +426,7 @@ class ApiService {
       method: 'GET',
       path: '/ai/questions/search',
       query: {'topic': topic, 'subject': subject, 'count': '$count'},
+      timeout: _aiRequestTimeout,
     );
     return _extractDataList(response).map(Question.fromJson).toList();
   }
@@ -428,6 +436,7 @@ class ApiService {
       method: 'POST',
       path: '/ai/grade',
       jsonBody: input,
+      timeout: _aiRequestTimeout,
     );
     return _extractDataMap(response);
   }
@@ -439,6 +448,7 @@ class ApiService {
       method: 'POST',
       path: '/ai/evaluate',
       jsonBody: input,
+      timeout: _aiRequestTimeout,
     );
     return _extractDataMap(response);
   }
@@ -448,6 +458,7 @@ class ApiService {
       method: 'POST',
       path: '/ai/score',
       jsonBody: input,
+      timeout: _aiRequestTimeout,
     );
     return _extractDataMap(response);
   }
@@ -457,7 +468,7 @@ class ApiService {
     required String path,
     Map<String, String>? query,
     Map<String, dynamic>? jsonBody,
-    Duration timeout = const Duration(seconds: 15),
+    Duration timeout = _defaultRequestTimeout,
     bool expectJson = true,
   }) async {
     final traceId = newTraceId();
@@ -480,42 +491,13 @@ class ApiService {
 
     late http.Response response;
     try {
-      switch (method.toUpperCase()) {
-        case 'GET':
-          response = await _client
-              .get(uri, headers: {'X-Trace-ID': traceId})
-              .timeout(timeout);
-          break;
-        case 'DELETE':
-          response = await _client
-              .delete(uri, headers: {'X-Trace-ID': traceId})
-              .timeout(timeout);
-          break;
-        case 'PUT':
-          response = await _client
-              .put(
-                uri,
-                headers: {
-                  'Content-Type': 'application/json',
-                  'X-Trace-ID': traceId,
-                },
-                body: payload,
-              )
-              .timeout(timeout);
-          break;
-        default:
-          response = await _client
-              .post(
-                uri,
-                headers: {
-                  'Content-Type': 'application/json',
-                  'X-Trace-ID': traceId,
-                },
-                body: payload,
-              )
-              .timeout(timeout);
-          break;
-      }
+      response = await _sendWithIdleTimeout(
+        method: method,
+        uri: uri,
+        traceId: traceId,
+        payload: payload,
+        idleTimeout: timeout,
+      );
     } catch (e) {
       final latency = DateTime.now().difference(started).inMilliseconds;
       _logger.error(
@@ -580,6 +562,92 @@ class ApiService {
       );
     }
     return response;
+  }
+
+  Future<http.Response> _sendWithIdleTimeout({
+    required String method,
+    required Uri uri,
+    required String traceId,
+    required Duration idleTimeout,
+    String? payload,
+  }) async {
+    final normalizedMethod = method.toUpperCase();
+    final request = http.Request(normalizedMethod, uri);
+    request.headers['X-Trace-ID'] = traceId;
+    if (normalizedMethod == 'POST' || normalizedMethod == 'PUT') {
+      request.headers['Content-Type'] = 'application/json';
+      request.body = payload ?? '';
+    }
+
+    final streamedResponse = await _client
+        .send(request)
+        .timeout(
+          idleTimeout,
+          onTimeout: () => throw TimeoutException(
+            'No response received in ${idleTimeout.inSeconds}s',
+            idleTimeout,
+          ),
+        );
+    final bytes = await _readBodyWithIdleTimeout(
+      streamedResponse.stream,
+      idleTimeout,
+    );
+    return http.Response.bytes(
+      bytes,
+      streamedResponse.statusCode,
+      headers: streamedResponse.headers,
+      isRedirect: streamedResponse.isRedirect,
+      persistentConnection: streamedResponse.persistentConnection,
+      reasonPhrase: streamedResponse.reasonPhrase,
+      request: streamedResponse.request,
+    );
+  }
+
+  Future<Uint8List> _readBodyWithIdleTimeout(
+    Stream<List<int>> stream,
+    Duration idleTimeout,
+  ) {
+    final completer = Completer<Uint8List>();
+    final builder = BytesBuilder(copy: false);
+    StreamSubscription<List<int>>? subscription;
+    Timer? timer;
+
+    void resetTimer() {
+      timer?.cancel();
+      timer = Timer(idleTimeout, () async {
+        await subscription?.cancel();
+        if (!completer.isCompleted) {
+          completer.completeError(
+            TimeoutException(
+              'No response content received in ${idleTimeout.inSeconds}s',
+              idleTimeout,
+            ),
+          );
+        }
+      });
+    }
+
+    resetTimer();
+    subscription = stream.listen(
+      (chunk) {
+        builder.add(chunk);
+        resetTimer();
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        timer?.cancel();
+        if (!completer.isCompleted) {
+          completer.completeError(error, stackTrace);
+        }
+      },
+      onDone: () {
+        timer?.cancel();
+        if (!completer.isCompleted) {
+          completer.complete(builder.takeBytes());
+        }
+      },
+      cancelOnError: true,
+    );
+    return completer.future;
   }
 
   List<Map<String, dynamic>> _extractDataList(http.Response response) {

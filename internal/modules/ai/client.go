@@ -79,6 +79,7 @@ type ProviderStatus struct {
 	Provider           string `json:"provider"`
 	ConfiguredProvider string `json:"configured_provider,omitempty"`
 	Model              string `json:"model"`
+	ConfiguredModel    string `json:"configured_model,omitempty"`
 	Ready              bool   `json:"ready"`
 	Fallback           bool   `json:"fallback"`
 	HasAPIKey          bool   `json:"has_api_key,omitempty"`

@@ -47,11 +47,11 @@ func Load() Config {
 	return Config{
 		HTTPPort:            getEnv("APP_PORT", "8080"),
 		ReadTimeout:         getEnvDuration("HTTP_READ_TIMEOUT", 10*time.Second),
-		WriteTimeout:        getEnvDuration("HTTP_WRITE_TIMEOUT", 15*time.Second),
+		WriteTimeout:        getEnvDuration("HTTP_WRITE_TIMEOUT", 90*time.Second),
 		ShutdownTimeout:     getEnvDuration("HTTP_SHUTDOWN_TIMEOUT", 10*time.Second),
 		AIProvider:          getEnv("AI_PROVIDER", "mock"),
 		AIMockLatency:       getEnvDuration("AI_MOCK_LATENCY", 200*time.Millisecond),
-		AIHTTPTimeout:       getEnvDuration("AI_HTTP_TIMEOUT", 20*time.Second),
+		AIHTTPTimeout:       getEnvDuration("AI_HTTP_TIMEOUT", 60*time.Second),
 		AIFallbackToMock:    getEnvBool("AI_FALLBACK_TO_MOCK", true),
 		AIOpenAIBaseURL:     getEnv("AI_OPENAI_BASE_URL", "https://api.openai.com/v1"),
 		AIOpenAIAPIKey:      getEnv("AI_OPENAI_API_KEY", ""),

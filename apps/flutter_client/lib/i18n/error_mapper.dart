@@ -1,6 +1,11 @@
+import 'dart:async';
+
 import '../services/api_service.dart';
 
 String mapErrorToZh(Object error) {
+  if (error is TimeoutException) {
+    return '请求超时，请稍后重试或减少生成数量';
+  }
   if (error is ApiException) {
     switch (error.code) {
       case 'bad_request':
