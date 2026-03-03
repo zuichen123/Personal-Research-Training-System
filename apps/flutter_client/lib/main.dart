@@ -1,4 +1,4 @@
-import 'dart:ui';
+﻿import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -22,7 +22,7 @@ Future<void> main() async {
     AppLogger.instance.error(
       module: 'app',
       event: 'flutter.error',
-      message: 'Flutter异常',
+      message: 'Flutter寮傚父',
       error: details.exceptionAsString(),
       stack: details.stack.toString(),
     );
@@ -33,7 +33,7 @@ Future<void> main() async {
     AppLogger.instance.error(
       module: 'app',
       event: 'platform.error',
-      message: '平台异常',
+      message: '骞冲彴寮傚父',
       error: error.toString(),
       stack: stack.toString(),
     );
@@ -43,7 +43,7 @@ Future<void> main() async {
   runApp(const MyApp());
 }
 
-// ─── 通用主题配置 ───
+// 鈹€鈹€鈹€ 閫氱敤涓婚閰嶇疆 鈹€鈹€鈹€
 
 CardThemeData _cardTheme(ColorScheme cs) => CardThemeData(
   elevation: 0.5,
@@ -87,7 +87,7 @@ class MyApp extends StatelessWidget {
     return MultiProvider(
       providers: [ChangeNotifierProvider(create: (_) => AppProvider())],
       child: MaterialApp(
-        title: '自学工具',
+        title: '鑷宸ュ叿',
         debugShowCheckedModeBanner: false,
         theme: _buildTheme(Brightness.light),
         darkTheme: _buildTheme(Brightness.dark),
@@ -116,7 +116,7 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// ─── 主导航：5 个主 tab ───
+// 鈹€鈹€鈹€ 涓诲鑸細5 涓富 tab 鈹€鈹€鈹€
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -128,7 +128,7 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
 
-  // 5 个主屏幕
+  // 5 涓富灞忓箷
   final List<Widget> _screens = const [
     QuestionsScreen(),
     MistakesScreen(),
@@ -141,22 +141,22 @@ class _MainScreenState extends State<MainScreen> {
     _NavItem(
       icon: Icons.question_answer_outlined,
       selectedIcon: Icons.question_answer,
-      label: '题库',
+      label: '棰樺簱',
     ),
     _NavItem(
       icon: Icons.menu_book_outlined,
       selectedIcon: Icons.menu_book,
-      label: '错题',
+      label: '閿欓',
     ),
     _NavItem(
       icon: Icons.edit_note_outlined,
       selectedIcon: Icons.edit_note,
-      label: '练习',
+      label: '缁冧範',
     ),
     _NavItem(
       icon: Icons.timer_outlined,
       selectedIcon: Icons.timer,
-      label: '专注',
+      label: '涓撴敞',
     ),
     _NavItem(
       icon: Icons.psychology_outlined,
@@ -165,22 +165,22 @@ class _MainScreenState extends State<MainScreen> {
     ),
   ];
 
-  // Drawer 条目 → 全屏 push
+  // Drawer 鏉＄洰 鈫?鍏ㄥ睆 push
   static const _drawerItems = [
     _NavItem(
       icon: Icons.folder_outlined,
       selectedIcon: Icons.folder,
-      label: '学习资料',
+      label: '瀛︿範璧勬枡',
     ),
     _NavItem(
       icon: Icons.event_note_outlined,
       selectedIcon: Icons.event_note,
-      label: '计划管理',
+      label: '璁″垝绠＄悊',
     ),
     _NavItem(
       icon: Icons.settings_outlined,
       selectedIcon: Icons.settings,
-      label: '设置',
+      label: '璁剧疆',
     ),
   ];
 
@@ -200,9 +200,9 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _openDrawerScreen(BuildContext context, int drawerIndex) {
-    Navigator.of(context).pop(); // 关闭 Drawer
+    Navigator.of(context).pop(); // 鍏抽棴 Drawer
 
-    // 根据 drawerIndex 确保对应数据加载
+    // 鏍规嵁 drawerIndex 纭繚瀵瑰簲鏁版嵁鍔犺浇
     final provider = context.read<AppProvider>();
     Widget screen;
     switch (drawerIndex) {
@@ -247,7 +247,7 @@ class _MainScreenState extends State<MainScreen> {
                 Icon(Icons.school, size: 32, color: cs.primary),
                 const SizedBox(width: 12),
                 Text(
-                  '自学工具',
+                  '鑷宸ュ叿',
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -278,35 +278,45 @@ class _MainScreenState extends State<MainScreen> {
     if (isWide) {
       return Scaffold(
         drawer: _buildDrawer(context),
-        body: Row(
+        body: Stack(
           children: [
-            NavigationRail(
-              extended: MediaQuery.sizeOf(context).width >= 1100,
-              selectedIndex: _currentIndex,
-              onDestinationSelected: _onDestinationSelected,
-              labelType: MediaQuery.sizeOf(context).width >= 1100
-                  ? NavigationRailLabelType.none
-                  : NavigationRailLabelType.all,
-              leading: Builder(
-                builder: (ctx) => IconButton(
-                  icon: const Icon(Icons.menu),
-                  tooltip: '更多功能',
-                  onPressed: () => Scaffold.of(ctx).openDrawer(),
+            Row(
+              children: [
+                NavigationRail(
+                  extended: MediaQuery.sizeOf(context).width >= 1100,
+                  selectedIndex: _currentIndex,
+                  onDestinationSelected: _onDestinationSelected,
+                  labelType: MediaQuery.sizeOf(context).width >= 1100
+                      ? NavigationRailLabelType.none
+                      : NavigationRailLabelType.all,
+                  destinations: _destinations
+                      .map(
+                        (d) => NavigationRailDestination(
+                          icon: Icon(d.icon),
+                          selectedIcon: Icon(d.selectedIcon),
+                          label: Text(d.label),
+                        ),
+                      )
+                      .toList(),
+                ),
+                const VerticalDivider(width: 1, thickness: 1),
+                Expanded(
+                  child: IndexedStack(index: _currentIndex, children: _screens),
+                ),
+              ],
+            ),
+            Positioned(
+              left: 10,
+              bottom: 10,
+              child: SafeArea(
+                child: Builder(
+                  builder: (ctx) => IconButton.filledTonal(
+                    icon: const Icon(Icons.menu),
+                    tooltip: '更多功能',
+                    onPressed: () => Scaffold.of(ctx).openDrawer(),
+                  ),
                 ),
               ),
-              destinations: _destinations
-                  .map(
-                    (d) => NavigationRailDestination(
-                      icon: Icon(d.icon),
-                      selectedIcon: Icon(d.selectedIcon),
-                      label: Text(d.label),
-                    ),
-                  )
-                  .toList(),
-            ),
-            const VerticalDivider(width: 1, thickness: 1),
-            Expanded(
-              child: IndexedStack(index: _currentIndex, children: _screens),
             ),
           ],
         ),
