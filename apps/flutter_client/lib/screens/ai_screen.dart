@@ -1,14 +1,25 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import 'package:signature/signature.dart';
 
 import '../models/question.dart';
 import '../providers/app_provider.dart';
 
+enum AIScreenFocusSection { none, generate, grade }
+
 class AIScreen extends StatefulWidget {
-  const AIScreen({super.key});
+  const AIScreen({
+    super.key,
+    this.focusSection = AIScreenFocusSection.none,
+  });
+
+  final AIScreenFocusSection focusSection;
 
   @override
   State<AIScreen> createState() => _AIScreenState();
@@ -61,6 +72,14 @@ class _AIScreenState extends State<AIScreen> {
   final Map<String, TextEditingController> _generatedSupplementControllers = {};
   final Map<String, Map<String, dynamic>> _generatedGradeResults = {};
   final Map<String, bool> _generatedSubmitting = {};
+  final Map<String, SignatureController> _generatedSignatureControllers = {};
+  final Map<String, bool> _generatedEraserMode = {};
+  final Map<String, List<_AnswerImageAttachment>> _generatedAttachments = {};
+
+  final ImagePicker _imagePicker = ImagePicker();
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _generateSectionKey = GlobalKey();
+  final GlobalKey _gradeSectionKey = GlobalKey();
 
   @override
   void initState() {
@@ -70,6 +89,9 @@ class _AIScreenState extends State<AIScreen> {
     _learnEndDateController.text = _formatDate(
       now.add(const Duration(days: 90)),
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _jumpToFocusedSection();
+    });
   }
 
   @override
@@ -104,6 +126,7 @@ class _AIScreenState extends State<AIScreen> {
     _evaluateQuestionIdController.dispose();
     _evaluateAnswerController.dispose();
     _evaluateContextController.dispose();
+    _scrollController.dispose();
     _clearGeneratedPracticeState();
     super.dispose();
   }
@@ -120,6 +143,7 @@ class _AIScreenState extends State<AIScreen> {
     final provider = context.watch<AppProvider>();
 
     return ListView(
+      controller: _scrollController,
       padding: const EdgeInsets.all(16),
       children: [
         _learningSection(context, provider),
@@ -343,6 +367,7 @@ class _AIScreenState extends State<AIScreen> {
 
   Widget _generateSection(AppProvider provider) {
     return _section(
+      key: _generateSectionKey,
       title: 'AI出题',
       icon: Icons.quiz_outlined,
       child: Column(
@@ -420,10 +445,18 @@ class _AIScreenState extends State<AIScreen> {
   ) {
     final qKey = _generatedQuestionKey(index);
     final selected = _generatedSelections[qKey] ?? <String>{};
-    final noteController = _generatedSupplementControllers[qKey] ??=
-        TextEditingController();
+    final noteController =
+        _generatedSupplementControllers[qKey] ??= TextEditingController();
     final result = _generatedGradeResults[qKey];
     final submitting = _generatedSubmitting[qKey] == true;
+    final attachments =
+        _generatedAttachments[qKey] ?? const <_AnswerImageAttachment>[];
+    final signatureController = _generatedSignatureControllers[qKey] ??=
+        SignatureController(
+          penStrokeWidth: 2.4,
+          penColor: Colors.black,
+          exportBackgroundColor: Colors.white,
+        );
 
     return Card(
       margin: const EdgeInsets.only(top: 8),
@@ -464,7 +497,7 @@ class _AIScreenState extends State<AIScreen> {
               const Padding(
                 padding: EdgeInsets.only(top: 6, bottom: 2),
                 child: Text(
-                  '请选择答案：',
+                  '请选择答案',
                   style: TextStyle(fontWeight: FontWeight.w500),
                 ),
               ),
@@ -480,7 +513,9 @@ class _AIScreenState extends State<AIScreen> {
                   onChanged: submitting
                       ? null
                       : (value) {
-                          if (value == null) return;
+                          if (value == null) {
+                            return;
+                          }
                           setState(() {
                             _generatedSelections[qKey] = {value};
                           });
@@ -517,13 +552,63 @@ class _AIScreenState extends State<AIScreen> {
                   ? '做题时遇到的问题/想法补充（可选）'
                   : '作答内容 / 问题补充',
             ),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: submitting
+                      ? null
+                      : () => _pickImageAttachment(qKey, ImageSource.gallery),
+                  icon: const Icon(Icons.photo_library_outlined),
+                  label: const Text('上传图片'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: submitting
+                      ? null
+                      : () => _pickImageAttachment(qKey, ImageSource.camera),
+                  icon: const Icon(Icons.photo_camera_outlined),
+                  label: const Text('拍照'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: submitting ? null : () => _pickAudioAttachment(qKey),
+                  icon: const Icon(Icons.mic_external_on_outlined),
+                  label: const Text('上传语音'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            _handwritingPanel(
+              qKey: qKey,
+              controller: signatureController,
+              submitting: submitting,
+            ),
+            if (attachments.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: attachments
+                    .asMap()
+                    .entries
+                    .map(
+                      (entry) => InputChip(
+                        label: Text(_attachmentLabel(entry.value)),
+                        onDeleted: submitting
+                            ? null
+                            : () => _removeAttachment(qKey, entry.key),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ],
             if (_isSingleChoice(question) || _isMultiChoice(question))
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
                   selected.isEmpty
                       ? '当前未选择答案'
-                      : '当前已选: ${selected.toList()..sort()}',
+                      : '当前已选: ${(selected.toList()..sort()).join(', ')}',
                   style: const TextStyle(fontSize: 12, color: Colors.grey),
                 ),
               ),
@@ -539,7 +624,7 @@ class _AIScreenState extends State<AIScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.send),
-              label: Text(submitting ? '提交中...' : '提交批阅'),
+              label: Text(submitting ? '提交中..' : '提交批阅'),
             ),
             if (result != null) _jsonBox('generated-$qKey', result),
           ],
@@ -556,13 +641,13 @@ class _AIScreenState extends State<AIScreen> {
     final qKey = _generatedQuestionKey(index);
     final selected = _generatedSelections[qKey] ?? <String>{};
     final note = _generatedSupplementControllers[qKey]?.text.trim() ?? '';
+    final attachments =
+        _generatedAttachments[qKey] ?? const <_AnswerImageAttachment>[];
 
     final userAnswers = <String>[];
     if (_isSingleChoice(question) || _isMultiChoice(question)) {
       if (selected.isEmpty) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('请选择答案后再提交')));
+        _showSnack('请选择答案后再提交');
         return;
       }
       for (final option in question.options) {
@@ -574,36 +659,313 @@ class _AIScreenState extends State<AIScreen> {
         userAnswers.add('note:$note');
       }
     } else {
-      if (note.isEmpty) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('请填写作答内容后再提交')));
+      if (note.isNotEmpty) {
+        userAnswers.add(note);
+      }
+      if (userAnswers.isEmpty && attachments.isEmpty) {
+        _showSnack('请至少填写作答内容或上传附件');
         return;
       }
-      userAnswers.add(note);
     }
 
-    setState(() => _generatedSubmitting[qKey] = true);
+    setState(() {
+      _generatedSubmitting[qKey] = true;
+    });
     try {
       await provider.gradeWithAI({
         'question': _questionPayloadFromQuestion(question),
         'user_answer': userAnswers,
+        if (attachments.isNotEmpty)
+          'attachments': attachments.map((e) => e.toJson()).toList(),
       });
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _generatedGradeResults[qKey] = provider.aiGradeResult ?? {};
       });
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       final message = provider.errorMessage ?? '提交失败';
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+      _showSnack(message);
     } finally {
       if (mounted) {
-        setState(() => _generatedSubmitting[qKey] = false);
+        setState(() {
+          _generatedSubmitting[qKey] = false;
+        });
       }
     }
+  }
+
+  Widget _handwritingPanel({
+    required String qKey,
+    required SignatureController controller,
+    required bool submitting,
+  }) {
+    final eraser = _generatedEraserMode[qKey] == true;
+    final borderColor = Theme.of(context).colorScheme.outlineVariant;
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: borderColor),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      padding: const EdgeInsets.all(8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text(
+                '手写区',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+              ),
+              const Spacer(),
+              IconButton(
+                tooltip: '画笔',
+                onPressed: submitting ? null : () => _setEraserMode(qKey, false),
+                visualDensity: VisualDensity.compact,
+                icon: Icon(
+                  Icons.edit,
+                  size: 18,
+                  color: eraser
+                      ? Colors.grey
+                      : Theme.of(context).colorScheme.primary,
+                ),
+              ),
+              IconButton(
+                tooltip: '橡皮',
+                onPressed: submitting ? null : () => _setEraserMode(qKey, true),
+                visualDensity: VisualDensity.compact,
+                icon: Icon(
+                  Icons.auto_fix_normal,
+                  size: 18,
+                  color: eraser
+                      ? Theme.of(context).colorScheme.primary
+                      : Colors.grey,
+                ),
+              ),
+              TextButton(
+                onPressed: submitting ? null : () => _clearSignature(qKey),
+                child: const Text('清空'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: submitting
+                    ? null
+                    : () => _captureSignatureAttachment(qKey),
+                icon: const Icon(Icons.add_photo_alternate_outlined, size: 18),
+                label: const Text('加入附件'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          SizedBox(
+            height: 140,
+            width: double.infinity,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Signature(
+                controller: controller,
+                backgroundColor: Colors.white,
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            '手写内容会转为图片并作为附件提交给 AI。',
+            style: TextStyle(fontSize: 11, color: Colors.grey),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickImageAttachment(String qKey, ImageSource source) async {
+    try {
+      final picked = await _imagePicker.pickImage(
+        source: source,
+        imageQuality: 85,
+      );
+      if (picked == null) {
+        return;
+      }
+      final bytes = await picked.readAsBytes();
+      if (bytes.isEmpty) {
+        _showSnack('图片读取失败');
+        return;
+      }
+      final name = picked.name.trim().isEmpty
+          ? 'image_${DateTime.now().millisecondsSinceEpoch}.jpg'
+          : picked.name;
+      final mimeType = _guessMimeType(name, fallback: 'image/jpeg');
+      _appendAttachment(
+        qKey,
+        _AnswerImageAttachment(
+          name: name,
+          source: source == ImageSource.camera ? 'camera' : 'gallery',
+          mimeType: mimeType,
+          dataUrl: _toDataUrl(mimeType, bytes),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      _showSnack('上传图片失败');
+    }
+  }
+
+  Future<void> _pickAudioAttachment(String qKey) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        withData: true,
+        type: FileType.custom,
+        allowedExtensions: const [
+          'mp3',
+          'wav',
+          'm4a',
+          'aac',
+          'ogg',
+          'webm',
+        ],
+      );
+      if (result == null || result.files.isEmpty) {
+        return;
+      }
+      final file = result.files.first;
+      final bytes = file.bytes;
+      if (bytes == null || bytes.isEmpty) {
+        _showSnack('语音文件读取失败');
+        return;
+      }
+      final name = file.name.trim().isEmpty
+          ? 'voice_${DateTime.now().millisecondsSinceEpoch}.wav'
+          : file.name;
+      final mimeType = _guessMimeType(name, fallback: 'audio/wav');
+      _appendAttachment(
+        qKey,
+        _AnswerImageAttachment(
+          name: name,
+          source: 'audio_upload',
+          mimeType: mimeType,
+          dataUrl: _toDataUrl(mimeType, bytes),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      _showSnack('上传语音失败');
+    }
+  }
+
+  Future<void> _captureSignatureAttachment(String qKey) async {
+    final controller = _generatedSignatureControllers[qKey];
+    if (controller == null || controller.isEmpty) {
+      _showSnack('请先在手写区书写内容');
+      return;
+    }
+    final bytes = await controller.toPngBytes();
+    if (bytes == null || bytes.isEmpty) {
+      _showSnack('手写内容转换失败');
+      return;
+    }
+    _appendAttachment(
+      qKey,
+      _AnswerImageAttachment(
+        name: 'handwriting_${DateTime.now().millisecondsSinceEpoch}.png',
+        source: 'handwriting',
+        mimeType: 'image/png',
+        dataUrl: _toDataUrl('image/png', bytes),
+      ),
+    );
+    controller.clear();
+  }
+
+  void _appendAttachment(String qKey, _AnswerImageAttachment item) {
+    final current =
+        _generatedAttachments[qKey] ?? const <_AnswerImageAttachment>[];
+    if (current.length >= 6) {
+      _showSnack('附件最多 6 个');
+      return;
+    }
+    setState(() {
+      _generatedAttachments[qKey] = [...current, item];
+    });
+  }
+
+  void _removeAttachment(String qKey, int index) {
+    final current = _generatedAttachments[qKey];
+    if (current == null || index < 0 || index >= current.length) {
+      return;
+    }
+    setState(() {
+      final next = [...current]..removeAt(index);
+      if (next.isEmpty) {
+        _generatedAttachments.remove(qKey);
+      } else {
+        _generatedAttachments[qKey] = next;
+      }
+    });
+  }
+
+  void _setEraserMode(String qKey, bool eraser) {
+    final controller = _generatedSignatureControllers[qKey];
+    if (controller == null) {
+      return;
+    }
+    setState(() {
+      _generatedEraserMode[qKey] = eraser;
+      controller.penColor = eraser ? Colors.white : Colors.black;
+      controller.penStrokeWidth = eraser ? 14 : 2.4;
+    });
+  }
+
+  void _clearSignature(String qKey) {
+    final controller = _generatedSignatureControllers[qKey];
+    controller?.clear();
+  }
+
+  String _attachmentLabel(_AnswerImageAttachment attachment) {
+    final mime = attachment.mimeType.toLowerCase();
+    final prefix = mime.startsWith('audio/') ? '音频' : '图片';
+    return '$prefix · ${attachment.name}';
+  }
+
+  String _toDataUrl(String mimeType, Uint8List bytes) {
+    return 'data:$mimeType;base64,${base64Encode(bytes)}';
+  }
+
+  String _guessMimeType(String fileName, {required String fallback}) {
+    final normalized = fileName.toLowerCase();
+    if (normalized.endsWith('.png')) return 'image/png';
+    if (normalized.endsWith('.jpg') || normalized.endsWith('.jpeg')) {
+      return 'image/jpeg';
+    }
+    if (normalized.endsWith('.webp')) return 'image/webp';
+    if (normalized.endsWith('.gif')) return 'image/gif';
+    if (normalized.endsWith('.heic')) return 'image/heic';
+    if (normalized.endsWith('.heif')) return 'image/heif';
+    if (normalized.endsWith('.bmp')) return 'image/bmp';
+
+    if (normalized.endsWith('.wav')) return 'audio/wav';
+    if (normalized.endsWith('.mp3')) return 'audio/mpeg';
+    if (normalized.endsWith('.m4a')) return 'audio/mp4';
+    if (normalized.endsWith('.aac')) return 'audio/aac';
+    if (normalized.endsWith('.ogg')) return 'audio/ogg';
+    if (normalized.endsWith('.webm')) return 'audio/webm';
+    return fallback;
+  }
+
+  void _showSnack(String message) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Widget _searchSection(AppProvider provider) {
@@ -670,6 +1032,7 @@ class _AIScreenState extends State<AIScreen> {
 
   Widget _gradeSection(BuildContext context, AppProvider provider) {
     return _section(
+      key: _gradeSectionKey,
       title: 'AI批阅',
       icon: Icons.grading,
       child: Column(
@@ -783,11 +1146,13 @@ class _AIScreenState extends State<AIScreen> {
   }
 
   Widget _section({
+    Key? key,
     required String title,
     required Widget child,
     IconData? icon,
   }) {
     return Card(
+      key: key,
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -912,14 +1277,46 @@ class _AIScreenState extends State<AIScreen> {
 
   bool _isMultiChoice(Question question) => question.type == 'multi_choice';
 
+  void _jumpToFocusedSection() {
+    switch (widget.focusSection) {
+      case AIScreenFocusSection.none:
+        return;
+      case AIScreenFocusSection.generate:
+        _scrollToSection(_generateSectionKey);
+        return;
+      case AIScreenFocusSection.grade:
+        _scrollToSection(_gradeSectionKey);
+        return;
+    }
+  }
+
+  void _scrollToSection(GlobalKey key) {
+    final targetContext = key.currentContext;
+    if (targetContext == null) {
+      return;
+    }
+    Scrollable.ensureVisible(
+      targetContext,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeInOut,
+      alignment: 0.06,
+    );
+  }
+
   void _clearGeneratedPracticeState() {
     for (final controller in _generatedSupplementControllers.values) {
       controller.dispose();
     }
+    for (final controller in _generatedSignatureControllers.values) {
+      controller.dispose();
+    }
     _generatedSupplementControllers.clear();
+    _generatedSignatureControllers.clear();
     _generatedSelections.clear();
     _generatedGradeResults.clear();
     _generatedSubmitting.clear();
+    _generatedEraserMode.clear();
+    _generatedAttachments.clear();
   }
 
   Map<String, dynamic>? _questionPayloadById(AppProvider provider, String id) {
@@ -947,3 +1344,4 @@ class _AIScreenState extends State<AIScreen> {
     };
   }
 }
+

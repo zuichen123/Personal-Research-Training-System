@@ -177,7 +177,7 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
     final cs = theme.colorScheme;
     final score = result['score'];
     final correct = result['correct'];
-    final feedback = result['feedback']?.toString() ?? '';
+    final analysis = _extractAnalysisText(result);
     final wrongReason = result['wrong_reason']?.toString() ?? '';
     final suggestions = result['suggestions'];
     final pretty = const JsonEncoder.withIndent('  ').convert(result);
@@ -263,33 +263,35 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
               ],
             ),
 
-            // ── 反馈 ──
-            if (feedback.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: cs.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(10),
+            const SizedBox(height: 12),
+            Theme(
+              data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+              child: ExpansionTile(
+                initiallyExpanded: false,
+                tilePadding: EdgeInsets.zero,
+                title: Text(
+                  '题目解析',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                    color: cs.primary,
+                  ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '反馈',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                        color: cs.primary,
-                      ),
+                children: [
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    const SizedBox(height: 4),
-                    SelectableText(feedback),
-                  ],
-                ),
+                    child: SelectableText(
+                      analysis.isEmpty ? '暂无题目解析' : analysis,
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
 
             // ── 错误原因 ──
             if (wrongReason.isNotEmpty) ...[
@@ -469,5 +471,19 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
       default:
         return raw;
     }
+  }
+
+  String _extractAnalysisText(Map<String, dynamic> result) {
+    final candidates = [
+      result['analysis'],
+      result['explanation'],
+    ];
+    for (final item in candidates) {
+      final text = item?.toString().trim() ?? '';
+      if (text.isNotEmpty) {
+        return text;
+      }
+    }
+    return '';
   }
 }
