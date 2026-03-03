@@ -8,6 +8,7 @@ import '../models/pomodoro.dart';
 import '../models/practice.dart';
 import '../models/question.dart';
 import '../models/resource.dart';
+import '../models/user_profile.dart';
 import '../services/api_service.dart';
 
 enum DataSection {
@@ -17,6 +18,7 @@ enum DataSection {
   resources,
   plans,
   pomodoro,
+  profile,
   ai,
 }
 
@@ -31,6 +33,7 @@ class AppProvider with ChangeNotifier {
     DataSection.resources: false,
     DataSection.plans: false,
     DataSection.pomodoro: false,
+    DataSection.profile: false,
     DataSection.ai: false,
   };
 
@@ -41,6 +44,7 @@ class AppProvider with ChangeNotifier {
     DataSection.resources: false,
     DataSection.plans: false,
     DataSection.pomodoro: false,
+    DataSection.profile: false,
     DataSection.ai: false,
   };
 
@@ -72,6 +76,9 @@ class AppProvider with ChangeNotifier {
 
   List<PomodoroSession> _pomodoroSessions = [];
   List<PomodoroSession> get pomodoroSessions => _pomodoroSessions;
+
+  UserProfile? _userProfile;
+  UserProfile? get userProfile => _userProfile;
 
   Map<String, dynamic> _aiProviderStatus = {};
   Map<String, dynamic> get aiProviderStatus => _aiProviderStatus;
@@ -128,6 +135,7 @@ class AppProvider with ChangeNotifier {
         break;
       case 7:
         await ensureAILoaded();
+        await ensureProfileLoaded();
         break;
       default:
         return;
@@ -173,6 +181,12 @@ class AppProvider with ChangeNotifier {
   Future<void> ensureAILoaded() async {
     if (!isSectionLoaded(DataSection.ai)) {
       await fetchAIProviderStatus();
+    }
+  }
+
+  Future<void> ensureProfileLoaded() async {
+    if (!isSectionLoaded(DataSection.profile)) {
+      await fetchUserProfile();
     }
   }
 
@@ -417,6 +431,49 @@ class AppProvider with ChangeNotifier {
     await _runSection(DataSection.ai, () async {
       _aiProviderStatus = await _api.getAIProviderStatus();
       _isSectionLoaded[DataSection.ai] = true;
+    });
+  }
+
+  Future<void> fetchUserProfile({
+    bool force = false,
+    String userId = 'default',
+  }) async {
+    if (!force && isSectionLoading(DataSection.profile)) {
+      return;
+    }
+    await _runSection(DataSection.profile, () async {
+      _userProfile = await _api.getUserProfile(userId: userId);
+      _isSectionLoaded[DataSection.profile] = true;
+    });
+  }
+
+  Future<void> updateUserProfile({
+    String userId = 'default',
+    required String nickname,
+    required int age,
+    required String academicStatus,
+    required List<String> goals,
+    String goalTargetDate = '',
+    required int dailyStudyMinutes,
+    List<String> weakSubjects = const [],
+    String targetDestination = '',
+    String notes = '',
+  }) async {
+    await _runAction('更新用户信息', () async {
+      _userProfile = await _api.updateUserProfile(
+        userId: userId,
+        nickname: nickname,
+        age: age,
+        academicStatus: academicStatus,
+        goals: goals,
+        goalTargetDate: goalTargetDate,
+        dailyStudyMinutes: dailyStudyMinutes,
+        weakSubjects: weakSubjects,
+        targetDestination: targetDestination,
+        notes: notes,
+      );
+      _isSectionLoaded[DataSection.profile] = true;
+      notifyListeners();
     });
   }
 

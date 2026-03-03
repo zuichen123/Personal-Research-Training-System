@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/user_profile.dart';
 import '../providers/app_provider.dart';
 import 'debug_log_screen.dart';
 
@@ -24,10 +25,47 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _providerDirty = false;
   bool _showApiKey = false;
 
+  final _nicknameController = TextEditingController();
+  final _ageController = TextEditingController();
+  final _academicStatusController = TextEditingController();
+  final _goalsController = TextEditingController();
+  final _goalTargetDateController = TextEditingController();
+  final _dailyStudyMinutesController = TextEditingController();
+  final _weakSubjectsController = TextEditingController();
+  final _targetDestinationController = TextEditingController();
+  final _notesController = TextEditingController();
+
+  bool _profileDirty = false;
+  bool _syncingProfileForm = false;
+  String _selectedAcademicPreset = _customAcademicStatus;
+
+  static const List<String> _academicStatusPresets = [
+    '初中',
+    '高中',
+    '中专',
+    '大专',
+    '本科',
+    '硕士',
+    '博士',
+    '在职学习',
+    '备考',
+    _customAcademicStatus,
+  ];
+  static const String _customAcademicStatus = '自定义';
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
+    _bindProfileDirtyListener(_nicknameController);
+    _bindProfileDirtyListener(_ageController);
+    _bindProfileDirtyListener(_academicStatusController);
+    _bindProfileDirtyListener(_goalsController);
+    _bindProfileDirtyListener(_goalTargetDateController);
+    _bindProfileDirtyListener(_dailyStudyMinutesController);
+    _bindProfileDirtyListener(_weakSubjectsController);
+    _bindProfileDirtyListener(_targetDestinationController);
+    _bindProfileDirtyListener(_notesController);
   }
 
   @override
@@ -38,6 +76,15 @@ class _SettingsScreenState extends State<SettingsScreen>
     _openAIBaseURLController.dispose();
     _openAIBaseURLFocusNode.dispose();
     _apiKeyController.dispose();
+    _nicknameController.dispose();
+    _ageController.dispose();
+    _academicStatusController.dispose();
+    _goalsController.dispose();
+    _goalTargetDateController.dispose();
+    _dailyStudyMinutesController.dispose();
+    _weakSubjectsController.dispose();
+    _targetDestinationController.dispose();
+    _notesController.dispose();
     super.dispose();
   }
 
@@ -49,6 +96,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
+            Tab(icon: Icon(Icons.person_outline), text: '用户信息'),
             Tab(icon: Icon(Icons.settings_outlined), text: 'AI设置'),
             Tab(icon: Icon(Icons.bug_report), text: '调试日志'),
           ],
@@ -56,18 +104,152 @@ class _SettingsScreenState extends State<SettingsScreen>
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () =>
-                context.read<AppProvider>().fetchAIProviderStatus(force: true),
+            onPressed: () async {
+              final app = context.read<AppProvider>();
+              await app.fetchUserProfile(force: true);
+              await app.fetchAIProviderStatus(force: true);
+            },
           ),
         ],
       ),
       body: TabBarView(
         controller: _tabController,
         children: [
+          _profileSettingsBody(context),
           _aiSettingsBody(context),
           const DebugLogScreen(embedded: true),
         ],
       ),
+    );
+  }
+
+  Widget _profileSettingsBody(BuildContext context) {
+    final provider = context.watch<AppProvider>();
+    final profile = provider.userProfile;
+    _syncProfileForm(profile);
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        if (provider.isSectionLoading(DataSection.profile) && profile == null)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 12),
+            child: LinearProgressIndicator(),
+          ),
+        _section(
+          title: '基础信息',
+          icon: Icons.badge_outlined,
+          child: Column(
+            children: [
+              _input(_nicknameController, '昵称（可选）'),
+              _input(
+                _ageController,
+                '年龄（必填）',
+                keyboardType: TextInputType.number,
+              ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: DropdownButtonFormField<String>(
+                  value: _selectedAcademicPreset,
+                  decoration: const InputDecoration(
+                    labelText: '学业状态（快捷选项）',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  items: _academicStatusPresets
+                      .map(
+                        (item) =>
+                            DropdownMenuItem(value: item, child: Text(item)),
+                      )
+                      .toList(),
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setState(() {
+                      _selectedAcademicPreset = value;
+                      if (value != _customAcademicStatus) {
+                        _academicStatusController.text = value;
+                      }
+                      _profileDirty = true;
+                    });
+                  },
+                ),
+              ),
+              _input(_academicStatusController, '学业状态（可手动填写）'),
+            ],
+          ),
+        ),
+        _section(
+          title: '目标与补充信息',
+          icon: Icons.flag_outlined,
+          child: Column(
+            children: [
+              _input(_goalsController, '目标（必填，每行一个）', maxLines: 3, minLines: 3),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _goalTargetDateController,
+                        readOnly: true,
+                        decoration: const InputDecoration(
+                          labelText: '目标日期（可选）',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      tooltip: '选择日期',
+                      onPressed: _pickGoalTargetDate,
+                      icon: const Icon(Icons.calendar_month_outlined),
+                    ),
+                    IconButton(
+                      tooltip: '清空日期',
+                      onPressed: () {
+                        _goalTargetDateController.clear();
+                        _profileDirty = true;
+                      },
+                      icon: const Icon(Icons.clear),
+                    ),
+                  ],
+                ),
+              ),
+              _input(
+                _dailyStudyMinutesController,
+                '每日学习时长（分钟，可填 0）',
+                keyboardType: TextInputType.number,
+              ),
+              _input(
+                _weakSubjectsController,
+                '薄弱科目（每行一个）',
+                maxLines: 3,
+                minLines: 2,
+              ),
+              _input(_targetDestinationController, '目标院校 / 证书'),
+              _input(_notesController, '备注', maxLines: 3, minLines: 2),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: FilledButton.icon(
+                  onPressed: () => _saveUserProfile(context, provider, profile),
+                  icon: const Icon(Icons.save),
+                  label: const Text('保存用户信息'),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (provider.errorMessage != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              '错误：${provider.errorMessage}',
+              style: const TextStyle(color: Colors.red),
+            ),
+          ),
+      ],
     );
   }
 
@@ -133,7 +315,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                   focusNode: _modelFocusNode,
                   controller: _modelController,
                   decoration: InputDecoration(
-                    labelText: '模型名称（自动获取/手动填写）',
+                    labelText: '模型名称（自动获取 / 手动填写）',
                     border: const OutlineInputBorder(),
                     isDense: true,
                     suffixIcon: IconButton(
@@ -160,7 +342,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               const Padding(
                 padding: EdgeInsets.only(bottom: 8),
                 child: Text(
-                  '提示：Base URL 在 provider=openai 时生效。',
+                  '提示：Base URL 仅在 provider=openai 时生效。',
                   style: TextStyle(fontSize: 12, color: Colors.grey),
                 ),
               ),
@@ -186,7 +368,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 ),
               ),
               const Text(
-                '提示：token 不会在状态接口中回显。',
+                '提示：Token 不会在状态接口中回显。',
                 style: TextStyle(fontSize: 12, color: Colors.grey),
               ),
               const SizedBox(height: 8),
@@ -276,12 +458,18 @@ class _SettingsScreenState extends State<SettingsScreen>
     TextEditingController controller,
     String label, {
     FocusNode? focusNode,
+    TextInputType keyboardType = TextInputType.text,
+    int? maxLines,
+    int? minLines,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: TextField(
         focusNode: focusNode,
         controller: controller,
+        keyboardType: keyboardType,
+        maxLines: maxLines ?? 1,
+        minLines: minLines,
         decoration: InputDecoration(
           labelText: label,
           border: const OutlineInputBorder(),
@@ -289,6 +477,97 @@ class _SettingsScreenState extends State<SettingsScreen>
         ),
       ),
     );
+  }
+
+  void _bindProfileDirtyListener(TextEditingController controller) {
+    controller.addListener(() {
+      if (_syncingProfileForm) return;
+      _profileDirty = true;
+    });
+  }
+
+  void _syncProfileForm(UserProfile? profile) {
+    if (profile == null || _profileDirty) {
+      return;
+    }
+    _syncingProfileForm = true;
+    _nicknameController.text = profile.nickname;
+    _ageController.text = profile.age <= 0 ? '' : '${profile.age}';
+    _academicStatusController.text = profile.academicStatus;
+    _goalsController.text = profile.goals.join('\n');
+    _goalTargetDateController.text = profile.goalTargetDate;
+    _dailyStudyMinutesController.text = '${profile.dailyStudyMinutes}';
+    _weakSubjectsController.text = profile.weakSubjects.join('\n');
+    _targetDestinationController.text = profile.targetDestination;
+    _notesController.text = profile.notes;
+    _selectedAcademicPreset =
+        _academicStatusPresets.contains(profile.academicStatus)
+        ? profile.academicStatus
+        : _customAcademicStatus;
+    _syncingProfileForm = false;
+  }
+
+  List<String> _splitLines(String raw) {
+    return raw
+        .split('\n')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  Future<void> _pickGoalTargetDate() async {
+    final existingRaw = _goalTargetDateController.text.trim();
+    DateTime initialDate = DateTime.now();
+    if (existingRaw.isNotEmpty) {
+      initialDate = DateTime.tryParse(existingRaw) ?? initialDate;
+    }
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime(2000, 1, 1),
+      lastDate: DateTime(2100, 12, 31),
+    );
+    if (picked == null) return;
+    final yyyy = picked.year.toString().padLeft(4, '0');
+    final mm = picked.month.toString().padLeft(2, '0');
+    final dd = picked.day.toString().padLeft(2, '0');
+    _goalTargetDateController.text = '$yyyy-$mm-$dd';
+    _profileDirty = true;
+  }
+
+  Future<void> _saveUserProfile(
+    BuildContext context,
+    AppProvider provider,
+    UserProfile? current,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final age = int.tryParse(_ageController.text.trim()) ?? 0;
+    final dailyStudyMinutes =
+        int.tryParse(_dailyStudyMinutesController.text.trim()) ?? 0;
+    final goals = _splitLines(_goalsController.text);
+    final weakSubjects = _splitLines(_weakSubjectsController.text);
+    try {
+      await provider.updateUserProfile(
+        userId: current?.userId ?? 'default',
+        nickname: _nicknameController.text.trim(),
+        age: age,
+        academicStatus: _academicStatusController.text.trim(),
+        goals: goals,
+        goalTargetDate: _goalTargetDateController.text.trim(),
+        dailyStudyMinutes: dailyStudyMinutes,
+        weakSubjects: weakSubjects,
+        targetDestination: _targetDestinationController.text.trim(),
+        notes: _notesController.text.trim(),
+      );
+      _profileDirty = false;
+      if (!mounted) return;
+      messenger.showSnackBar(const SnackBar(content: Text('用户信息已保存')));
+    } catch (_) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text(provider.errorMessage ?? '保存失败')),
+      );
+    }
   }
 
   Future<void> _saveProviderConfig(

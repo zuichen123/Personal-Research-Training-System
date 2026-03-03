@@ -13,6 +13,7 @@ import '../models/pomodoro.dart';
 import '../models/practice.dart';
 import '../models/question.dart';
 import '../models/resource.dart';
+import '../models/user_profile.dart';
 
 class ApiException implements Exception {
   ApiException({
@@ -368,6 +369,54 @@ class ApiService {
 
   Future<void> deletePomodoro(String id) async {
     await _request(method: 'DELETE', path: '/pomodoro/$id');
+  }
+
+  Future<UserProfile> getUserProfile({String userId = 'default'}) async {
+    final query = <String, String>{};
+    if (userId.trim().isNotEmpty) {
+      query['user_id'] = userId.trim();
+    }
+    final response = await _request(
+      method: 'GET',
+      path: '/profile',
+      query: query,
+    );
+    return UserProfile.fromJson(_extractDataMap(response));
+  }
+
+  Future<UserProfile> updateUserProfile({
+    String userId = 'default',
+    required String nickname,
+    required int age,
+    required String academicStatus,
+    required List<String> goals,
+    String goalTargetDate = '',
+    required int dailyStudyMinutes,
+    List<String> weakSubjects = const [],
+    String targetDestination = '',
+    String notes = '',
+  }) async {
+    final body = <String, dynamic>{
+      'user_id': userId.trim(),
+      'nickname': nickname.trim(),
+      'age': age,
+      'academic_status': academicStatus.trim(),
+      'goals': goals,
+      'daily_study_minutes': dailyStudyMinutes,
+      'weak_subjects': weakSubjects,
+      'target_destination': targetDestination.trim(),
+      'notes': notes.trim(),
+    };
+    final normalizedGoalDate = goalTargetDate.trim();
+    if (normalizedGoalDate.isNotEmpty) {
+      body['goal_target_date'] = normalizedGoalDate;
+    }
+    final response = await _request(
+      method: 'PUT',
+      path: '/profile',
+      jsonBody: body,
+    );
+    return UserProfile.fromJson(_extractDataMap(response));
   }
 
   Future<Map<String, dynamic>> getAIProviderStatus() async {

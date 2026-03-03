@@ -19,6 +19,7 @@ import (
 	"self-study-tool/internal/modules/plan"
 	"self-study-tool/internal/modules/pomodoro"
 	"self-study-tool/internal/modules/practice"
+	"self-study-tool/internal/modules/profile"
 	"self-study-tool/internal/modules/question"
 	"self-study-tool/internal/modules/resource"
 	"self-study-tool/internal/modules/system"
@@ -52,12 +53,14 @@ func NewApp(cfg config.Config) (*App, error) {
 	pomodoroRepo := pomodoro.NewSQLiteRepository(db)
 	practiceRepo := practice.NewSQLiteRepository(db)
 	resourceRepo := resource.NewSQLiteRepository(db)
+	profileRepo := profile.NewSQLiteRepository(db)
 
 	questionService := question.NewService(questionRepo)
 	mistakeService := mistake.NewService(mistakeRepo)
 	planService := plan.NewService(planRepo)
 	pomodoroService := pomodoro.NewService(pomodoroRepo)
 	resourceService := resource.NewService(resourceRepo, questionService)
+	profileService := profile.NewService(profileRepo)
 	aiConfigRepo := ai.NewSQLiteProviderConfigRepository(db)
 
 	aiRuntime := runtimeConfigFromConfig(cfg)
@@ -84,6 +87,7 @@ func NewApp(cfg config.Config) (*App, error) {
 	aiHandler := ai.NewHandler(aiService)
 	practiceHandler := practice.NewHandler(practiceService)
 	resourceHandler := resource.NewHandler(resourceService, cfg.UploadMaxBytes)
+	profileHandler := profile.NewHandler(profileService)
 	systemHandler := system.NewHandler()
 
 	effectiveWriteTimeout := cfg.WriteTimeout
@@ -117,6 +121,7 @@ func NewApp(cfg config.Config) (*App, error) {
 			aiHandler.RegisterRoutes(r)
 			practiceHandler.RegisterRoutes(r)
 			resourceHandler.RegisterRoutes(r)
+			profileHandler.RegisterRoutes(r)
 		})
 	})
 

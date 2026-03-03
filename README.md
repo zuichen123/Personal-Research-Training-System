@@ -114,3 +114,8 @@ flutter run
 - `LOG_SQL_ENABLED` 默认 `true`
 - `LOG_SQL_SLOW_MS` 默认 `200`
 - `LOG_AI_SUMMARY_ENABLED` 默认 `true`
+
+### Profile API
+
+- `GET /api/v1/profile`
+- `PUT /api/v1/profile`

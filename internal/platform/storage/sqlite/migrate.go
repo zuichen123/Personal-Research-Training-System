@@ -93,6 +93,28 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 			claude_model TEXT NOT NULL DEFAULT 'claude-3-5-sonnet-20241022',
 			updated_at TEXT NOT NULL
 		);`,
+		`CREATE TABLE IF NOT EXISTS user_profiles (
+			user_id TEXT PRIMARY KEY,
+			nickname TEXT NOT NULL DEFAULT '',
+			age INTEGER NOT NULL DEFAULT 0,
+			academic_status TEXT NOT NULL DEFAULT '',
+			goals_json TEXT NOT NULL DEFAULT '[]',
+			goal_target_date TEXT,
+			daily_study_minutes INTEGER NOT NULL DEFAULT 0,
+			weak_subjects_json TEXT NOT NULL DEFAULT '[]',
+			target_destination TEXT NOT NULL DEFAULT '',
+			notes TEXT NOT NULL DEFAULT '',
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		);`,
+		`INSERT OR IGNORE INTO user_profiles (
+			user_id, nickname, age, academic_status, goals_json, goal_target_date,
+			daily_study_minutes, weak_subjects_json, target_destination, notes, created_at, updated_at
+		) VALUES (
+			'default', '', 0, '', '[]', NULL, 0, '[]', '', '',
+			strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+			strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+		);`,
 		`CREATE INDEX IF NOT EXISTS idx_mistakes_question_id ON mistakes(question_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_practice_attempts_question_id ON practice_attempts(question_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_resources_question_id ON resources(question_id);`,
