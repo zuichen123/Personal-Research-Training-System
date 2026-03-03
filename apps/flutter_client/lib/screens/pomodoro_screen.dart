@@ -40,23 +40,27 @@ class PomodoroScreen extends StatelessWidget {
                 child: Center(
                   child: Column(
                     children: [
-                      Icon(Icons.timer_outlined,
-                          size: 64,
-                          color: Colors.teal.withValues(alpha: 0.4)),
+                      Icon(
+                        Icons.timer_outlined,
+                        size: 64,
+                        color: Colors.teal.withValues(alpha: 0.4),
+                      ),
                       const SizedBox(height: 16),
-                      const Text('暂无专注记录',
-                          style:
-                              TextStyle(fontSize: 16, color: Colors.grey)),
+                      const Text(
+                        '暂无专注记录',
+                        style: TextStyle(fontSize: 16, color: Colors.grey),
+                      ),
                       const SizedBox(height: 8),
-                      const Text('点击右下角按钮开始一次专注',
-                          style:
-                              TextStyle(fontSize: 13, color: Colors.grey)),
+                      const Text(
+                        '点击右下角按钮开始一次专注',
+                        style: TextStyle(fontSize: 13, color: Colors.grey),
+                      ),
                     ],
                   ),
                 ),
               )
             else
-              ...sessions.map((s) => _sessionCard(s)),
+              ...sessions.map((s) => _sessionCard(context, s)),
           ],
         ),
       ),
@@ -84,32 +88,35 @@ class PomodoroScreen extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.timer,
-                    color: theme.colorScheme.primary, size: 22),
+                Icon(Icons.timer, color: theme.colorScheme.primary, size: 22),
                 const SizedBox(width: 8),
-                Text('进行中的专注',
-                    style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.onPrimaryContainer)),
+                Text(
+                  '进行中的专注',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.onPrimaryContainer,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 10),
-            Text('任务: ${running.taskTitle}',
-                style: TextStyle(
-                    fontSize: 15,
-                    color: theme.colorScheme.onPrimaryContainer)),
+            Text(
+              '任务: ${running.taskTitle}',
+              style: TextStyle(
+                fontSize: 15,
+                color: theme.colorScheme.onPrimaryContainer,
+              ),
+            ),
             Text(
               '时长: ${running.durationMinutes} 分钟, 休息: ${running.breakMinutes} 分钟',
-              style:
-                  TextStyle(color: theme.colorScheme.onPrimaryContainer),
+              style: TextStyle(color: theme.colorScheme.onPrimaryContainer),
             ),
             const SizedBox(height: 12),
             Row(
               children: [
                 FilledButton.icon(
                   onPressed: () async {
-                    await provider.endPomodoro(running.id,
-                        status: 'completed');
+                    await provider.endPomodoro(running.id, status: 'completed');
                   },
                   icon: const Icon(Icons.check),
                   label: const Text('完成'),
@@ -117,11 +124,18 @@ class PomodoroScreen extends StatelessWidget {
                 const SizedBox(width: 8),
                 OutlinedButton.icon(
                   onPressed: () async {
-                    await provider.endPomodoro(running.id,
-                        status: 'canceled');
+                    await provider.endPomodoro(running.id, status: 'canceled');
                   },
                   icon: const Icon(Icons.close),
                   label: const Text('取消'),
+                ),
+                const SizedBox(width: 8),
+                TextButton.icon(
+                  onPressed: () async {
+                    await _deleteSession(context, running.id);
+                  },
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('删除'),
                 ),
               ],
             ),
@@ -131,28 +145,37 @@ class PomodoroScreen extends StatelessWidget {
     );
   }
 
-  Widget _sessionCard(PomodoroSession session) {
-    final ended =
-        session.endedAt?.toLocal().toString().split('.').first ?? '-';
+  Widget _sessionCard(BuildContext context, PomodoroSession session) {
+    final ended = session.endedAt?.toLocal().toString().split('.').first ?? '-';
     final statusColor = session.status == 'completed'
         ? Colors.green
         : session.status == 'canceled'
-            ? Colors.grey
-            : Colors.orange;
+        ? Colors.grey
+        : Colors.orange;
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6),
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: statusColor,
           radius: 18,
-          child: Icon(_statusIcon(session.status),
-              color: Colors.white, size: 18),
+          child: Icon(
+            _statusIcon(session.status),
+            color: Colors.white,
+            size: 18,
+          ),
         ),
         title: Text(session.taskTitle),
         subtitle: Text(
           '${_statusZh(session.status)} | ${session.durationMinutes}m + ${session.breakMinutes}m\n结束时间: $ended',
         ),
         isThreeLine: true,
+        trailing: IconButton(
+          tooltip: '删除',
+          onPressed: () async {
+            await _deleteSession(context, session.id);
+          },
+          icon: const Icon(Icons.delete_outline),
+        ),
       ),
     );
   }
@@ -211,15 +234,15 @@ class PomodoroScreen extends StatelessWidget {
               onPressed: () async {
                 final task = taskController.text.trim();
                 if (task.isEmpty) {
-                  ScaffoldMessenger.of(ctx).showSnackBar(
-                      const SnackBar(content: Text('任务名称不能为空')));
+                  ScaffoldMessenger.of(
+                    ctx,
+                  ).showSnackBar(const SnackBar(content: Text('任务名称不能为空')));
                   return;
                 }
 
                 final duration =
                     int.tryParse(durationController.text.trim()) ?? 25;
-                final breakMin =
-                    int.tryParse(breakController.text.trim()) ?? 5;
+                final breakMin = int.tryParse(breakController.text.trim()) ?? 5;
 
                 try {
                   await provider.startPomodoro(
@@ -230,8 +253,9 @@ class PomodoroScreen extends StatelessWidget {
                   if (ctx.mounted) Navigator.of(ctx).pop();
                 } catch (e) {
                   if (ctx.mounted) {
-                    ScaffoldMessenger.of(ctx).showSnackBar(
-                        SnackBar(content: Text('开始失败：$e')));
+                    ScaffoldMessenger.of(
+                      ctx,
+                    ).showSnackBar(SnackBar(content: Text('开始失败：$e')));
                   }
                 }
               },
@@ -253,6 +277,48 @@ class PomodoroScreen extends StatelessWidget {
         return '已取消';
       default:
         return status;
+    }
+  }
+
+  Future<void> _deleteSession(BuildContext context, String id) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('删除计时记录'),
+          content: const Text('确认删除这条专注计时记录？'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('删除'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true || !context.mounted) {
+      return;
+    }
+    try {
+      await context.read<AppProvider>().deletePomodoro(id);
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已删除专注计时记录')));
+    } catch (_) {
+      if (!context.mounted) {
+        return;
+      }
+      final message = context.read<AppProvider>().errorMessage ?? '删除失败';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     }
   }
 }

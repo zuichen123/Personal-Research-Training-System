@@ -13,16 +13,24 @@ type Config struct {
 	WriteTimeout        time.Duration
 	ShutdownTimeout     time.Duration
 	AIProvider          string
+	AIProviderSet       bool
 	AIMockLatency       time.Duration
 	AIHTTPTimeout       time.Duration
 	AIFallbackToMock    bool
 	AIOpenAIBaseURL     string
+	AIOpenAIBaseURLSet  bool
 	AIOpenAIAPIKey      string
+	AIOpenAIAPIKeySet   bool
 	AIOpenAIModel       string
+	AIOpenAIModelSet    bool
 	AIGeminiAPIKey      string
+	AIGeminiAPIKeySet   bool
 	AIGeminiModel       string
+	AIGeminiModelSet    bool
 	AIClaudeAPIKey      string
+	AIClaudeAPIKeySet   bool
 	AIClaudeModel       string
+	AIClaudeModelSet    bool
 	DatabasePath        string
 	UploadMaxBytes      int64
 	AppEnv              string
@@ -44,22 +52,39 @@ type Config struct {
 }
 
 func Load() Config {
+	aiProvider, aiProviderSet := getEnvWithSource("AI_PROVIDER", "mock")
+	openAIBaseURL, openAIBaseURLSet := getEnvWithSource("AI_OPENAI_BASE_URL", "https://api.openai.com/v1")
+	openAIAPIKey, openAIAPIKeySet := getEnvWithSource("AI_OPENAI_API_KEY", "")
+	openAIModel, openAIModelSet := getEnvWithSource("AI_OPENAI_MODEL", "gpt-4o-mini")
+	geminiAPIKey, geminiAPIKeySet := getEnvWithSource("AI_GEMINI_API_KEY", "")
+	geminiModel, geminiModelSet := getEnvWithSource("AI_GEMINI_MODEL", "gemini-1.5-flash")
+	claudeAPIKey, claudeAPIKeySet := getEnvWithSource("AI_CLAUDE_API_KEY", "")
+	claudeModel, claudeModelSet := getEnvWithSource("AI_CLAUDE_MODEL", "claude-3-5-sonnet-20241022")
+
 	return Config{
 		HTTPPort:            getEnv("APP_PORT", "8080"),
 		ReadTimeout:         getEnvDuration("HTTP_READ_TIMEOUT", 10*time.Second),
 		WriteTimeout:        getEnvDuration("HTTP_WRITE_TIMEOUT", 90*time.Second),
 		ShutdownTimeout:     getEnvDuration("HTTP_SHUTDOWN_TIMEOUT", 10*time.Second),
-		AIProvider:          getEnv("AI_PROVIDER", "mock"),
+		AIProvider:          aiProvider,
+		AIProviderSet:       aiProviderSet,
 		AIMockLatency:       getEnvDuration("AI_MOCK_LATENCY", 200*time.Millisecond),
 		AIHTTPTimeout:       getEnvDuration("AI_HTTP_TIMEOUT", 60*time.Second),
 		AIFallbackToMock:    getEnvBool("AI_FALLBACK_TO_MOCK", true),
-		AIOpenAIBaseURL:     getEnv("AI_OPENAI_BASE_URL", "https://api.openai.com/v1"),
-		AIOpenAIAPIKey:      getEnv("AI_OPENAI_API_KEY", ""),
-		AIOpenAIModel:       getEnv("AI_OPENAI_MODEL", "gpt-4o-mini"),
-		AIGeminiAPIKey:      getEnv("AI_GEMINI_API_KEY", ""),
-		AIGeminiModel:       getEnv("AI_GEMINI_MODEL", "gemini-1.5-flash"),
-		AIClaudeAPIKey:      getEnv("AI_CLAUDE_API_KEY", ""),
-		AIClaudeModel:       getEnv("AI_CLAUDE_MODEL", "claude-3-5-sonnet-20241022"),
+		AIOpenAIBaseURL:     openAIBaseURL,
+		AIOpenAIBaseURLSet:  openAIBaseURLSet,
+		AIOpenAIAPIKey:      openAIAPIKey,
+		AIOpenAIAPIKeySet:   openAIAPIKeySet,
+		AIOpenAIModel:       openAIModel,
+		AIOpenAIModelSet:    openAIModelSet,
+		AIGeminiAPIKey:      geminiAPIKey,
+		AIGeminiAPIKeySet:   geminiAPIKeySet,
+		AIGeminiModel:       geminiModel,
+		AIGeminiModelSet:    geminiModelSet,
+		AIClaudeAPIKey:      claudeAPIKey,
+		AIClaudeAPIKeySet:   claudeAPIKeySet,
+		AIClaudeModel:       claudeModel,
+		AIClaudeModelSet:    claudeModelSet,
 		DatabasePath:        getEnv("SQLITE_PATH", "./data/self-study.db"),
 		UploadMaxBytes:      getEnvInt64("UPLOAD_MAX_BYTES", 20*1024*1024),
 		AppEnv:              getEnv("APP_ENV", "development"),
@@ -86,6 +111,17 @@ func getEnv(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func getEnvWithSource(key, fallback string) (string, bool) {
+	raw, ok := os.LookupEnv(key)
+	if !ok || strings.TrimSpace(raw) == "" {
+		return fallback, false
+	}
+	if strings.TrimSpace(raw) == strings.TrimSpace(fallback) {
+		return raw, false
+	}
+	return raw, true
 }
 
 func getEnvDuration(key string, fallback time.Duration) time.Duration {

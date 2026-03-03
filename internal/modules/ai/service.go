@@ -18,15 +18,27 @@ type Service struct {
 	questionService *question.Service
 	fallbackEnabled bool
 	runtime         RuntimeConfig
+	configStore     ProviderConfigStore
 }
 
 func NewService(client Client, questionService *question.Service, fallbackEnabled bool, runtime RuntimeConfig) *Service {
+	return NewServiceWithStore(client, questionService, fallbackEnabled, runtime, nil)
+}
+
+func NewServiceWithStore(
+	client Client,
+	questionService *question.Service,
+	fallbackEnabled bool,
+	runtime RuntimeConfig,
+	configStore ProviderConfigStore,
+) *Service {
 	runtime.Provider = strings.ToLower(strings.TrimSpace(runtime.Provider))
 	return &Service{
 		client:          client,
 		questionService: questionService,
 		fallbackEnabled: fallbackEnabled,
 		runtime:         runtime,
+		configStore:     configStore,
 	}
 }
 
@@ -39,6 +51,10 @@ func (s *Service) ProviderStatus() ProviderStatus {
 func (s *Service) UpdateProviderConfig(req UpdateProviderConfigRequest) (ProviderStatus, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	prevRuntime := s.runtime
+	prevClient := s.client
+	prevFallback := s.fallbackEnabled
 
 	nextProvider := strings.ToLower(strings.TrimSpace(req.Provider))
 	if nextProvider == "" {
@@ -91,9 +107,33 @@ func (s *Service) UpdateProviderConfig(req UpdateProviderConfigRequest) (Provide
 	}
 
 	if err := s.applyProviderConfigLocked(nextProvider); err != nil {
+		s.runtime = prevRuntime
+		s.client = prevClient
+		s.fallbackEnabled = prevFallback
 		return ProviderStatus{}, err
 	}
+	if s.configStore != nil {
+		if err := s.configStore.SaveProviderConfig(context.Background(), s.providerConfigSnapshotLocked()); err != nil {
+			s.runtime = prevRuntime
+			s.client = prevClient
+			s.fallbackEnabled = prevFallback
+			return ProviderStatus{}, errs.Internal(fmt.Sprintf("persist ai provider config: %v", err))
+		}
+	}
 	return s.providerStatusLocked(), nil
+}
+
+func (s *Service) providerConfigSnapshotLocked() ProviderConfigRecord {
+	return ProviderConfigRecord{
+		Provider:      strings.ToLower(strings.TrimSpace(s.runtime.Provider)),
+		OpenAIBaseURL: strings.TrimSpace(s.runtime.OpenAIBaseURL),
+		OpenAIAPIKey:  strings.TrimSpace(s.runtime.OpenAIAPIKey),
+		OpenAIModel:   strings.TrimSpace(s.runtime.OpenAIModel),
+		GeminiAPIKey:  strings.TrimSpace(s.runtime.GeminiAPIKey),
+		GeminiModel:   strings.TrimSpace(s.runtime.GeminiModel),
+		ClaudeAPIKey:  strings.TrimSpace(s.runtime.ClaudeAPIKey),
+		ClaudeModel:   strings.TrimSpace(s.runtime.ClaudeModel),
+	}
 }
 
 func (s *Service) providerStatusLocked() ProviderStatus {

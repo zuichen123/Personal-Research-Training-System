@@ -20,6 +20,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 		r.Post("/start", h.start)
 		r.Post("/{id}/end", h.end)
 		r.Get("/", h.list)
+		r.Delete("/{id}", h.delete)
 	})
 }
 
@@ -60,4 +61,12 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, items)
+}
+
+func (h *Handler) delete(w http.ResponseWriter, r *http.Request) {
+	if err := h.service.Delete(r.Context(), chi.URLParam(r, "id")); err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }

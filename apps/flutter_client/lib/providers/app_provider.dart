@@ -126,6 +126,9 @@ class AppProvider with ChangeNotifier {
       case 6:
         await ensureAILoaded();
         break;
+      case 7:
+        await ensureAILoaded();
+        break;
       default:
         return;
     }
@@ -265,6 +268,14 @@ class AppProvider with ChangeNotifier {
     });
   }
 
+  Future<void> deletePracticeAttempt(String id) async {
+    await _runAction('删除练习记录', () async {
+      await _api.deletePracticeAttempt(id);
+      _attempts.removeWhere((e) => e.id == id);
+      notifyListeners();
+    });
+  }
+
   Future<void> fetchResources({bool force = false, String? questionId}) async {
     if (!force && isSectionLoading(DataSection.resources)) {
       return;
@@ -387,6 +398,14 @@ class AppProvider with ChangeNotifier {
       } else {
         _pomodoroSessions.insert(0, updated);
       }
+      notifyListeners();
+    });
+  }
+
+  Future<void> deletePomodoro(String id) async {
+    await _runAction('删除专注记录', () async {
+      await _api.deletePomodoro(id);
+      _pomodoroSessions.removeWhere((e) => e.id == id);
       notifyListeners();
     });
   }

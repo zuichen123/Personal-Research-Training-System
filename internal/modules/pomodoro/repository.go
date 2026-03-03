@@ -7,4 +7,5 @@ type Repository interface {
 	GetByID(ctx context.Context, id string) (Session, error)
 	List(ctx context.Context, status string) ([]Session, error)
 	Update(ctx context.Context, item Session) (Session, error)
+	Delete(ctx context.Context, id string) error
 }

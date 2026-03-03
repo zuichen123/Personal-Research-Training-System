@@ -19,6 +19,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Route("/practice", func(r chi.Router) {
 		r.Post("/submit", h.submit)
 		r.Get("/attempts", h.listAttempts)
+		r.Delete("/attempts/{id}", h.deleteAttempt)
 	})
 }
 
@@ -44,4 +45,12 @@ func (h *Handler) listAttempts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, items)
+}
+
+func (h *Handler) deleteAttempt(w http.ResponseWriter, r *http.Request) {
+	if err := h.service.DeleteAttempt(r.Context(), chi.URLParam(r, "id")); err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }

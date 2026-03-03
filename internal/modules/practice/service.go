@@ -100,3 +100,10 @@ func (s *Service) ListAttemptsByQuestionID(ctx context.Context, questionID strin
 	}
 	return filtered, nil
 }
+
+func (s *Service) DeleteAttempt(ctx context.Context, id string) error {
+	if strings.TrimSpace(id) == "" {
+		return errs.BadRequest("attempt id is required")
+	}
+	return s.repo.Delete(ctx, strings.TrimSpace(id))
+}

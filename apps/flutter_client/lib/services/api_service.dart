@@ -146,6 +146,10 @@ class ApiService {
     return _extractDataList(response).map(PracticeAttempt.fromJson).toList();
   }
 
+  Future<void> deletePracticeAttempt(String id) async {
+    await _request(method: 'DELETE', path: '/practice/attempts/$id');
+  }
+
   Future<List<MistakeRecord>> getMistakes({String? questionId}) async {
     final query = <String, String>{};
     if (questionId != null && questionId.trim().isNotEmpty) {
@@ -360,6 +364,10 @@ class ApiService {
       jsonBody: {'status': status},
     );
     return PomodoroSession.fromJson(_extractDataMap(response));
+  }
+
+  Future<void> deletePomodoro(String id) async {
+    await _request(method: 'DELETE', path: '/pomodoro/$id');
   }
 
   Future<Map<String, dynamic>> getAIProviderStatus() async {

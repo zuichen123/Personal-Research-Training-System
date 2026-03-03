@@ -39,6 +39,7 @@ flutter run
   - `POST /api/v1/practice/submit`
   - `GET /api/v1/practice/attempts`
   - `GET /api/v1/practice/attempts?question_id=...`
+  - `DELETE /api/v1/practice/attempts/{id}`
 - 资源：
   - `POST /api/v1/resources`
   - `GET /api/v1/resources`
@@ -49,6 +50,7 @@ flutter run
   - `POST /api/v1/pomodoro/start`
   - `POST /api/v1/pomodoro/{id}/end`
   - `GET /api/v1/pomodoro`
+  - `DELETE /api/v1/pomodoro/{id}`
 - AI：
   - `GET /api/v1/ai/provider`
   - `PUT /api/v1/ai/provider/config`
@@ -92,6 +94,8 @@ flutter run
 - `AI_GEMINI_MODEL` 默认 `gemini-1.5-flash`
 - `AI_CLAUDE_API_KEY` 默认空
 - `AI_CLAUDE_MODEL` 默认 `claude-3-5-sonnet-20241022`
+
+> AI 供应商配置会持久化到数据库表 `ai_provider_config`。优先级：**环境变量（配置文件） > 数据库**；当环境变量为默认值时，运行时会优先采用数据库中保存的值。
 
 ### 日志
 

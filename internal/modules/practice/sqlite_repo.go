@@ -76,6 +76,18 @@ func (r *SQLiteRepository) List(ctx context.Context) ([]Attempt, error) {
 	return result, nil
 }
 
+func (r *SQLiteRepository) Delete(ctx context.Context, id string) error {
+	res, err := r.db.ExecContext(ctx, `DELETE FROM practice_attempts WHERE id = ?`, id)
+	if err != nil {
+		return errs.Internal(fmt.Sprintf("failed to delete attempt: %v", err))
+	}
+	affected, _ := res.RowsAffected()
+	if affected == 0 {
+		return errs.NotFound("practice attempt not found")
+	}
+	return nil
+}
+
 type attemptScanner interface {
 	Scan(dest ...any) error
 }

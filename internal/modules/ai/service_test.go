@@ -1,12 +1,28 @@
 package ai
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
 
 	"self-study-tool/internal/modules/question"
 )
+
+type testConfigStore struct {
+	last  ProviderConfigRecord
+	saved bool
+}
+
+func (s *testConfigStore) LoadProviderConfig(context.Context) (ProviderConfigRecord, bool, error) {
+	return ProviderConfigRecord{}, false, nil
+}
+
+func (s *testConfigStore) SaveProviderConfig(_ context.Context, cfg ProviderConfigRecord) error {
+	s.last = cfg
+	s.saved = true
+	return nil
+}
 
 func newQuestionServiceForTest() *question.Service {
 	return question.NewService(question.NewMemoryRepository())
@@ -164,5 +180,45 @@ func TestService_UpdateProviderConfig_ConfiguredModelWhenFallbackToMock(t *testi
 	}
 	if !status.Fallback {
 		t.Fatal("expected fallback=true when openai is not ready")
+	}
+}
+
+func TestService_UpdateProviderConfig_PersistsToStore(t *testing.T) {
+	store := &testConfigStore{}
+	svc := NewServiceWithStore(
+		NewMockClient(0),
+		newQuestionServiceForTest(),
+		false,
+		RuntimeConfig{
+			Provider:       "mock",
+			FallbackToMock: true,
+			MockLatency:    0,
+			AIHTTPTimeout:  5 * time.Second,
+			OpenAIBaseURL:  "https://api.openai.com/v1",
+			OpenAIModel:    "gpt-4o-mini",
+		},
+		store,
+	)
+
+	_, err := svc.UpdateProviderConfig(UpdateProviderConfigRequest{
+		Provider:      "openai",
+		APIKey:        "runtime-openai-key",
+		Model:         "gpt-4.1-mini",
+		OpenAIBaseURL: "https://example.com/v1",
+	})
+	if err != nil {
+		t.Fatalf("update config error: %v", err)
+	}
+	if !store.saved {
+		t.Fatal("expected provider config to be persisted")
+	}
+	if store.last.Provider != "openai" {
+		t.Fatalf("unexpected stored provider: %s", store.last.Provider)
+	}
+	if store.last.OpenAIBaseURL != "https://example.com/v1" {
+		t.Fatalf("unexpected stored openai base url: %s", store.last.OpenAIBaseURL)
+	}
+	if store.last.OpenAIAPIKey != "runtime-openai-key" {
+		t.Fatalf("unexpected stored openai api key: %s", store.last.OpenAIAPIKey)
 	}
 }

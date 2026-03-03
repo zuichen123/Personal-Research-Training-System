@@ -69,6 +69,13 @@ func (s *Service) List(ctx context.Context, status string) ([]Session, error) {
 	return s.repo.List(ctx, strings.TrimSpace(status))
 }
 
+func (s *Service) Delete(ctx context.Context, id string) error {
+	if strings.TrimSpace(id) == "" {
+		return errs.BadRequest("session id is required")
+	}
+	return s.repo.Delete(ctx, id)
+}
+
 func normalizeDuration(v int) int {
 	if v <= 0 {
 		return 25

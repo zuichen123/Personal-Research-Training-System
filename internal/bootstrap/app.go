@@ -58,26 +58,23 @@ func NewApp(cfg config.Config) (*App, error) {
 	planService := plan.NewService(planRepo)
 	pomodoroService := pomodoro.NewService(pomodoroRepo)
 	resourceService := resource.NewService(resourceRepo, questionService)
+	aiConfigRepo := ai.NewSQLiteProviderConfigRepository(db)
 
-	aiClient, fallbackUsed, err := buildAIClient(cfg)
+	aiRuntime := runtimeConfigFromConfig(cfg)
+	dbAIConfig, hasDBAIConfig, err := aiConfigRepo.LoadProviderConfig(context.Background())
+	if err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	aiRuntime = mergeRuntimeConfig(aiRuntime, cfg, dbAIConfig, hasDBAIConfig)
+
+	aiClient, fallbackUsed, err := buildAIClient(aiRuntime)
 	if err != nil {
 		_ = db.Close()
 		return nil, err
 	}
 
-	aiService := ai.NewService(aiClient, questionService, fallbackUsed, ai.RuntimeConfig{
-		Provider:       cfg.AIProvider,
-		FallbackToMock: cfg.AIFallbackToMock,
-		MockLatency:    cfg.AIMockLatency,
-		AIHTTPTimeout:  cfg.AIHTTPTimeout,
-		OpenAIBaseURL:  cfg.AIOpenAIBaseURL,
-		OpenAIAPIKey:   cfg.AIOpenAIAPIKey,
-		OpenAIModel:    cfg.AIOpenAIModel,
-		GeminiAPIKey:   cfg.AIGeminiAPIKey,
-		GeminiModel:    cfg.AIGeminiModel,
-		ClaudeAPIKey:   cfg.AIClaudeAPIKey,
-		ClaudeModel:    cfg.AIClaudeModel,
-	})
+	aiService := ai.NewServiceWithStore(aiClient, questionService, fallbackUsed, aiRuntime, aiConfigRepo)
 	practiceService := practice.NewService(practiceRepo, questionService, aiService, mistakeService)
 
 	questionHandler := question.NewHandler(questionService)
@@ -164,50 +161,102 @@ func ensureDatabaseDir(dbPath string) error {
 	return nil
 }
 
-func buildAIClient(cfg config.Config) (ai.Client, bool, error) {
-	provider := strings.ToLower(strings.TrimSpace(cfg.AIProvider))
-	fallbackToMock := cfg.AIFallbackToMock
+func runtimeConfigFromConfig(cfg config.Config) ai.RuntimeConfig {
+	return ai.RuntimeConfig{
+		Provider:       cfg.AIProvider,
+		FallbackToMock: cfg.AIFallbackToMock,
+		MockLatency:    cfg.AIMockLatency,
+		AIHTTPTimeout:  cfg.AIHTTPTimeout,
+		OpenAIBaseURL:  cfg.AIOpenAIBaseURL,
+		OpenAIAPIKey:   cfg.AIOpenAIAPIKey,
+		OpenAIModel:    cfg.AIOpenAIModel,
+		GeminiAPIKey:   cfg.AIGeminiAPIKey,
+		GeminiModel:    cfg.AIGeminiModel,
+		ClaudeAPIKey:   cfg.AIClaudeAPIKey,
+		ClaudeModel:    cfg.AIClaudeModel,
+	}
+}
+
+func mergeRuntimeConfig(
+	runtime ai.RuntimeConfig,
+	cfg config.Config,
+	dbCfg ai.ProviderConfigRecord,
+	hasDB bool,
+) ai.RuntimeConfig {
+	if !hasDB {
+		return runtime
+	}
+	if !cfg.AIProviderSet && strings.TrimSpace(dbCfg.Provider) != "" {
+		runtime.Provider = dbCfg.Provider
+	}
+	if !cfg.AIOpenAIBaseURLSet && strings.TrimSpace(dbCfg.OpenAIBaseURL) != "" {
+		runtime.OpenAIBaseURL = dbCfg.OpenAIBaseURL
+	}
+	if !cfg.AIOpenAIAPIKeySet && strings.TrimSpace(dbCfg.OpenAIAPIKey) != "" {
+		runtime.OpenAIAPIKey = dbCfg.OpenAIAPIKey
+	}
+	if !cfg.AIOpenAIModelSet && strings.TrimSpace(dbCfg.OpenAIModel) != "" {
+		runtime.OpenAIModel = dbCfg.OpenAIModel
+	}
+	if !cfg.AIGeminiAPIKeySet && strings.TrimSpace(dbCfg.GeminiAPIKey) != "" {
+		runtime.GeminiAPIKey = dbCfg.GeminiAPIKey
+	}
+	if !cfg.AIGeminiModelSet && strings.TrimSpace(dbCfg.GeminiModel) != "" {
+		runtime.GeminiModel = dbCfg.GeminiModel
+	}
+	if !cfg.AIClaudeAPIKeySet && strings.TrimSpace(dbCfg.ClaudeAPIKey) != "" {
+		runtime.ClaudeAPIKey = dbCfg.ClaudeAPIKey
+	}
+	if !cfg.AIClaudeModelSet && strings.TrimSpace(dbCfg.ClaudeModel) != "" {
+		runtime.ClaudeModel = dbCfg.ClaudeModel
+	}
+	return runtime
+}
+
+func buildAIClient(runtime ai.RuntimeConfig) (ai.Client, bool, error) {
+	provider := strings.ToLower(strings.TrimSpace(runtime.Provider))
+	fallbackToMock := runtime.FallbackToMock
 
 	switch provider {
 	case "", "mock":
-		return ai.NewMockClient(cfg.AIMockLatency), false, nil
+		return ai.NewMockClient(runtime.MockLatency), false, nil
 	case "openai":
 		client := ai.NewOpenAIClient(ai.OpenAIConfig{
-			BaseURL: cfg.AIOpenAIBaseURL,
-			APIKey:  cfg.AIOpenAIAPIKey,
-			Model:   cfg.AIOpenAIModel,
-			Timeout: cfg.AIHTTPTimeout,
+			BaseURL: runtime.OpenAIBaseURL,
+			APIKey:  runtime.OpenAIAPIKey,
+			Model:   runtime.OpenAIModel,
+			Timeout: runtime.AIHTTPTimeout,
 		})
 		if client.IsReady() {
 			return client, false, nil
 		}
 	case "gemini":
 		client := ai.NewGeminiClient(ai.GeminiConfig{
-			APIKey:  cfg.AIGeminiAPIKey,
-			Model:   cfg.AIGeminiModel,
-			Timeout: cfg.AIHTTPTimeout,
+			APIKey:  runtime.GeminiAPIKey,
+			Model:   runtime.GeminiModel,
+			Timeout: runtime.AIHTTPTimeout,
 		})
 		if client.IsReady() {
 			return client, false, nil
 		}
 	case "claude":
 		client := ai.NewClaudeClient(ai.ClaudeConfig{
-			APIKey:  cfg.AIClaudeAPIKey,
-			Model:   cfg.AIClaudeModel,
-			Timeout: cfg.AIHTTPTimeout,
+			APIKey:  runtime.ClaudeAPIKey,
+			Model:   runtime.ClaudeModel,
+			Timeout: runtime.AIHTTPTimeout,
 		})
 		if client.IsReady() {
 			return client, false, nil
 		}
 	default:
-		return nil, false, fmt.Errorf("unsupported ai provider: %s", cfg.AIProvider)
+		return nil, false, fmt.Errorf("unsupported ai provider: %s", runtime.Provider)
 	}
 
 	if fallbackToMock {
 		logx.L().Warn("ai provider is not ready, fallback to mock",
 			slog.String("ai_provider", provider),
 		)
-		return ai.NewMockClient(cfg.AIMockLatency), true, nil
+		return ai.NewMockClient(runtime.MockLatency), true, nil
 	}
 	return nil, false, fmt.Errorf("ai provider %q is not ready, check credentials/model", provider)
 }

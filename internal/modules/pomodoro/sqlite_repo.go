@@ -117,6 +117,18 @@ func (r *SQLiteRepository) Update(ctx context.Context, item Session) (Session, e
 	return item, nil
 }
 
+func (r *SQLiteRepository) Delete(ctx context.Context, id string) error {
+	res, err := r.db.ExecContext(ctx, `DELETE FROM pomodoro_sessions WHERE id = ?`, id)
+	if err != nil {
+		return errs.Internal(fmt.Sprintf("failed to delete pomodoro session: %v", err))
+	}
+	affected, _ := res.RowsAffected()
+	if affected == 0 {
+		return errs.NotFound("pomodoro session not found")
+	}
+	return nil
+}
+
 type sessionScanner interface {
 	Scan(dest ...any) error
 }

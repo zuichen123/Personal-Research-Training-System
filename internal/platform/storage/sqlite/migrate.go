@@ -81,6 +81,18 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 			ended_at TEXT,
 			FOREIGN KEY(plan_id) REFERENCES plans(id) ON DELETE SET NULL
 		);`,
+		`CREATE TABLE IF NOT EXISTS ai_provider_config (
+			id INTEGER PRIMARY KEY CHECK (id = 1),
+			provider TEXT NOT NULL DEFAULT 'mock',
+			openai_base_url TEXT NOT NULL DEFAULT 'https://api.openai.com/v1',
+			openai_api_key TEXT NOT NULL DEFAULT '',
+			openai_model TEXT NOT NULL DEFAULT 'gpt-4o-mini',
+			gemini_api_key TEXT NOT NULL DEFAULT '',
+			gemini_model TEXT NOT NULL DEFAULT 'gemini-1.5-flash',
+			claude_api_key TEXT NOT NULL DEFAULT '',
+			claude_model TEXT NOT NULL DEFAULT 'claude-3-5-sonnet-20241022',
+			updated_at TEXT NOT NULL
+		);`,
 		`CREATE INDEX IF NOT EXISTS idx_mistakes_question_id ON mistakes(question_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_practice_attempts_question_id ON practice_attempts(question_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_resources_question_id ON resources(question_id);`,

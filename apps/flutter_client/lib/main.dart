@@ -12,6 +12,7 @@ import 'screens/pomodoro_screen.dart';
 import 'screens/practice_screen.dart';
 import 'screens/questions_screen.dart';
 import 'screens/resources_screen.dart';
+import 'screens/settings_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -93,6 +94,7 @@ class _MainScreenState extends State<MainScreen> {
     PlansScreen(),
     PomodoroScreen(),
     AIScreen(),
+    SettingsScreen(),
   ];
 
   static const _destinations = [
@@ -130,6 +132,11 @@ class _MainScreenState extends State<MainScreen> {
       icon: Icons.psychology_outlined,
       selectedIcon: Icons.psychology,
       label: 'AI',
+    ),
+    _NavItem(
+      icon: Icons.settings_outlined,
+      selectedIcon: Icons.settings,
+      label: '设置',
     ),
   ];
 
