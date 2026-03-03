@@ -38,6 +38,8 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _profileDirty = false;
   bool _syncingProfileForm = false;
   String _selectedAcademicPreset = _customAcademicStatus;
+  bool? _backendHealthy;
+  bool _checkingHealth = false;
 
   static const List<String> _academicStatusPresets = [
     '初中',
@@ -66,6 +68,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     _bindProfileDirtyListener(_weakSubjectsController);
     _bindProfileDirtyListener(_targetDestinationController);
     _bindProfileDirtyListener(_notesController);
+    _checkBackendHealth();
   }
 
   @override
@@ -86,6 +89,21 @@ class _SettingsScreenState extends State<SettingsScreen>
     _targetDestinationController.dispose();
     _notesController.dispose();
     super.dispose();
+  }
+
+  Future<void> _checkBackendHealth() async {
+    if (_checkingHealth) return;
+    setState(() => _checkingHealth = true);
+    try {
+      final provider = context.read<AppProvider>();
+      final api = provider.apiService;
+      final healthy = await api.checkHealth();
+      if (mounted) setState(() => _backendHealthy = healthy);
+    } catch (_) {
+      if (mounted) setState(() => _backendHealthy = false);
+    } finally {
+      if (mounted) setState(() => _checkingHealth = false);
+    }
   }
 
   @override
@@ -261,6 +279,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        _healthCard(context),
         _section(
           title: '模型服务状态',
           icon: Icons.cloud_done_outlined,
@@ -703,5 +722,44 @@ class _SettingsScreenState extends State<SettingsScreen>
       return;
     }
     _openAIBaseURLController.text = baseURL;
+  }
+
+  Widget _healthCard(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final Color color;
+    final IconData icon;
+    final String label;
+
+    if (_checkingHealth) {
+      color = Colors.grey;
+      icon = Icons.sync;
+      label = '检查中…';
+    } else if (_backendHealthy == true) {
+      color = Colors.green;
+      icon = Icons.cloud_done;
+      label = '后端连接正常';
+    } else if (_backendHealthy == false) {
+      color = Colors.red;
+      icon = Icons.cloud_off;
+      label = '后端连接失败';
+    } else {
+      color = Colors.grey;
+      icon = Icons.cloud_queue;
+      label = '未检测';
+    }
+
+    return Card(
+      color: color.withValues(alpha: 0.08),
+      margin: const EdgeInsets.only(bottom: 12),
+      child: ListTile(
+        leading: Icon(icon, color: color),
+        title: Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w600)),
+        trailing: IconButton(
+          icon: Icon(Icons.refresh, color: cs.outline),
+          tooltip: '重新检测',
+          onPressed: _checkBackendHealth,
+        ),
+      ),
+    );
   }
 }

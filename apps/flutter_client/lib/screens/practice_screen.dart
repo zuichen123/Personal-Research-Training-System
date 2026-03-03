@@ -176,8 +176,8 @@ class PracticeScreen extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  a.submittedAt.toLocal().toString().split(' ')[0],
-                  style: const TextStyle(fontSize: 12),
+                   _formatDate(a.submittedAt),
+                   style: const TextStyle(fontSize: 12),
                 ),
                 const SizedBox(height: 4),
                 IconButton(
@@ -259,6 +259,14 @@ class PracticeScreen extends StatelessWidget {
       default:
         return type.trim().isEmpty ? '-' : type;
     }
+  }
+
+  String _formatDate(DateTime dt) {
+    final local = dt.toLocal();
+    final y = local.year.toString().padLeft(4, '0');
+    final m = local.month.toString().padLeft(2, '0');
+    final d = local.day.toString().padLeft(2, '0');
+    return '$y-$m-$d';
   }
 
   Future<void> _deleteAttempt(BuildContext context, String id) async {

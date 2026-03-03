@@ -1,11 +1,48 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/pomodoro.dart';
 import '../providers/app_provider.dart';
 
-class PomodoroScreen extends StatelessWidget {
+String _formatTime(DateTime dt) {
+  final local = dt.toLocal();
+  final y = local.year.toString().padLeft(4, '0');
+  final m = local.month.toString().padLeft(2, '0');
+  final d = local.day.toString().padLeft(2, '0');
+  final h = local.hour.toString().padLeft(2, '0');
+  final min = local.minute.toString().padLeft(2, '0');
+  return '$y-$m-$d $h:$min';
+}
+
+class PomodoroScreen extends StatefulWidget {
   const PomodoroScreen({super.key});
+
+  @override
+  State<PomodoroScreen> createState() => _PomodoroScreenState();
+}
+
+class _PomodoroScreenState extends State<PomodoroScreen> {
+  Timer? _countdownTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      final provider = context.read<AppProvider>();
+      if (provider.runningPomodoro != null) {
+        setState(() {}); // 刷新倒计时
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -78,8 +115,24 @@ class PomodoroScreen extends StatelessWidget {
     PomodoroSession running,
   ) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    // ── 计算倒计时 ──
+    final endTime = running.startedAt.add(
+      Duration(minutes: running.durationMinutes),
+    );
+    final remaining = endTime.difference(DateTime.now());
+    final totalSeconds = running.durationMinutes * 60;
+    final elapsedSeconds = totalSeconds - remaining.inSeconds;
+    final progress = totalSeconds > 0
+        ? (elapsedSeconds / totalSeconds).clamp(0.0, 1.0)
+        : 0.0;
+    final isOvertime = remaining.isNegative;
+    final displayMinutes = isOvertime ? 0 : remaining.inMinutes;
+    final displaySeconds = isOvertime ? 0 : remaining.inSeconds % 60;
+
     return Card(
-      color: theme.colorScheme.primaryContainer,
+      color: cs.primaryContainer,
       elevation: 3,
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -88,28 +141,78 @@ class PomodoroScreen extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.timer, color: theme.colorScheme.primary, size: 22),
+                Icon(Icons.timer, color: cs.primary, size: 22),
                 const SizedBox(width: 8),
                 Text(
                   '进行中的专注',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.onPrimaryContainer,
+                    color: cs.onPrimaryContainer,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 14),
+
+            // ── 倒计时视觉 ──
+            Center(
+              child: SizedBox(
+                width: 120,
+                height: 120,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    SizedBox(
+                      width: 120,
+                      height: 120,
+                      child: CircularProgressIndicator(
+                        value: progress,
+                        strokeWidth: 8,
+                        backgroundColor: cs.onPrimaryContainer.withValues(alpha: 0.12),
+                        color: isOvertime ? Colors.red : cs.primary,
+                      ),
+                    ),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          isOvertime
+                              ? '已超时'
+                              : '${displayMinutes.toString().padLeft(2, '0')}:${displaySeconds.toString().padLeft(2, '0')}',
+                          style: TextStyle(
+                            fontSize: isOvertime ? 16 : 28,
+                            fontWeight: FontWeight.bold,
+                            color: isOvertime
+                                ? Colors.red
+                                : cs.onPrimaryContainer,
+                          ),
+                        ),
+                        if (!isOvertime)
+                          Text(
+                            '剩余',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: cs.onPrimaryContainer.withValues(alpha: 0.7),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 14),
             Text(
               '任务: ${running.taskTitle}',
               style: TextStyle(
                 fontSize: 15,
-                color: theme.colorScheme.onPrimaryContainer,
+                color: cs.onPrimaryContainer,
               ),
             ),
             Text(
               '时长: ${running.durationMinutes} 分钟, 休息: ${running.breakMinutes} 分钟',
-              style: TextStyle(color: theme.colorScheme.onPrimaryContainer),
+              style: TextStyle(color: cs.onPrimaryContainer),
             ),
             const SizedBox(height: 12),
             Row(
@@ -146,12 +249,14 @@ class PomodoroScreen extends StatelessWidget {
   }
 
   Widget _sessionCard(BuildContext context, PomodoroSession session) {
-    final ended = session.endedAt?.toLocal().toString().split('.').first ?? '-';
+    final ended = session.endedAt != null
+        ? _formatTime(session.endedAt!)
+        : '-';
     final statusColor = session.status == 'completed'
         ? Colors.green
         : session.status == 'canceled'
-        ? Colors.grey
-        : Colors.orange;
+            ? Colors.grey
+            : Colors.orange;
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6),
       child: ListTile(
@@ -166,7 +271,7 @@ class PomodoroScreen extends StatelessWidget {
         ),
         title: Text(session.taskTitle),
         subtitle: Text(
-          '${_statusZh(session.status)} | ${session.durationMinutes}m + ${session.breakMinutes}m\n结束时间: $ended',
+          '${_statusZh(session.status)} | ${session.durationMinutes}m + ${session.breakMinutes}m\n结束: $ended',
         ),
         isThreeLine: true,
         trailing: IconButton(
@@ -234,9 +339,8 @@ class PomodoroScreen extends StatelessWidget {
               onPressed: () async {
                 final task = taskController.text.trim();
                 if (task.isEmpty) {
-                  ScaffoldMessenger.of(
-                    ctx,
-                  ).showSnackBar(const SnackBar(content: Text('任务名称不能为空')));
+                  ScaffoldMessenger.of(ctx)
+                      .showSnackBar(const SnackBar(content: Text('任务名称不能为空')));
                   return;
                 }
 
@@ -253,9 +357,8 @@ class PomodoroScreen extends StatelessWidget {
                   if (ctx.mounted) Navigator.of(ctx).pop();
                 } catch (e) {
                   if (ctx.mounted) {
-                    ScaffoldMessenger.of(
-                      ctx,
-                    ).showSnackBar(SnackBar(content: Text('开始失败：$e')));
+                    ScaffoldMessenger.of(ctx)
+                        .showSnackBar(SnackBar(content: Text('开始失败：$e')));
                   }
                 }
               },
@@ -308,17 +411,15 @@ class PomodoroScreen extends StatelessWidget {
       if (!context.mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('已删除专注计时记录')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('已删除专注计时记录')));
     } catch (_) {
       if (!context.mounted) {
         return;
       }
       final message = context.read<AppProvider>().errorMessage ?? '删除失败';
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
     }
   }
 }

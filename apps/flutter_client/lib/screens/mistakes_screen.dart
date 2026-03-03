@@ -222,8 +222,8 @@ class _MistakesScreenState extends State<MistakesScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  m.createdAt.toLocal().toString().split(' ')[0],
-                  style: const TextStyle(fontSize: 12),
+                   _formatDate(m.createdAt),
+                   style: const TextStyle(fontSize: 12),
                 ),
                 const SizedBox(height: 4),
                 IconButton(
@@ -306,6 +306,14 @@ class _MistakesScreenState extends State<MistakesScreen> {
       if (!context.mounted) return;
       context.read<AppProvider>().fetchQuestions();
     });
+  }
+
+  String _formatDate(DateTime dt) {
+    final local = dt.toLocal();
+    final y = local.year.toString().padLeft(4, '0');
+    final m = local.month.toString().padLeft(2, '0');
+    final d = local.day.toString().padLeft(2, '0');
+    return '$y-$m-$d';
   }
 
   Future<void> _deleteMistake(BuildContext context, String id) async {

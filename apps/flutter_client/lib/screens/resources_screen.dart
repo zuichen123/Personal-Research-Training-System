@@ -103,7 +103,7 @@ class ResourcesScreen extends StatelessWidget {
                 if (value == 'download') {
                   await _download(context, r.id);
                 } else if (value == 'delete') {
-                  await context.read<AppProvider>().deleteResource(r.id);
+                  await _deleteResource(context, r.id);
                 }
               },
               itemBuilder: (_) => const [
@@ -179,6 +179,38 @@ class ResourcesScreen extends StatelessWidget {
         );
       },
     );
+  }
+
+  Future<void> _deleteResource(BuildContext context, String id) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('删除资料'),
+        content: const Text('确认删除这份学习资料？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    try {
+      await context.read<AppProvider>().deleteResource(id);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('已删除资料')));
+    } catch (_) {
+      if (!context.mounted) return;
+      final message = context.read<AppProvider>().errorMessage ?? '删除失败';
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
+    }
   }
 
   Future<void> _download(BuildContext context, String id) async {

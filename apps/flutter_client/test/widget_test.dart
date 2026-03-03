@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_client/main.dart';
 
 void main() {
-  testWidgets('Narrow screen shows NavigationBar with 7 tabs',
+  testWidgets('Narrow screen shows NavigationBar with 5 tabs',
       (WidgetTester tester) async {
     // Force narrow screen → bottom NavigationBar
     tester.view.physicalSize = const Size(400, 800);
@@ -17,7 +17,7 @@ void main() {
 
     expect(find.byType(MainScreen), findsOneWidget);
     expect(find.byType(NavigationBar), findsOneWidget);
-    expect(find.byType(NavigationDestination), findsNWidgets(7));
+    expect(find.byType(NavigationDestination), findsNWidgets(5));
   });
 
   testWidgets('Wide screen shows NavigationRail',

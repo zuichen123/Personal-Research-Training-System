@@ -43,6 +43,42 @@ Future<void> main() async {
   runApp(const MyApp());
 }
 
+// ─── 通用主题配置 ───
+
+CardThemeData _cardTheme(ColorScheme cs) => CardThemeData(
+  elevation: 0.5,
+  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+  clipBehavior: Clip.antiAlias,
+);
+
+AppBarTheme _appBarTheme(ColorScheme cs) => AppBarTheme(
+  centerTitle: true,
+  scrolledUnderElevation: 1,
+  backgroundColor: cs.surface,
+);
+
+NavigationBarThemeData _navBarTheme(ColorScheme cs) => NavigationBarThemeData(
+  indicatorColor: cs.primaryContainer.withValues(alpha: 0.7),
+  labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+  height: 68,
+);
+
+FloatingActionButtonThemeData _fabTheme(ColorScheme cs) =>
+    FloatingActionButtonThemeData(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 2,
+    );
+
+InputDecorationTheme _inputTheme(ColorScheme cs) => InputDecorationTheme(
+  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+  isDense: true,
+  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+);
+
+DialogThemeData _dialogTheme(ColorScheme cs) => DialogThemeData(
+  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+);
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -53,28 +89,34 @@ class MyApp extends StatelessWidget {
       child: MaterialApp(
         title: '自学工具',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          useMaterial3: true,
-          fontFamily: 'MiSans',
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF0D47A1),
-            brightness: Brightness.light,
-          ),
-        ),
-        darkTheme: ThemeData(
-          useMaterial3: true,
-          fontFamily: 'MiSans',
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF0D47A1),
-            brightness: Brightness.dark,
-          ),
-        ),
+        theme: _buildTheme(Brightness.light),
+        darkTheme: _buildTheme(Brightness.dark),
         themeMode: ThemeMode.system,
         home: const MainScreen(),
       ),
     );
   }
+
+  ThemeData _buildTheme(Brightness brightness) {
+    final cs = ColorScheme.fromSeed(
+      seedColor: const Color(0xFF0D47A1),
+      brightness: brightness,
+    );
+    return ThemeData(
+      useMaterial3: true,
+      fontFamily: 'MiSans',
+      colorScheme: cs,
+      cardTheme: _cardTheme(cs),
+      appBarTheme: _appBarTheme(cs),
+      navigationBarTheme: _navBarTheme(cs),
+      floatingActionButtonTheme: _fabTheme(cs),
+      inputDecorationTheme: _inputTheme(cs),
+      dialogTheme: _dialogTheme(cs),
+    );
+  }
 }
+
+// ─── 主导航：5 个主 tab ───
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -86,15 +128,13 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
 
+  // 5 个主屏幕
   final List<Widget> _screens = const [
     QuestionsScreen(),
     MistakesScreen(),
     PracticeScreen(),
-    ResourcesScreen(),
-    PlansScreen(),
     PomodoroScreen(),
     AIScreen(),
-    SettingsScreen(),
   ];
 
   static const _destinations = [
@@ -114,16 +154,6 @@ class _MainScreenState extends State<MainScreen> {
       label: '练习',
     ),
     _NavItem(
-      icon: Icons.folder_outlined,
-      selectedIcon: Icons.folder,
-      label: '资料',
-    ),
-    _NavItem(
-      icon: Icons.event_note_outlined,
-      selectedIcon: Icons.event_note,
-      label: '计划',
-    ),
-    _NavItem(
       icon: Icons.timer_outlined,
       selectedIcon: Icons.timer,
       label: '专注',
@@ -132,6 +162,20 @@ class _MainScreenState extends State<MainScreen> {
       icon: Icons.psychology_outlined,
       selectedIcon: Icons.psychology,
       label: 'AI',
+    ),
+  ];
+
+  // Drawer 条目 → 全屏 push
+  static const _drawerItems = [
+    _NavItem(
+      icon: Icons.folder_outlined,
+      selectedIcon: Icons.folder,
+      label: '学习资料',
+    ),
+    _NavItem(
+      icon: Icons.event_note_outlined,
+      selectedIcon: Icons.event_note,
+      label: '计划管理',
     ),
     _NavItem(
       icon: Icons.settings_outlined,
@@ -155,12 +199,85 @@ class _MainScreenState extends State<MainScreen> {
     context.read<AppProvider>().ensureDataForTab(index);
   }
 
+  void _openDrawerScreen(BuildContext context, int drawerIndex) {
+    Navigator.of(context).pop(); // 关闭 Drawer
+
+    // 根据 drawerIndex 确保对应数据加载
+    final provider = context.read<AppProvider>();
+    Widget screen;
+    switch (drawerIndex) {
+      case 0:
+        provider.ensureResourcesLoaded();
+        screen = const ResourcesScreen();
+        break;
+      case 1:
+        provider.ensurePlansLoaded();
+        screen = const PlansScreen();
+        break;
+      case 2:
+        provider.ensureAILoaded();
+        provider.ensureProfileLoaded();
+        screen = const SettingsScreen();
+        break;
+      default:
+        return;
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => screen),
+    );
+  }
+
+  Widget _buildDrawer(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Drawer(
+      child: Column(
+        children: [
+          DrawerHeader(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [cs.primaryContainer, cs.primary.withValues(alpha: 0.15)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Icon(Icons.school, size: 32, color: cs.primary),
+                const SizedBox(width: 12),
+                Text(
+                  '自学工具',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: cs.onPrimaryContainer,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ..._drawerItems.asMap().entries.map((entry) {
+            final i = entry.key;
+            final item = entry.value;
+            return ListTile(
+              leading: Icon(item.icon),
+              title: Text(item.label),
+              onTap: () => _openDrawerScreen(context, i),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isWide = MediaQuery.sizeOf(context).width >= 800;
 
     if (isWide) {
       return Scaffold(
+        drawer: _buildDrawer(context),
         body: Row(
           children: [
             NavigationRail(
@@ -170,6 +287,13 @@ class _MainScreenState extends State<MainScreen> {
               labelType: MediaQuery.sizeOf(context).width >= 1100
                   ? NavigationRailLabelType.none
                   : NavigationRailLabelType.all,
+              leading: Builder(
+                builder: (ctx) => IconButton(
+                  icon: const Icon(Icons.menu),
+                  tooltip: '更多功能',
+                  onPressed: () => Scaffold.of(ctx).openDrawer(),
+                ),
+              ),
               destinations: _destinations
                   .map(
                     (d) => NavigationRailDestination(
@@ -190,6 +314,7 @@ class _MainScreenState extends State<MainScreen> {
     }
 
     return Scaffold(
+      drawer: _buildDrawer(context),
       body: IndexedStack(index: _currentIndex, children: _screens),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,

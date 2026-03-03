@@ -4,6 +4,16 @@ import '../models/practice.dart';
 import '../models/question.dart';
 import 'question_detail_screen.dart';
 
+String _formatTime(DateTime dt) {
+  final local = dt.toLocal();
+  final y = local.year.toString().padLeft(4, '0');
+  final mo = local.month.toString().padLeft(2, '0');
+  final d = local.day.toString().padLeft(2, '0');
+  final h = local.hour.toString().padLeft(2, '0');
+  final mi = local.minute.toString().padLeft(2, '0');
+  return '$y-$mo-$d $h:$mi';
+}
+
 class PracticeAttemptDetailScreen extends StatelessWidget {
   const PracticeAttemptDetailScreen({
     super.key,
@@ -173,7 +183,7 @@ class PracticeAttemptDetailScreen extends StatelessWidget {
   }
 
   Widget _submitTimeCard(BuildContext context) {
-    final time = attempt.submittedAt.toLocal().toString();
+    final time = _formatTime(attempt.submittedAt);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -228,7 +238,7 @@ class PracticeAttemptDetailScreen extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        item.submittedAt.toLocal().toString(),
+                        _formatTime(item.submittedAt),
                         style: const TextStyle(fontSize: 12),
                       ),
                     ),

@@ -176,7 +176,7 @@ class _PlansScreenState extends State<PlansScreen> {
                 if (value == 'edit') {
                   await _showCreateDialog(context, plan: item);
                 } else if (value == 'delete') {
-                  await context.read<AppProvider>().deletePlan(item.id);
+                  await _deletePlan(context, item.id, item.title);
                 }
               },
               itemBuilder: (context) => const [
@@ -213,6 +213,42 @@ class _PlansScreenState extends State<PlansScreen> {
         return Icons.check;
       default:
         return Icons.help_outline;
+    }
+  }
+
+  Future<void> _deletePlan(
+    BuildContext context,
+    String id,
+    String title,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('删除计划'),
+        content: Text('确认删除计划"$title"？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    try {
+      await context.read<AppProvider>().deletePlan(id);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('已删除计划')));
+    } catch (_) {
+      if (!context.mounted) return;
+      final message = context.read<AppProvider>().errorMessage ?? '删除失败';
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
     }
   }
 

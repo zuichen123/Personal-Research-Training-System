@@ -25,6 +25,7 @@ enum DataSection {
 class AppProvider with ChangeNotifier {
   final ApiService _api = ApiService();
   final AppLogger _logger = AppLogger.instance;
+  ApiService get apiService => _api;
 
   final Map<DataSection, bool> _isSectionLoading = {
     DataSection.questions: false,
@@ -122,20 +123,10 @@ class AppProvider with ChangeNotifier {
         await ensureAttemptsLoaded();
         break;
       case 3:
-        await ensureResourcesLoaded();
-        break;
-      case 4:
-        await ensurePlansLoaded();
-        break;
-      case 5:
         await ensurePomodoroLoaded();
         break;
-      case 6:
+      case 4:
         await ensureAILoaded();
-        break;
-      case 7:
-        await ensureAILoaded();
-        await ensureProfileLoaded();
         break;
       default:
         return;

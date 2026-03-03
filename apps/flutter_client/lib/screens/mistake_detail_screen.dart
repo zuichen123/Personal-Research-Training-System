@@ -4,6 +4,16 @@ import '../models/mistake.dart';
 import '../models/question.dart';
 import 'question_detail_screen.dart';
 
+String _formatTime(DateTime dt) {
+  final local = dt.toLocal();
+  final y = local.year.toString().padLeft(4, '0');
+  final mo = local.month.toString().padLeft(2, '0');
+  final d = local.day.toString().padLeft(2, '0');
+  final h = local.hour.toString().padLeft(2, '0');
+  final mi = local.minute.toString().padLeft(2, '0');
+  return '$y-$mo-$d $h:$mi';
+}
+
 class MistakeDetailScreen extends StatelessWidget {
   const MistakeDetailScreen({
     super.key,
@@ -204,7 +214,7 @@ class MistakeDetailScreen extends StatelessWidget {
                       children: [
                         Expanded(
                           child: Text(
-                            item.createdAt.toLocal().toString(),
+                            _formatTime(item.createdAt),
                             style: const TextStyle(fontSize: 12),
                           ),
                         ),
@@ -236,7 +246,7 @@ class MistakeDetailScreen extends StatelessWidget {
   }
 
   Widget _createdTimeCard(BuildContext context) {
-    final time = mistake.createdAt.toLocal().toString();
+    final time = _formatTime(mistake.createdAt);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
