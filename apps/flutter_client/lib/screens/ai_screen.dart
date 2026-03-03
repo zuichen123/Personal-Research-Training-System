@@ -14,42 +14,58 @@ class AIScreen extends StatefulWidget {
 }
 
 class _AIScreenState extends State<AIScreen> {
-  // ---- AI学习计划（独立控制器） ----
-  final _learnModeController = TextEditingController(text: 'unit_learning');
+  final _learnModeController = TextEditingController(
+    text: 'long_term_learning',
+  );
   final _learnSubjectController = TextEditingController(text: 'math');
   final _learnUnitController = TextEditingController(text: '函数');
-  final _learnGoalsController = TextEditingController(text: '掌握核心概念,完成5道题');
+  final _learnGoalsController = TextEditingController(text: '夯实基础,完成阶段测试');
+  final _learnFinalGoalController = TextEditingController();
+  final _learnTotalHoursController = TextEditingController(text: '120');
+  final _learnStartDateController = TextEditingController();
+  final _learnEndDateController = TextEditingController();
+  final _learnStatusController = TextEditingController(text: 'pending');
+  final _learnThemesController = TextEditingController(text: '数学,英语');
+  final _learnSupplementController = TextEditingController();
 
-  // ---- AI出题（独立控制器） ----
+  final _optimizeDaysController = TextEditingController(text: '3');
+  final _optimizeReasonController = TextEditingController();
+  String _optimizeAction = 'postpone';
+
   final _genTopicController = TextEditingController(text: '函数单调性');
   final _genSubjectController = TextEditingController(text: 'math');
   final _genCountController = TextEditingController(text: '3');
   final _genDifficultyController = TextEditingController(text: '3');
   bool _persist = false;
 
-  // ---- AI搜题（独立控制器） ----
   final _searchTopicController = TextEditingController(text: '函数单调性');
   final _searchSubjectController = TextEditingController(text: 'math');
   final _searchCountController = TextEditingController(text: '5');
 
-  // ---- AI评分（独立控制器） ----
   final _scoreTopicController = TextEditingController(text: '函数');
   final _accuracyController = TextEditingController(text: '80');
   final _stabilityController = TextEditingController(text: '70');
   final _speedController = TextEditingController(text: '75');
 
-  // ---- AI批阅（独立控制器） ----
   final _gradeQuestionIdController = TextEditingController();
   final _gradeAnswerController = TextEditingController();
 
-  // ---- AI评估（独立控制器） ----
   final _evaluateModeController = TextEditingController(text: 'comprehensive');
   final _evaluateQuestionIdController = TextEditingController();
   final _evaluateAnswerController = TextEditingController();
   final _evaluateContextController = TextEditingController(text: '错题复盘');
 
-  // ---- 折叠状态 ----
   final Map<String, bool> _expanded = {};
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _learnStartDateController.text = _formatDate(now);
+    _learnEndDateController.text = _formatDate(
+      now.add(const Duration(days: 90)),
+    );
+  }
 
   @override
   void dispose() {
@@ -57,6 +73,15 @@ class _AIScreenState extends State<AIScreen> {
     _learnSubjectController.dispose();
     _learnUnitController.dispose();
     _learnGoalsController.dispose();
+    _learnFinalGoalController.dispose();
+    _learnTotalHoursController.dispose();
+    _learnStartDateController.dispose();
+    _learnEndDateController.dispose();
+    _learnStatusController.dispose();
+    _learnThemesController.dispose();
+    _learnSupplementController.dispose();
+    _optimizeDaysController.dispose();
+    _optimizeReasonController.dispose();
     _genTopicController.dispose();
     _genSubjectController.dispose();
     _genCountController.dispose();
@@ -91,218 +116,17 @@ class _AIScreenState extends State<AIScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        _section(
-          title: 'AI学习计划',
-          icon: Icons.school_outlined,
-          child: Column(
-            children: [
-              _input(_learnModeController, '模式（如 unit_learning / unit_review）'),
-              _input(_learnSubjectController, '科目'),
-              _input(_learnUnitController, '单元'),
-              _input(_learnGoalsController, '目标（逗号分隔）'),
-              const SizedBox(height: 8),
-              FilledButton.icon(
-                onPressed: () async {
-                  await _runProviderAction(() {
-                    return provider.buildLearningPlan({
-                      'mode': _learnModeController.text.trim(),
-                      'subject': _learnSubjectController.text.trim(),
-                      'unit': _learnUnitController.text.trim(),
-                      'current_stage': 'pending',
-                      'goals': _learnGoalsController.text
-                          .split(',')
-                          .map((e) => e.trim())
-                          .where((e) => e.isNotEmpty)
-                          .toList(),
-                    });
-                  });
-                },
-                icon: const Icon(Icons.auto_awesome),
-                label: const Text('生成计划'),
-              ),
-              if (provider.aiLearningPlan != null)
-                _jsonBox('learn', provider.aiLearningPlan!),
-            ],
-          ),
-        ),
-        _section(
-          title: 'AI出题',
-          icon: Icons.quiz_outlined,
-          child: Column(
-            children: [
-              _input(_genTopicController, '主题'),
-              _input(_genSubjectController, '科目'),
-              _input(_genCountController, '数量'),
-              _input(_genDifficultyController, '难度(1-5)'),
-              SwitchListTile(
-                value: _persist,
-                title: const Text('同时写入题库'),
-                contentPadding: EdgeInsets.zero,
-                onChanged: (v) => setState(() => _persist = v),
-              ),
-              FilledButton.icon(
-                onPressed: () async {
-                  await _runProviderAction(() {
-                    return provider.generateAIQuestions({
-                      'topic': _genTopicController.text.trim(),
-                      'subject': _genSubjectController.text.trim(),
-                      'scope': 'unit',
-                      'count':
-                          int.tryParse(_genCountController.text.trim()) ?? 3,
-                      'difficulty':
-                          int.tryParse(_genDifficultyController.text.trim()) ??
-                          3,
-                    }, persist: _persist);
-                  });
-                },
-                icon: const Icon(Icons.auto_fix_high),
-                label: const Text('开始出题'),
-              ),
-              const SizedBox(height: 8),
-              Text('生成题目数量：${provider.aiGeneratedQuestions.length}'),
-            ],
-          ),
-        ),
-        _section(
-          title: 'AI搜题',
-          icon: Icons.travel_explore,
-          child: Column(
-            children: [
-              _input(_searchTopicController, '主题'),
-              _input(_searchSubjectController, '科目'),
-              _input(_searchCountController, '数量'),
-              FilledButton.icon(
-                onPressed: () async {
-                  await _runProviderAction(() {
-                    return provider.searchAIQuestions(
-                      topic: _searchTopicController.text.trim(),
-                      subject: _searchSubjectController.text.trim(),
-                      count:
-                          int.tryParse(_searchCountController.text.trim()) ?? 5,
-                    );
-                  });
-                },
-                icon: const Icon(Icons.search),
-                label: const Text('联网搜题'),
-              ),
-              const SizedBox(height: 8),
-              Text('搜索结果数量：${provider.aiSearchQuestions.length}'),
-            ],
-          ),
-        ),
-        _section(
-          title: 'AI评分',
-          icon: Icons.analytics_outlined,
-          child: Column(
-            children: [
-              _input(_scoreTopicController, '主题'),
-              _input(_accuracyController, '准确率(0-100)'),
-              _input(_stabilityController, '稳定度(0-100)'),
-              _input(_speedController, '速度(0-100)'),
-              FilledButton.icon(
-                onPressed: () async {
-                  await _runProviderAction(() {
-                    return provider.scoreWithAI({
-                      'topic': _scoreTopicController.text.trim(),
-                      'accuracy':
-                          double.tryParse(_accuracyController.text.trim()) ?? 0,
-                      'stability':
-                          double.tryParse(_stabilityController.text.trim()) ??
-                          0,
-                      'speed':
-                          double.tryParse(_speedController.text.trim()) ?? 0,
-                    });
-                  });
-                },
-                icon: const Icon(Icons.calculate),
-                label: const Text('计算评分'),
-              ),
-              if (provider.aiScoreResult != null)
-                _jsonBox('score', provider.aiScoreResult!),
-            ],
-          ),
-        ),
-        _section(
-          title: 'AI批阅',
-          icon: Icons.grading,
-          child: Column(
-            children: [
-              _input(_gradeQuestionIdController, '题目ID'),
-              _input(_gradeAnswerController, '作答内容(逗号分隔)'),
-              FilledButton.icon(
-                onPressed: () async {
-                  final questionPayload = _questionPayloadById(
-                    provider,
-                    _gradeQuestionIdController.text.trim(),
-                  );
-                  if (questionPayload == null) {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('请先输入存在的题目ID')),
-                      );
-                    }
-                    return;
-                  }
-                  await _runProviderAction(() {
-                    return provider.gradeWithAI({
-                      'question': questionPayload,
-                      'user_answer': _gradeAnswerController.text
-                          .split(',')
-                          .map((e) => e.trim())
-                          .where((e) => e.isNotEmpty)
-                          .toList(),
-                    });
-                  });
-                },
-                icon: const Icon(Icons.rate_review),
-                label: const Text('执行批阅'),
-              ),
-              if (provider.aiGradeResult != null)
-                _jsonBox('grade', provider.aiGradeResult!),
-            ],
-          ),
-        ),
-        _section(
-          title: 'AI评估',
-          icon: Icons.assessment_outlined,
-          child: Column(
-            children: [
-              _input(_evaluateModeController, '评估模式'),
-              _input(_evaluateQuestionIdController, '题目ID'),
-              _input(_evaluateAnswerController, '作答内容(逗号分隔)'),
-              _input(_evaluateContextController, '评估上下文'),
-              FilledButton.icon(
-                onPressed: () async {
-                  final questionPayload = _questionPayloadById(
-                    provider,
-                    _evaluateQuestionIdController.text.trim(),
-                  );
-                  await _runProviderAction(() {
-                    return provider.evaluateWithAI({
-                      'mode': _evaluateModeController.text.trim(),
-                      'question': questionPayload ?? <String, dynamic>{},
-                      'user_answer': _evaluateAnswerController.text
-                          .split(',')
-                          .map((e) => e.trim())
-                          .where((e) => e.isNotEmpty)
-                          .toList(),
-                      'context': _evaluateContextController.text.trim(),
-                    });
-                  });
-                },
-                icon: const Icon(Icons.fact_check),
-                label: const Text('执行评估'),
-              ),
-              if (provider.aiEvaluateResult != null)
-                _jsonBox('evaluate', provider.aiEvaluateResult!),
-            ],
-          ),
-        ),
+        _learningSection(context, provider),
+        _generateSection(provider),
+        _searchSection(provider),
+        _scoreSection(provider),
+        _gradeSection(context, provider),
+        _evaluateSection(provider),
         if (provider.errorMessage != null)
           Padding(
             padding: const EdgeInsets.only(top: 8),
             child: Text(
-              '错误：${provider.errorMessage}',
+              '错误: ${provider.errorMessage}',
               style: const TextStyle(color: Colors.red),
             ),
           ),
@@ -310,7 +134,421 @@ class _AIScreenState extends State<AIScreen> {
     );
   }
 
-  // ---- helpers ----
+  Widget _learningSection(BuildContext context, AppProvider provider) {
+    return _section(
+      title: 'AI学习计划',
+      icon: Icons.school_outlined,
+      child: Column(
+        children: [
+          _input(_learnFinalGoalController, '最终目标（如：高考数学130+）'),
+          _input(_learnTotalHoursController, '总投入小时（可空，AI估算）'),
+          Row(
+            children: [
+              Expanded(
+                child: _input(
+                  _learnStartDateController,
+                  '开始日期',
+                  readOnly: true,
+                ),
+              ),
+              IconButton(
+                onPressed: () => _pickDate(_learnStartDateController),
+                icon: const Icon(Icons.event),
+              ),
+              Expanded(
+                child: _input(_learnEndDateController, '结束日期', readOnly: true),
+              ),
+              IconButton(
+                onPressed: () => _pickDate(_learnEndDateController),
+                icon: const Icon(Icons.event_available),
+              ),
+            ],
+          ),
+          _input(_learnStatusController, '当前状态（pending/in_progress）'),
+          _input(_learnSubjectController, '主科目（如：math）'),
+          _input(_learnThemesController, '主题（逗号分隔，如：数学,英语）'),
+          _input(_learnUnitController, '当前单元'),
+          _input(_learnModeController, '模式（long_term_learning/unit_review）'),
+          _input(_learnGoalsController, '阶段目标（逗号分隔）'),
+          _input(_learnSupplementController, '补充信息（可选）'),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilledButton.icon(
+                onPressed: () async {
+                  await _runProviderAction(() {
+                    return provider.buildLearningPlan({
+                      'final_goal': _learnFinalGoalController.text.trim(),
+                      'total_hours':
+                          int.tryParse(
+                            _learnTotalHoursController.text.trim(),
+                          ) ??
+                          0,
+                      'start_date': _learnStartDateController.text.trim(),
+                      'end_date': _learnEndDateController.text.trim(),
+                      'current_status': _learnStatusController.text.trim(),
+                      'mode': _learnModeController.text.trim(),
+                      'subject': _learnSubjectController.text.trim(),
+                      'unit': _learnUnitController.text.trim(),
+                      'goals': _learnGoalsController.text
+                          .split(',')
+                          .map((e) => e.trim())
+                          .where((e) => e.isNotEmpty)
+                          .toList(),
+                      'themes': _learnThemesController.text
+                          .split(',')
+                          .map((e) => e.trim())
+                          .where((e) => e.isNotEmpty)
+                          .toList(),
+                      'supplement': _learnSupplementController.text.trim(),
+                    });
+                  });
+                },
+                icon: const Icon(Icons.auto_awesome),
+                label: const Text('生成学习计划'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: provider.aiLearningPlan == null
+                    ? null
+                    : () async {
+                        await _runProviderAction(() {
+                          return provider.optimizeLearningPlan(
+                            action: _optimizeAction,
+                            days:
+                                int.tryParse(
+                                  _optimizeDaysController.text.trim(),
+                                ) ??
+                                0,
+                            reason: _optimizeReasonController.text.trim(),
+                            supplement: _learnSupplementController.text.trim(),
+                          );
+                        });
+                      },
+                icon: const Icon(Icons.tune),
+                label: const Text('优化日程'),
+              ),
+              OutlinedButton.icon(
+                onPressed: provider.aiLearningPlan == null
+                    ? null
+                    : () async {
+                        try {
+                          final imported = await provider
+                              .importLearningPlanToPlans();
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('已导入 $imported 条计划')),
+                          );
+                        } catch (_) {
+                          if (!context.mounted) return;
+                          final message = provider.errorMessage ?? '导入失败';
+                          ScaffoldMessenger.of(
+                            context,
+                          ).showSnackBar(SnackBar(content: Text(message)));
+                        }
+                      },
+                icon: const Icon(Icons.playlist_add_check),
+                label: const Text('导入计划管理'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  value: _optimizeAction,
+                  decoration: const InputDecoration(
+                    labelText: '优化动作',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'postpone', child: Text('推迟执行')),
+                    DropdownMenuItem(value: 'advance', child: Text('提前执行')),
+                    DropdownMenuItem(
+                      value: 'complete_early',
+                      child: Text('提前完成'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() => _optimizeAction = value);
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(child: _input(_optimizeDaysController, '调整天数')),
+            ],
+          ),
+          _input(_optimizeReasonController, '调整原因（如：考试冲突）'),
+          if (provider.aiLearningPlan != null) ...[
+            _learningSummary(provider.aiLearningPlan!),
+            _jsonBox('learn', provider.aiLearningPlan!),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _learningSummary(Map<String, dynamic> plan) {
+    final follow = _asStringList(plan['follow_up_questions']);
+    final missing = _asStringList(plan['missing_fields']);
+    final hints = _asStringList(plan['optimization_hints']);
+    final planItems = plan['plan_items'];
+    final planItemCount = planItems is List ? planItems.length : 0;
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('计划目标: ${plan['final_goal'] ?? '-'}'),
+          Text(
+            '计划周期: ${plan['plan_start_date'] ?? '-'} ~ ${plan['plan_end_date'] ?? '-'}',
+          ),
+          Text('计划条目: $planItemCount'),
+          if (missing.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text('待补充字段: ${missing.join(', ')}'),
+          ],
+          if (follow.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            const Text('AI追问建议:'),
+            ...follow.map((e) => Text('• $e')),
+          ],
+          if (hints.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            const Text('优化提示:'),
+            ...hints.map((e) => Text('• $e')),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _generateSection(AppProvider provider) {
+    return _section(
+      title: 'AI出题',
+      icon: Icons.quiz_outlined,
+      child: Column(
+        children: [
+          _input(_genTopicController, '主题'),
+          _input(_genSubjectController, '科目'),
+          _input(_genCountController, '数量'),
+          _input(_genDifficultyController, '难度(1-5)'),
+          SwitchListTile(
+            value: _persist,
+            title: const Text('同时写入题库'),
+            contentPadding: EdgeInsets.zero,
+            onChanged: (v) => setState(() => _persist = v),
+          ),
+          FilledButton.icon(
+            onPressed: () async {
+              await _runProviderAction(() {
+                return provider.generateAIQuestions({
+                  'topic': _genTopicController.text.trim(),
+                  'subject': _genSubjectController.text.trim(),
+                  'scope': 'unit',
+                  'count': int.tryParse(_genCountController.text.trim()) ?? 3,
+                  'difficulty':
+                      int.tryParse(_genDifficultyController.text.trim()) ?? 3,
+                }, persist: _persist);
+              });
+            },
+            icon: const Icon(Icons.auto_fix_high),
+            label: const Text('开始出题'),
+          ),
+          const SizedBox(height: 8),
+          Text('生成题目数量: ${provider.aiGeneratedQuestions.length}'),
+        ],
+      ),
+    );
+  }
+
+  Widget _searchSection(AppProvider provider) {
+    return _section(
+      title: 'AI搜题',
+      icon: Icons.travel_explore,
+      child: Column(
+        children: [
+          _input(_searchTopicController, '主题'),
+          _input(_searchSubjectController, '科目'),
+          _input(_searchCountController, '数量'),
+          FilledButton.icon(
+            onPressed: () async {
+              await _runProviderAction(() {
+                return provider.searchAIQuestions(
+                  topic: _searchTopicController.text.trim(),
+                  subject: _searchSubjectController.text.trim(),
+                  count: int.tryParse(_searchCountController.text.trim()) ?? 5,
+                );
+              });
+            },
+            icon: const Icon(Icons.search),
+            label: const Text('联网搜题'),
+          ),
+          const SizedBox(height: 8),
+          Text('搜索结果数量: ${provider.aiSearchQuestions.length}'),
+        ],
+      ),
+    );
+  }
+
+  Widget _scoreSection(AppProvider provider) {
+    return _section(
+      title: 'AI评分',
+      icon: Icons.analytics_outlined,
+      child: Column(
+        children: [
+          _input(_scoreTopicController, '主题'),
+          _input(_accuracyController, '准确率(0-100)'),
+          _input(_stabilityController, '稳定度(0-100)'),
+          _input(_speedController, '速度(0-100)'),
+          FilledButton.icon(
+            onPressed: () async {
+              await _runProviderAction(() {
+                return provider.scoreWithAI({
+                  'topic': _scoreTopicController.text.trim(),
+                  'accuracy':
+                      double.tryParse(_accuracyController.text.trim()) ?? 0,
+                  'stability':
+                      double.tryParse(_stabilityController.text.trim()) ?? 0,
+                  'speed': double.tryParse(_speedController.text.trim()) ?? 0,
+                });
+              });
+            },
+            icon: const Icon(Icons.calculate),
+            label: const Text('计算评分'),
+          ),
+          if (provider.aiScoreResult != null)
+            _jsonBox('score', provider.aiScoreResult!),
+        ],
+      ),
+    );
+  }
+
+  Widget _gradeSection(BuildContext context, AppProvider provider) {
+    return _section(
+      title: 'AI批阅',
+      icon: Icons.grading,
+      child: Column(
+        children: [
+          _input(_gradeQuestionIdController, '题目ID'),
+          _input(_gradeAnswerController, '作答内容(逗号分隔)'),
+          FilledButton.icon(
+            onPressed: () async {
+              final questionPayload = _questionPayloadById(
+                provider,
+                _gradeQuestionIdController.text.trim(),
+              );
+              if (questionPayload == null) {
+                if (mounted) {
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('请输入存在的题目ID')));
+                }
+                return;
+              }
+              await _runProviderAction(() {
+                return provider.gradeWithAI({
+                  'question': questionPayload,
+                  'user_answer': _gradeAnswerController.text
+                      .split(',')
+                      .map((e) => e.trim())
+                      .where((e) => e.isNotEmpty)
+                      .toList(),
+                });
+              });
+            },
+            icon: const Icon(Icons.rate_review),
+            label: const Text('执行批阅'),
+          ),
+          if (provider.aiGradeResult != null)
+            _jsonBox('grade', provider.aiGradeResult!),
+        ],
+      ),
+    );
+  }
+
+  Widget _evaluateSection(AppProvider provider) {
+    return _section(
+      title: 'AI评估',
+      icon: Icons.assessment_outlined,
+      child: Column(
+        children: [
+          _input(_evaluateModeController, '评估模式'),
+          _input(_evaluateQuestionIdController, '题目ID'),
+          _input(_evaluateAnswerController, '作答内容(逗号分隔)'),
+          _input(_evaluateContextController, '评估上下文'),
+          FilledButton.icon(
+            onPressed: () async {
+              final questionPayload = _questionPayloadById(
+                provider,
+                _evaluateQuestionIdController.text.trim(),
+              );
+              await _runProviderAction(() {
+                return provider.evaluateWithAI({
+                  'mode': _evaluateModeController.text.trim(),
+                  'question': questionPayload ?? <String, dynamic>{},
+                  'user_answer': _evaluateAnswerController.text
+                      .split(',')
+                      .map((e) => e.trim())
+                      .where((e) => e.isNotEmpty)
+                      .toList(),
+                  'context': _evaluateContextController.text.trim(),
+                });
+              });
+            },
+            icon: const Icon(Icons.fact_check),
+            label: const Text('执行评估'),
+          ),
+          if (provider.aiEvaluateResult != null)
+            _jsonBox('evaluate', provider.aiEvaluateResult!),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickDate(TextEditingController controller) async {
+    final initial = _parseDate(controller.text) ?? DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+      initialDate: initial,
+    );
+    if (picked != null) {
+      controller.text = _formatDate(picked);
+    }
+  }
+
+  DateTime? _parseDate(String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) return null;
+    return DateTime.tryParse(text);
+  }
+
+  String _formatDate(DateTime dt) {
+    final d = DateUtils.dateOnly(dt);
+    final y = d.year.toString().padLeft(4, '0');
+    final m = d.month.toString().padLeft(2, '0');
+    final day = d.day.toString().padLeft(2, '0');
+    return '$y-$m-$day';
+  }
+
+  List<String> _asStringList(dynamic raw) {
+    if (raw is! List) return const [];
+    return raw.map((e) => '$e').toList(growable: false);
+  }
 
   Widget _section({
     required String title,
@@ -351,11 +589,16 @@ class _AIScreenState extends State<AIScreen> {
     );
   }
 
-  Widget _input(TextEditingController controller, String label) {
+  Widget _input(
+    TextEditingController controller,
+    String label, {
+    bool readOnly = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: TextField(
         controller: controller,
+        readOnly: readOnly,
         decoration: InputDecoration(
           labelText: label,
           border: const OutlineInputBorder(),

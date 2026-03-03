@@ -5,8 +5,10 @@ import "time"
 type PlanType string
 
 const (
+	YearPlan     PlanType = "year_plan"
 	MonthGoal    PlanType = "month_goal"
 	MonthPlan    PlanType = "month_plan"
+	WeekPlan     PlanType = "week_plan"
 	DayGoal      PlanType = "day_goal"
 	DayPlan      PlanType = "day_plan"
 	CurrentPhase PlanType = "current_phase"

@@ -460,6 +460,18 @@ class ApiService {
     return _extractDataMap(response);
   }
 
+  Future<Map<String, dynamic>> optimizeLearningPlan(
+    Map<String, dynamic> input,
+  ) async {
+    final response = await _request(
+      method: 'POST',
+      path: '/ai/learning/optimize',
+      jsonBody: input,
+      timeout: _aiRequestTimeout,
+    );
+    return _extractDataMap(response);
+  }
+
   Future<List<Question>> generateAIQuestions(
     Map<String, dynamic> input, {
     bool persist = false,

@@ -30,6 +30,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 		r.Get("/questions/search", h.searchOnline)
 		r.Post("/grade", h.grade)
 		r.Post("/learning", h.learning)
+		r.Post("/learning/optimize", h.optimizeLearning)
 		r.Post("/evaluate", h.evaluate)
 		r.Post("/score", h.score)
 	})
@@ -176,6 +177,21 @@ func (h *Handler) learning(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, err := h.service.Learn(r.Context(), req)
+	if err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, result)
+}
+
+func (h *Handler) optimizeLearning(w http.ResponseWriter, r *http.Request) {
+	var req OptimizeLearnRequest
+	if err := httpx.DecodeJSON(r, &req); err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+
+	result, err := h.service.OptimizeLearningPlan(r.Context(), req)
 	if err != nil {
 		httpx.WriteError(w, err)
 		return

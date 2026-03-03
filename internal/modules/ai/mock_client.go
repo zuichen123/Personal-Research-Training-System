@@ -118,37 +118,168 @@ func (m *MockClient) BuildLearningPlan(ctx context.Context, req LearnRequest) (L
 	case <-time.After(m.latency):
 	}
 
+	now := time.Now().UTC()
+	mode := strings.TrimSpace(req.Mode)
+	if mode == "" {
+		mode = "long_term_learning"
+	}
+	subject := strings.TrimSpace(req.Subject)
+	if subject == "" {
+		subject = "general"
+	}
 	unit := strings.TrimSpace(req.Unit)
 	if unit == "" {
 		unit = "general unit"
 	}
 
-	outline := []string{
-		"Read core concepts and definitions",
-		"Summarize key formulas and examples",
-		"Complete 3 targeted exercises",
+	finalGoal := strings.TrimSpace(req.FinalGoal)
+	if finalGoal == "" {
+		finalGoal = strings.Join(req.Goals, "; ")
 	}
-	if strings.Contains(strings.ToLower(req.Mode), "review") {
-		outline = []string{
-			"Revisit wrong answers and weak points",
-			"Redo prior exercises without notes",
-			"Write a concise memory card summary",
+	if finalGoal == "" {
+		finalGoal = fmt.Sprintf("Build a stable study rhythm for %s", subject)
+	}
+
+	currentStatus := strings.TrimSpace(req.CurrentStatus)
+	if currentStatus == "" {
+		currentStatus = strings.TrimSpace(req.CurrentStage)
+	}
+	if currentStatus == "" {
+		currentStatus = "pending"
+	}
+
+	start := parseDateOrDefault(req.StartDate, now)
+	end := parseDateOrDefault(req.EndDate, start.AddDate(0, 3, 0))
+	if end.Before(start) {
+		end = start.AddDate(0, 0, 30)
+	}
+
+	durationDays := int(end.Sub(start).Hours()/24) + 1
+	if durationDays < 1 {
+		durationDays = 1
+	}
+
+	totalHours := req.TotalHours
+	if totalHours <= 0 {
+		if req.Profile.DailyStudyMinutes > 0 {
+			totalHours = req.Profile.DailyStudyMinutes * durationDays / 60
+		}
+		if totalHours <= 0 {
+			totalHours = maxInt(20, durationDays/2)
 		}
 	}
 
+	outline := []string{
+		"Break down the final goal into theme-level milestones",
+		"Track daily progress and re-plan weekly",
+		"Reserve weekly review slots for weak points",
+	}
+	if strings.Contains(strings.ToLower(mode), "review") {
+		outline = []string{
+			"Audit mistakes and classify weak knowledge points",
+			"Redo core exercises without notes",
+			"Perform one mixed review at the end of each week",
+		}
+	}
 	checklist := []string{
-		"Can explain key concepts in your own words",
-		"Can solve standard problem types",
-		"Can identify common pitfalls",
+		"Can explain each theme with examples",
+		"Can finish planned daily tasks on time",
+		"Can adjust schedule when delays happen",
 	}
 
+	themes := normalizeThemes(req.Themes, subject)
+	themePlans := make([]LearnTheme, 0, len(themes))
+	hoursPerTheme := float64(totalHours) / float64(maxInt(1, len(themes)))
+	for _, theme := range themes {
+		nodes := buildThemeNodes(theme, start, end, hoursPerTheme, req.Goals)
+		themePlans = append(themePlans, LearnTheme{
+			Name:           theme,
+			EstimatedHours: round1(hoursPerTheme),
+			Children:       nodes,
+		})
+	}
+
+	missingFields, followUp := missingLearnInputs(req)
+	planItems := planItemsFromThemes(themePlans, currentStatus)
+	planItems = append([]LearnPlanItemNote{{
+		PlanType:   "current_phase",
+		Title:      fmt.Sprintf("AI plan: %s", finalGoal),
+		Content:    fmt.Sprintf("Period %s ~ %s; mode=%s; subject=%s", formatDate(start), formatDate(end), mode, subject),
+		TargetDate: formatDate(end),
+		Status:     currentStatus,
+		Priority:   1,
+	}}, planItems...)
+
 	return LearnResult{
-		Mode:            req.Mode,
-		Subject:         req.Subject,
-		Unit:            unit,
-		StudyOutline:    outline,
-		ReviewChecklist: checklist,
-		StageSuggestion: "Current stage: reinforce weak points then start mixed practice",
+		Mode:              mode,
+		Subject:           subject,
+		Unit:              unit,
+		CreatedAt:         now.Format(time.RFC3339),
+		FinalGoal:         finalGoal,
+		CurrentStatus:     currentStatus,
+		PlanStartDate:     formatDate(start),
+		PlanEndDate:       formatDate(end),
+		StudyOutline:      outline,
+		ReviewChecklist:   checklist,
+		StageSuggestion:   "Start from month/week plans and execute day plans strictly. Use manual optimization when schedule shifts.",
+		MissingFields:     missingFields,
+		FollowUpQuestions: followUp,
+		Themes:            themePlans,
+		PlanItems:         planItems,
+		OptimizationHints: []string{
+			"If delayed, trigger optimize with action=postpone and provide delay reason.",
+			"If completed early, trigger optimize with action=complete_early to refill review tasks.",
+		},
+	}, nil
+}
+
+func (m *MockClient) OptimizeLearningPlan(ctx context.Context, req OptimizeLearnRequest) (OptimizeLearnResult, error) {
+	select {
+	case <-ctx.Done():
+		return OptimizeLearnResult{}, ctx.Err()
+	case <-time.After(m.latency):
+	}
+
+	action := strings.ToLower(strings.TrimSpace(req.Action))
+	if action == "" {
+		action = "postpone"
+	}
+	updated := req.Plan
+	summary := make([]string, 0, 4)
+
+	switch action {
+	case "postpone":
+		days := maxInt(1, req.Days)
+		shiftLearnResult(&updated, days)
+		updated.CurrentStatus = "rescheduled"
+		summary = append(summary, fmt.Sprintf("Plan postponed by %d day(s).", days))
+	case "advance":
+		days := maxInt(1, req.Days)
+		shiftLearnResult(&updated, -days)
+		if strings.TrimSpace(updated.CurrentStatus) == "" || updated.CurrentStatus == "pending" {
+			updated.CurrentStatus = "in_progress"
+		}
+		summary = append(summary, fmt.Sprintf("Plan advanced by %d day(s).", days))
+	case "complete_early":
+		updated.CurrentStatus = "completed_early"
+		summary = append(summary, "Current phase marked as completed early.")
+		updated.OptimizationHints = append(updated.OptimizationHints,
+			"Use freed time for weak-subject consolidation or mixed mock exams.")
+	default:
+		summary = append(summary, "No optimization action applied because action is unsupported.")
+	}
+
+	if reason := strings.TrimSpace(req.Reason); reason != "" {
+		summary = append(summary, "Reason: "+reason)
+	}
+	if supplement := strings.TrimSpace(req.Supplement); supplement != "" {
+		summary = append(summary, "Supplement: "+supplement)
+	}
+
+	return OptimizeLearnResult{
+		Action:        action,
+		ChangeSummary: summary,
+		UpdatedPlan:   updated,
 	}, nil
 }
 
@@ -219,4 +350,275 @@ func (m *MockClient) ScoreLearning(ctx context.Context, req ScoreRequest) (Score
 		Grade:  "",
 		Advice: advice,
 	}, nil
+}
+
+func normalizeThemes(themes []string, subject string) []string {
+	result := make([]string, 0, len(themes))
+	for _, theme := range themes {
+		t := strings.TrimSpace(theme)
+		if t == "" {
+			continue
+		}
+		result = append(result, t)
+	}
+	if len(result) > 0 {
+		return result
+	}
+	if strings.TrimSpace(subject) != "" {
+		return []string{strings.TrimSpace(subject)}
+	}
+	return []string{"general"}
+}
+
+func missingLearnInputs(req LearnRequest) ([]string, []string) {
+	missing := []string{}
+	questions := []string{}
+	if strings.TrimSpace(req.FinalGoal) == "" {
+		missing = append(missing, "final_goal")
+		questions = append(questions, "What is your final target (exam/school/certification)?")
+	}
+	if req.TotalHours <= 0 {
+		missing = append(missing, "total_hours")
+		questions = append(questions, "How many study hours can you commit in total?")
+	}
+	if strings.TrimSpace(req.StartDate) == "" {
+		missing = append(missing, "start_date")
+		questions = append(questions, "When do you want to start?")
+	}
+	if strings.TrimSpace(req.EndDate) == "" {
+		missing = append(missing, "end_date")
+		questions = append(questions, "What is your expected end date?")
+	}
+	if strings.TrimSpace(req.CurrentStatus) == "" && strings.TrimSpace(req.CurrentStage) == "" {
+		missing = append(missing, "current_status")
+		questions = append(questions, "What is your current learning stage/status?")
+	}
+	if len(req.Themes) == 0 {
+		missing = append(missing, "themes")
+		questions = append(questions, "Which themes/subjects should be included in this plan?")
+	}
+	return missing, questions
+}
+
+func buildThemeNodes(
+	theme string,
+	start, end time.Time,
+	hours float64,
+	goals []string,
+) []LearnPlanNode {
+	levels := []string{"month", "week", "day", "task"}
+	durationDays := int(end.Sub(start).Hours()/24) + 1
+	switch {
+	case durationDays > 240:
+		levels = []string{"year", "month", "week", "day", "task"}
+	case durationDays <= 14:
+		levels = []string{"day", "task"}
+	case durationDays <= 60:
+		levels = []string{"week", "day", "task"}
+	}
+	return buildNodesByLevel(levels, theme, start, end, hours, goals)
+}
+
+func buildNodesByLevel(
+	levels []string,
+	theme string,
+	start, end time.Time,
+	hours float64,
+	goals []string,
+) []LearnPlanNode {
+	if len(levels) == 0 {
+		return nil
+	}
+	level := levels[0]
+	if level == "task" {
+		tasks := normalizeGoals(goals)
+		taskHours := hours / float64(maxInt(1, len(tasks)))
+		nodes := make([]LearnPlanNode, 0, len(tasks))
+		for i, task := range tasks {
+			nodes = append(nodes, LearnPlanNode{
+				Level:          "task",
+				Title:          fmt.Sprintf("%s task %d", theme, i+1),
+				EstimatedHours: round1(taskHours),
+				StartDate:      formatDate(start),
+				EndDate:        formatDate(end),
+				Details:        []string{task},
+			})
+		}
+		return nodes
+	}
+
+	segments := segmentCount(level)
+	totalDays := maxInt(1, int(end.Sub(start).Hours()/24)+1)
+	spanDays := maxInt(1, totalDays/segments)
+	nodes := make([]LearnPlanNode, 0, segments)
+	for i := 0; i < segments; i++ {
+		segStart := start.AddDate(0, 0, i*spanDays)
+		segEnd := segStart.AddDate(0, 0, spanDays-1)
+		if i == segments-1 || segEnd.After(end) {
+			segEnd = end
+		}
+		children := buildNodesByLevel(levels[1:], theme, segStart, segEnd, hours/float64(segments), goals)
+		nodes = append(nodes, LearnPlanNode{
+			Level:          level,
+			Title:          fmt.Sprintf("%s %d", titleLevel(level), i+1),
+			EstimatedHours: round1(hours / float64(segments)),
+			StartDate:      formatDate(segStart),
+			EndDate:        formatDate(segEnd),
+			Details: []string{
+				fmt.Sprintf("Theme: %s", theme),
+				fmt.Sprintf("Focus window: %s ~ %s", formatDate(segStart), formatDate(segEnd)),
+			},
+			Children: children,
+		})
+	}
+	return nodes
+}
+
+func normalizeGoals(goals []string) []string {
+	out := make([]string, 0, len(goals))
+	for _, goal := range goals {
+		g := strings.TrimSpace(goal)
+		if g == "" {
+			continue
+		}
+		out = append(out, g)
+	}
+	if len(out) == 0 {
+		return []string{
+			"Read key concepts and build notes",
+			"Complete focused practice set",
+		}
+	}
+	return out
+}
+
+func segmentCount(level string) int {
+	switch level {
+	case "year":
+		return 1
+	case "month":
+		return 2
+	case "week":
+		return 2
+	case "day":
+		return 3
+	default:
+		return 1
+	}
+}
+
+func planItemsFromThemes(themes []LearnTheme, status string) []LearnPlanItemNote {
+	flat := make([]LearnPlanItemNote, 0, 24)
+	for _, theme := range themes {
+		flattenPlanItems(theme.Children, &flat, status)
+	}
+	if len(flat) > 24 {
+		return flat[:24]
+	}
+	return flat
+}
+
+func flattenPlanItems(nodes []LearnPlanNode, out *[]LearnPlanItemNote, status string) {
+	for _, node := range nodes {
+		if len(*out) >= 24 {
+			return
+		}
+		*out = append(*out, LearnPlanItemNote{
+			PlanType:   mapPlanType(node.Level),
+			Title:      node.Title,
+			Content:    strings.Join(node.Details, "; "),
+			TargetDate: node.EndDate,
+			Status:     status,
+			Priority:   3,
+		})
+		flattenPlanItems(node.Children, out, status)
+	}
+}
+
+func mapPlanType(level string) string {
+	switch level {
+	case "year":
+		return "year_plan"
+	case "month":
+		return "month_plan"
+	case "week":
+		return "week_plan"
+	case "day", "task":
+		return "day_plan"
+	default:
+		return "current_phase"
+	}
+}
+
+func shiftLearnResult(plan *LearnResult, days int) {
+	plan.PlanStartDate = shiftDate(plan.PlanStartDate, days)
+	plan.PlanEndDate = shiftDate(plan.PlanEndDate, days)
+	for i := range plan.Themes {
+		shiftNodes(plan.Themes[i].Children, days)
+	}
+	for i := range plan.PlanItems {
+		plan.PlanItems[i].TargetDate = shiftDate(plan.PlanItems[i].TargetDate, days)
+	}
+}
+
+func shiftNodes(nodes []LearnPlanNode, days int) {
+	for i := range nodes {
+		nodes[i].StartDate = shiftDate(nodes[i].StartDate, days)
+		nodes[i].EndDate = shiftDate(nodes[i].EndDate, days)
+		shiftNodes(nodes[i].Children, days)
+	}
+}
+
+func shiftDate(raw string, days int) string {
+	if strings.TrimSpace(raw) == "" {
+		return raw
+	}
+	dt, err := time.Parse("2006-01-02", raw)
+	if err != nil {
+		return raw
+	}
+	return formatDate(dt.AddDate(0, 0, days))
+}
+
+func parseDateOrDefault(raw string, fallback time.Time) time.Time {
+	if strings.TrimSpace(raw) == "" {
+		return fallback
+	}
+	dt, err := time.Parse("2006-01-02", raw)
+	if err != nil {
+		return fallback
+	}
+	return dt
+}
+
+func formatDate(dt time.Time) string {
+	return dt.Format("2006-01-02")
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func round1(v float64) float64 {
+	return math.Round(v*10) / 10
+}
+
+func titleLevel(level string) string {
+	switch level {
+	case "year":
+		return "Year"
+	case "month":
+		return "Month"
+	case "week":
+		return "Week"
+	case "day":
+		return "Day"
+	case "task":
+		return "Task"
+	default:
+		return "Plan"
+	}
 }

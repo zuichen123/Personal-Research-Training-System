@@ -89,7 +89,7 @@ func validateInput(planType PlanType, title string) error {
 		return errs.BadRequest("plan_type is required")
 	}
 	if !isValidPlanType(normalizedType) {
-		return errs.BadRequest("plan_type must be one of: month_goal/month_plan/day_goal/day_plan/current_phase")
+		return errs.BadRequest("plan_type must be one of: year_plan/month_goal/month_plan/week_plan/day_goal/day_plan/current_phase")
 	}
 	return nil
 }
@@ -100,7 +100,7 @@ func normalizeType(planType PlanType) PlanType {
 
 func isValidPlanType(planType PlanType) bool {
 	switch planType {
-	case MonthGoal, MonthPlan, DayGoal, DayPlan, CurrentPhase:
+	case YearPlan, MonthGoal, MonthPlan, WeekPlan, DayGoal, DayPlan, CurrentPhase:
 		return true
 	default:
 		return false

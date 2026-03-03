@@ -299,13 +299,48 @@ func (s *Service) Grade(ctx context.Context, req GradeRequest) (GradeResult, err
 }
 
 func (s *Service) Learn(ctx context.Context, req LearnRequest) (LearnResult, error) {
-	if strings.TrimSpace(req.Mode) == "" {
-		return LearnResult{}, errs.BadRequest("mode is required")
+	req.Mode = strings.TrimSpace(req.Mode)
+	if req.Mode == "" {
+		req.Mode = "long_term_learning"
 	}
-	if strings.TrimSpace(req.Subject) == "" {
-		return LearnResult{}, errs.BadRequest("subject is required")
+	req.Subject = strings.TrimSpace(req.Subject)
+	if req.Subject == "" {
+		req.Subject = "general"
 	}
+	req.Unit = strings.TrimSpace(req.Unit)
+	req.CurrentStage = strings.TrimSpace(req.CurrentStage)
+	req.CurrentStatus = strings.TrimSpace(req.CurrentStatus)
+	req.FinalGoal = strings.TrimSpace(req.FinalGoal)
+	req.StartDate = strings.TrimSpace(req.StartDate)
+	req.EndDate = strings.TrimSpace(req.EndDate)
+	req.Supplement = strings.TrimSpace(req.Supplement)
+	req.UserID = strings.TrimSpace(req.UserID)
+	req.ProfileSummary = strings.TrimSpace(req.ProfileSummary)
+	if req.UserID == "" {
+		req.UserID = "default"
+	}
+	req.Themes = normalizeStringList(req.Themes)
+	req.Goals = normalizeStringList(req.Goals)
+
 	return s.currentClient().BuildLearningPlan(ctx, req)
+}
+
+func (s *Service) OptimizeLearningPlan(ctx context.Context, req OptimizeLearnRequest) (OptimizeLearnResult, error) {
+	req.Action = strings.ToLower(strings.TrimSpace(req.Action))
+	if req.Action == "" {
+		return OptimizeLearnResult{}, errs.BadRequest("action is required")
+	}
+	switch req.Action {
+	case "postpone", "advance", "complete_early":
+	default:
+		return OptimizeLearnResult{}, errs.BadRequest("action must be one of: postpone/advance/complete_early")
+	}
+	req.Reason = strings.TrimSpace(req.Reason)
+	req.Supplement = strings.TrimSpace(req.Supplement)
+	if req.Action != "complete_early" && req.Days <= 0 {
+		return OptimizeLearnResult{}, errs.BadRequest("days must be > 0 for postpone/advance")
+	}
+	return s.currentClient().OptimizeLearningPlan(ctx, req)
 }
 
 func (s *Service) Evaluate(ctx context.Context, req EvaluateRequest) (EvaluateResult, error) {
@@ -351,6 +386,21 @@ func normalizeGrade(score float64) string {
 	default:
 		return "E"
 	}
+}
+
+func normalizeStringList(items []string) []string {
+	if len(items) == 0 {
+		return []string{}
+	}
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		trimmed := strings.TrimSpace(item)
+		if trimmed == "" {
+			continue
+		}
+		out = append(out, trimmed)
+	}
+	return out
 }
 
 func (s *Service) SearchOnlineQuestions(ctx context.Context, topic, subject string, count int) ([]question.Question, error) {

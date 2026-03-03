@@ -156,27 +156,146 @@ func (c *remoteLLMClient) BuildLearningPlan(ctx context.Context, req LearnReques
 		return LearnResult{}, errs.BadRequest("ai provider is not ready")
 	}
 	prompt := fmt.Sprintf(
-		`Build a study plan in JSON only.
+		`Build a long-term study plan in JSON only.
 Input:
 mode=%s
 subject=%s
 unit=%s
 current_stage=%s
 goals=%v
+final_goal=%s
+total_hours=%d
+start_date=%s
+end_date=%s
+current_status=%s
+themes=%v
+supplement=%s
+profile_summary=%s
 Output schema:
 {
   "mode":"string",
   "subject":"string",
   "unit":"string",
+  "created_at":"RFC3339 string",
+  "final_goal":"string",
+  "current_status":"string",
+  "plan_start_date":"YYYY-MM-DD",
+  "plan_end_date":"YYYY-MM-DD",
   "study_outline":["string"],
   "review_checklist":["string"],
-  "stage_suggestion":"string"
+  "stage_suggestion":"string",
+  "missing_fields":["string"],
+  "follow_up_questions":["string"],
+  "themes":[
+    {
+      "name":"string",
+      "estimated_hours":number,
+      "children":[
+        {
+          "level":"year|month|week|day|task",
+          "title":"string",
+          "estimated_hours":number,
+          "start_date":"YYYY-MM-DD",
+          "end_date":"YYYY-MM-DD",
+          "details":["string"],
+          "children":[]
+        }
+      ]
+    }
+  ],
+  "plan_items":[
+    {
+      "plan_type":"year_plan|month_plan|week_plan|day_plan|current_phase",
+      "title":"string",
+      "content":"string",
+      "target_date":"YYYY-MM-DD",
+      "status":"pending|in_progress|done|rescheduled",
+      "priority":1
+    }
+  ],
+  "optimization_hints":["string"]
 }`,
 		req.Mode, req.Subject, req.Unit, req.CurrentStage, req.Goals,
+		req.FinalGoal, req.TotalHours, req.StartDate, req.EndDate, req.CurrentStatus,
+		req.Themes, req.Supplement, req.ProfileSummary,
 	)
 	var out LearnResult
 	if err := c.invokeJSON(ctx, "build_learning_plan", prompt, &out); err != nil {
 		return LearnResult{}, err
+	}
+	return out, nil
+}
+
+func (c *remoteLLMClient) OptimizeLearningPlan(ctx context.Context, req OptimizeLearnRequest) (OptimizeLearnResult, error) {
+	if !c.ready {
+		return OptimizeLearnResult{}, errs.BadRequest("ai provider is not ready")
+	}
+	planJSON, _ := json.Marshal(req.Plan)
+	prompt := fmt.Sprintf(
+		`Optimize the given study plan in JSON only.
+action=%s
+days=%d
+reason=%s
+supplement=%s
+plan=%s
+
+Output schema:
+{
+  "action":"postpone|advance|complete_early",
+  "change_summary":["string"],
+  "updated_plan":{
+    "mode":"string",
+    "subject":"string",
+    "unit":"string",
+    "created_at":"RFC3339 string",
+    "final_goal":"string",
+    "current_status":"string",
+    "plan_start_date":"YYYY-MM-DD",
+    "plan_end_date":"YYYY-MM-DD",
+    "study_outline":["string"],
+    "review_checklist":["string"],
+    "stage_suggestion":"string",
+    "missing_fields":["string"],
+    "follow_up_questions":["string"],
+    "themes":[
+      {
+        "name":"string",
+        "estimated_hours":number,
+        "children":[
+          {
+            "level":"year|month|week|day|task",
+            "title":"string",
+            "estimated_hours":number,
+            "start_date":"YYYY-MM-DD",
+            "end_date":"YYYY-MM-DD",
+            "details":["string"],
+            "children":[]
+          }
+        ]
+      }
+    ],
+    "plan_items":[
+      {
+        "plan_type":"year_plan|month_plan|week_plan|day_plan|current_phase",
+        "title":"string",
+        "content":"string",
+        "target_date":"YYYY-MM-DD",
+        "status":"pending|in_progress|done|rescheduled",
+        "priority":1
+      }
+    ],
+    "optimization_hints":["string"]
+  }
+}`,
+		req.Action,
+		req.Days,
+		req.Reason,
+		req.Supplement,
+		string(planJSON),
+	)
+	var out OptimizeLearnResult
+	if err := c.invokeJSON(ctx, "optimize_learning_plan", prompt, &out); err != nil {
+		return OptimizeLearnResult{}, err
 	}
 	return out, nil
 }

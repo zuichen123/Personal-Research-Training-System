@@ -488,9 +488,94 @@ class AppProvider with ChangeNotifier {
 
   Future<void> buildLearningPlan(Map<String, dynamic> input) async {
     await _runAction('生成学习计划', () async {
-      _aiLearningPlan = await _api.buildLearningPlan(input);
+      final payload = Map<String, dynamic>.from(input);
+      final profile = _userProfile;
+      payload.putIfAbsent('user_id', () => profile?.userId ?? 'default');
+      if (profile != null) {
+        payload.putIfAbsent(
+          'profile',
+          () => {
+            'academic_status': profile.academicStatus,
+            'daily_study_minutes': profile.dailyStudyMinutes,
+            'goals': profile.goals,
+            'weak_subjects': profile.weakSubjects,
+            'target_destination': profile.targetDestination,
+            'notes': profile.notes,
+          },
+        );
+        payload.putIfAbsent('profile_summary', () {
+          final goals = profile.goals.join(', ');
+          final weak = profile.weakSubjects.join(', ');
+          return 'academic=${profile.academicStatus}; daily_minutes=${profile.dailyStudyMinutes}; goals=$goals; weak_subjects=$weak; target=${profile.targetDestination}';
+        });
+      }
+      _aiLearningPlan = await _api.buildLearningPlan(payload);
       notifyListeners();
     });
+  }
+
+  Future<void> optimizeLearningPlan({
+    required String action,
+    int days = 0,
+    String reason = '',
+    String supplement = '',
+  }) async {
+    await _runAction('优化学习计划', () async {
+      if (_aiLearningPlan == null) {
+        throw StateError('ai learning plan is empty');
+      }
+      final payload = <String, dynamic>{
+        'action': action,
+        'days': days,
+        'reason': reason,
+        'supplement': supplement,
+        'plan': _aiLearningPlan,
+      };
+      final optimized = await _api.optimizeLearningPlan(payload);
+      final updatedPlan = optimized['updated_plan'];
+      if (updatedPlan is Map<String, dynamic>) {
+        _aiLearningPlan = updatedPlan;
+      } else {
+        _aiLearningPlan = optimized;
+      }
+      notifyListeners();
+    });
+  }
+
+  Future<int> importLearningPlanToPlans() async {
+    var imported = 0;
+    await _runAction('导入AI计划到计划表', () async {
+      final raw = _aiLearningPlan?['plan_items'];
+      if (raw is! List) {
+        throw StateError('learning plan has no plan_items');
+      }
+      for (final item in raw) {
+        if (item is! Map) {
+          continue;
+        }
+        final mapped = Map<String, dynamic>.from(item.cast<dynamic, dynamic>());
+        final planType = mapped['plan_type']?.toString().trim() ?? '';
+        final title = mapped['title']?.toString().trim() ?? '';
+        if (planType.isEmpty || title.isEmpty) {
+          continue;
+        }
+        final created = await _api.createPlan({
+          'plan_type': planType,
+          'title': title,
+          'content': mapped['content']?.toString() ?? '',
+          'target_date': mapped['target_date']?.toString() ?? '',
+          'status': mapped['status']?.toString().trim().isNotEmpty == true
+              ? mapped['status']?.toString()
+              : 'pending',
+          'priority': int.tryParse('${mapped['priority'] ?? ''}') ?? 3,
+        });
+        _plans.insert(0, created);
+        imported++;
+      }
+      _isSectionLoaded[DataSection.plans] = true;
+      notifyListeners();
+    });
+    return imported;
   }
 
   Future<void> generateAIQuestions(

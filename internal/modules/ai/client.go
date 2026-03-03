@@ -29,20 +29,88 @@ type GradeResult struct {
 }
 
 type LearnRequest struct {
-	Mode         string   `json:"mode"`
-	Subject      string   `json:"subject"`
-	Unit         string   `json:"unit"`
-	CurrentStage string   `json:"current_stage"`
-	Goals        []string `json:"goals"`
+	Mode           string               `json:"mode"`
+	Subject        string               `json:"subject"`
+	Unit           string               `json:"unit"`
+	CurrentStage   string               `json:"current_stage"`
+	Goals          []string             `json:"goals"`
+	FinalGoal      string               `json:"final_goal"`
+	TotalHours     int                  `json:"total_hours"`
+	StartDate      string               `json:"start_date"`
+	EndDate        string               `json:"end_date"`
+	CurrentStatus  string               `json:"current_status"`
+	Themes         []string             `json:"themes"`
+	Supplement     string               `json:"supplement"`
+	UserID         string               `json:"user_id"`
+	Profile        LearnProfileSnapshot `json:"profile"`
+	ProfileSummary string               `json:"profile_summary"`
 }
 
 type LearnResult struct {
-	Mode            string   `json:"mode"`
-	Subject         string   `json:"subject"`
-	Unit            string   `json:"unit"`
-	StudyOutline    []string `json:"study_outline"`
-	ReviewChecklist []string `json:"review_checklist"`
-	StageSuggestion string   `json:"stage_suggestion"`
+	Mode              string              `json:"mode"`
+	Subject           string              `json:"subject"`
+	Unit              string              `json:"unit"`
+	CreatedAt         string              `json:"created_at"`
+	FinalGoal         string              `json:"final_goal"`
+	CurrentStatus     string              `json:"current_status"`
+	PlanStartDate     string              `json:"plan_start_date"`
+	PlanEndDate       string              `json:"plan_end_date"`
+	StudyOutline      []string            `json:"study_outline"`
+	ReviewChecklist   []string            `json:"review_checklist"`
+	StageSuggestion   string              `json:"stage_suggestion"`
+	MissingFields     []string            `json:"missing_fields"`
+	FollowUpQuestions []string            `json:"follow_up_questions"`
+	Themes            []LearnTheme        `json:"themes"`
+	PlanItems         []LearnPlanItemNote `json:"plan_items"`
+	OptimizationHints []string            `json:"optimization_hints"`
+}
+
+type LearnProfileSnapshot struct {
+	AcademicStatus    string   `json:"academic_status"`
+	DailyStudyMinutes int      `json:"daily_study_minutes"`
+	Goals             []string `json:"goals"`
+	WeakSubjects      []string `json:"weak_subjects"`
+	TargetDestination string   `json:"target_destination"`
+	Notes             string   `json:"notes"`
+}
+
+type LearnTheme struct {
+	Name           string          `json:"name"`
+	EstimatedHours float64         `json:"estimated_hours"`
+	Children       []LearnPlanNode `json:"children"`
+}
+
+type LearnPlanNode struct {
+	Level          string          `json:"level"`
+	Title          string          `json:"title"`
+	EstimatedHours float64         `json:"estimated_hours"`
+	StartDate      string          `json:"start_date"`
+	EndDate        string          `json:"end_date"`
+	Details        []string        `json:"details"`
+	Children       []LearnPlanNode `json:"children"`
+}
+
+type LearnPlanItemNote struct {
+	PlanType   string `json:"plan_type"`
+	Title      string `json:"title"`
+	Content    string `json:"content"`
+	TargetDate string `json:"target_date"`
+	Status     string `json:"status"`
+	Priority   int    `json:"priority"`
+}
+
+type OptimizeLearnRequest struct {
+	Plan       LearnResult `json:"plan"`
+	Action     string      `json:"action"`
+	Days       int         `json:"days"`
+	Reason     string      `json:"reason"`
+	Supplement string      `json:"supplement"`
+}
+
+type OptimizeLearnResult struct {
+	Action        string      `json:"action"`
+	ChangeSummary []string    `json:"change_summary"`
+	UpdatedPlan   LearnResult `json:"updated_plan"`
 }
 
 type EvaluateRequest struct {
@@ -112,6 +180,7 @@ type Client interface {
 	GenerateQuestions(ctx context.Context, req GenerateRequest) ([]question.CreateInput, error)
 	GradeAnswer(ctx context.Context, req GradeRequest) (GradeResult, error)
 	BuildLearningPlan(ctx context.Context, req LearnRequest) (LearnResult, error)
+	OptimizeLearningPlan(ctx context.Context, req OptimizeLearnRequest) (OptimizeLearnResult, error)
 	EvaluateLearning(ctx context.Context, req EvaluateRequest) (EvaluateResult, error)
 	ScoreLearning(ctx context.Context, req ScoreRequest) (ScoreResult, error)
 	ProviderName() string

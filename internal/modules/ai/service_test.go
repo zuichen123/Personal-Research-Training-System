@@ -222,3 +222,70 @@ func TestService_UpdateProviderConfig_PersistsToStore(t *testing.T) {
 		t.Fatalf("unexpected stored openai api key: %s", store.last.OpenAIAPIKey)
 	}
 }
+
+func TestService_OptimizeLearningPlan_RejectsInvalidAction(t *testing.T) {
+	svc := NewService(
+		NewMockClient(0),
+		newQuestionServiceForTest(),
+		false,
+		RuntimeConfig{Provider: "mock"},
+	)
+
+	_, err := svc.OptimizeLearningPlan(context.Background(), OptimizeLearnRequest{
+		Action: "invalid",
+		Days:   2,
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid action")
+	}
+	if !strings.Contains(err.Error(), "action must be one of") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestService_OptimizeLearningPlan_PostponeRequiresDays(t *testing.T) {
+	svc := NewService(
+		NewMockClient(0),
+		newQuestionServiceForTest(),
+		false,
+		RuntimeConfig{Provider: "mock"},
+	)
+
+	_, err := svc.OptimizeLearningPlan(context.Background(), OptimizeLearnRequest{
+		Action: "postpone",
+		Days:   0,
+	})
+	if err == nil {
+		t.Fatal("expected error for missing days")
+	}
+	if !strings.Contains(err.Error(), "days must be > 0") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestService_OptimizeLearningPlan_Success(t *testing.T) {
+	svc := NewService(
+		NewMockClient(0),
+		newQuestionServiceForTest(),
+		false,
+		RuntimeConfig{Provider: "mock"},
+	)
+
+	result, err := svc.OptimizeLearningPlan(context.Background(), OptimizeLearnRequest{
+		Action: "postpone",
+		Days:   3,
+		Plan: LearnResult{
+			PlanStartDate: "2026-03-01",
+			PlanEndDate:   "2026-06-01",
+		},
+	})
+	if err != nil {
+		t.Fatalf("optimize learning plan error: %v", err)
+	}
+	if result.UpdatedPlan.PlanStartDate != "2026-03-04" {
+		t.Fatalf("unexpected shifted start date: %s", result.UpdatedPlan.PlanStartDate)
+	}
+	if result.UpdatedPlan.PlanEndDate != "2026-06-04" {
+		t.Fatalf("unexpected shifted end date: %s", result.UpdatedPlan.PlanEndDate)
+	}
+}

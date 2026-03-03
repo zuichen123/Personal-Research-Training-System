@@ -91,3 +91,20 @@ func TestService_CreateValidation_ValidPlanType(t *testing.T) {
 		t.Fatalf("expected plan type %s, got %s", DayPlan, item.PlanType)
 	}
 }
+
+func TestService_CreateValidation_ValidYearAndWeekPlanType(t *testing.T) {
+	svc := NewService(newTestRepo())
+	cases := []PlanType{YearPlan, WeekPlan}
+	for _, planType := range cases {
+		item, err := svc.Create(context.Background(), CreateInput{
+			PlanType: planType,
+			Title:    "plan",
+		})
+		if err != nil {
+			t.Fatalf("Create() error for %s = %v", planType, err)
+		}
+		if item.PlanType != planType {
+			t.Fatalf("expected plan type %s, got %s", planType, item.PlanType)
+		}
+	}
+}

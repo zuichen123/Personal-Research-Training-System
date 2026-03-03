@@ -50,14 +50,16 @@ class _PlansScreenState extends State<PlansScreen> {
                       isDense: true,
                     ),
                     items: const [
-                      DropdownMenuItem(
-                          value: 'month_goal', child: Text('月目标')),
-                      DropdownMenuItem(
-                          value: 'month_plan', child: Text('月计划')),
+                      DropdownMenuItem(value: 'year_plan', child: Text('年计划')),
+                      DropdownMenuItem(value: 'month_goal', child: Text('月目标')),
+                      DropdownMenuItem(value: 'month_plan', child: Text('月计划')),
+                      DropdownMenuItem(value: 'week_plan', child: Text('周计划')),
                       DropdownMenuItem(value: 'day_goal', child: Text('日目标')),
                       DropdownMenuItem(value: 'day_plan', child: Text('日计划')),
                       DropdownMenuItem(
-                          value: 'current_phase', child: Text('当前阶段')),
+                        value: 'current_phase',
+                        child: Text('当前阶段'),
+                      ),
                     ],
                     onChanged: (value) =>
                         setState(() => _typeFilter = value ?? ''),
@@ -111,15 +113,21 @@ class _PlansScreenState extends State<PlansScreen> {
           Center(
             child: Column(
               children: [
-                Icon(Icons.event_note_outlined,
-                    size: 64,
-                    color: Colors.indigo.withValues(alpha: 0.4)),
+                Icon(
+                  Icons.event_note_outlined,
+                  size: 64,
+                  color: Colors.indigo.withValues(alpha: 0.4),
+                ),
                 const SizedBox(height: 16),
-                const Text('暂无计划',
-                    style: TextStyle(fontSize: 16, color: Colors.grey)),
+                const Text(
+                  '暂无计划',
+                  style: TextStyle(fontSize: 16, color: Colors.grey),
+                ),
                 const SizedBox(height: 8),
-                const Text('点击右下角按钮制定你的第一个计划',
-                    style: TextStyle(fontSize: 13, color: Colors.grey)),
+                const Text(
+                  '点击右下角按钮制定你的第一个计划',
+                  style: TextStyle(fontSize: 13, color: Colors.grey),
+                ),
               ],
             ),
           ),
@@ -138,8 +146,11 @@ class _PlansScreenState extends State<PlansScreen> {
             leading: CircleAvatar(
               backgroundColor: _statusColor(item.status),
               radius: 18,
-              child: Icon(_statusIcon(item.status),
-                  color: Colors.white, size: 18),
+              child: Icon(
+                _statusIcon(item.status),
+                color: Colors.white,
+                size: 18,
+              ),
             ),
             title: Text(item.title),
             subtitle: Wrap(
@@ -147,27 +158,37 @@ class _PlansScreenState extends State<PlansScreen> {
               runSpacing: 4,
               children: [
                 Chip(
-                  label: Text(_planTypeZh(item.planType),
-                      style: const TextStyle(fontSize: 11)),
+                  label: Text(
+                    _planTypeZh(item.planType),
+                    style: const TextStyle(fontSize: 11),
+                  ),
                   visualDensity: VisualDensity.compact,
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
                 Chip(
-                  label: Text(_statusZh(item.status),
-                      style: const TextStyle(fontSize: 11)),
-                  backgroundColor: _statusColor(item.status).withValues(alpha: 0.15),
+                  label: Text(
+                    _statusZh(item.status),
+                    style: const TextStyle(fontSize: 11),
+                  ),
+                  backgroundColor: _statusColor(
+                    item.status,
+                  ).withValues(alpha: 0.15),
                   visualDensity: VisualDensity.compact,
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
                 Chip(
-                  label: Text('P${item.priority}',
-                      style: const TextStyle(fontSize: 11)),
+                  label: Text(
+                    'P${item.priority}',
+                    style: const TextStyle(fontSize: 11),
+                  ),
                   visualDensity: VisualDensity.compact,
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
                 if (item.targetDate.isNotEmpty)
-                  Text('📅 ${item.targetDate}',
-                      style: const TextStyle(fontSize: 12)),
+                  Text(
+                    '📅 ${item.targetDate}',
+                    style: const TextStyle(fontSize: 12),
+                  ),
               ],
             ),
             isThreeLine: true,
@@ -242,13 +263,15 @@ class _PlansScreenState extends State<PlansScreen> {
     try {
       await context.read<AppProvider>().deletePlan(id);
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('已删除计划')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已删除计划')));
     } catch (_) {
       if (!context.mounted) return;
       final message = context.read<AppProvider>().errorMessage ?? '删除失败';
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
@@ -284,6 +307,10 @@ class _PlansScreenState extends State<PlansScreen> {
                       decoration: const InputDecoration(labelText: '计划类型'),
                       items: const [
                         DropdownMenuItem(
+                          value: 'year_plan',
+                          child: Text('年计划'),
+                        ),
+                        DropdownMenuItem(
                           value: 'month_goal',
                           child: Text('月目标'),
                         ),
@@ -292,9 +319,11 @@ class _PlansScreenState extends State<PlansScreen> {
                           child: Text('月计划'),
                         ),
                         DropdownMenuItem(
-                            value: 'day_goal', child: Text('日目标')),
-                        DropdownMenuItem(
-                            value: 'day_plan', child: Text('日计划')),
+                          value: 'week_plan',
+                          child: Text('周计划'),
+                        ),
+                        DropdownMenuItem(value: 'day_goal', child: Text('日目标')),
+                        DropdownMenuItem(value: 'day_plan', child: Text('日计划')),
                         DropdownMenuItem(
                           value: 'current_phase',
                           child: Text('当前阶段'),
@@ -323,8 +352,9 @@ class _PlansScreenState extends State<PlansScreen> {
                 FilledButton(
                   onPressed: () async {
                     if (titleController.text.trim().isEmpty) {
-                      ScaffoldMessenger.of(ctx).showSnackBar(
-                          const SnackBar(content: Text('标题不能为空')));
+                      ScaffoldMessenger.of(
+                        ctx,
+                      ).showSnackBar(const SnackBar(content: Text('标题不能为空')));
                       return;
                     }
                     final input = {
@@ -345,8 +375,9 @@ class _PlansScreenState extends State<PlansScreen> {
                       if (ctx.mounted) Navigator.of(ctx).pop();
                     } catch (e) {
                       if (ctx.mounted) {
-                        ScaffoldMessenger.of(ctx).showSnackBar(
-                            SnackBar(content: Text('操作失败：$e')));
+                        ScaffoldMessenger.of(
+                          ctx,
+                        ).showSnackBar(SnackBar(content: Text('操作失败：$e')));
                       }
                     }
                   },
@@ -381,10 +412,14 @@ class _PlansScreenState extends State<PlansScreen> {
 
   String _planTypeZh(String planType) {
     switch (planType) {
+      case 'year_plan':
+        return '年计划';
       case 'month_goal':
         return '月目标';
       case 'month_plan':
         return '月计划';
+      case 'week_plan':
+        return '周计划';
       case 'day_goal':
         return '日目标';
       case 'day_plan':
