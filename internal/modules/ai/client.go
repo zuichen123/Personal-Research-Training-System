@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"time"
 
 	"self-study-tool/internal/modules/question"
 )
@@ -75,10 +76,35 @@ type ScoreResult struct {
 }
 
 type ProviderStatus struct {
-	Provider string `json:"provider"`
-	Model    string `json:"model"`
-	Ready    bool   `json:"ready"`
-	Fallback bool   `json:"fallback"`
+	Provider           string `json:"provider"`
+	ConfiguredProvider string `json:"configured_provider,omitempty"`
+	Model              string `json:"model"`
+	Ready              bool   `json:"ready"`
+	Fallback           bool   `json:"fallback"`
+	HasAPIKey          bool   `json:"has_api_key,omitempty"`
+	OpenAIBaseURL      string `json:"openai_base_url,omitempty"`
+}
+
+type RuntimeConfig struct {
+	Provider       string
+	FallbackToMock bool
+	MockLatency    time.Duration
+	AIHTTPTimeout  time.Duration
+
+	OpenAIBaseURL string
+	OpenAIAPIKey  string
+	OpenAIModel   string
+	GeminiAPIKey  string
+	GeminiModel   string
+	ClaudeAPIKey  string
+	ClaudeModel   string
+}
+
+type UpdateProviderConfigRequest struct {
+	Provider      string `json:"provider"`
+	APIKey        string `json:"api_key"`
+	Model         string `json:"model"`
+	OpenAIBaseURL string `json:"openai_base_url"`
 }
 
 type Client interface {

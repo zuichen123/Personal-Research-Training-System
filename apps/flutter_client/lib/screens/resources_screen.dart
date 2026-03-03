@@ -1,8 +1,7 @@
-import 'dart:typed_data';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../models/resource.dart';
@@ -60,9 +59,23 @@ class ResourcesScreen extends StatelessWidget {
 
     if (resources.isEmpty) {
       return ListView(
-        children: const [
-          SizedBox(height: 96),
-          Center(child: Text('暂无上传资料')),
+        children: [
+          const SizedBox(height: 64),
+          Center(
+            child: Column(
+              children: [
+                Icon(Icons.folder_open,
+                    size: 64,
+                    color: Colors.blueGrey.withValues(alpha: 0.4)),
+                const SizedBox(height: 16),
+                const Text('暂无上传资料',
+                    style: TextStyle(fontSize: 16, color: Colors.grey)),
+                const SizedBox(height: 8),
+                const Text('点击右下角按钮上传你的第一份资料',
+                    style: TextStyle(fontSize: 13, color: Colors.grey)),
+              ],
+            ),
+          ),
         ],
       );
     }

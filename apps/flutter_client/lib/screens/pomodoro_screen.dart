@@ -31,13 +31,29 @@ class PomodoroScreen extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           children: [
             if (running != null) _runningCard(context, provider, running),
-            const SizedBox(height: 12),
+            if (running != null) const SizedBox(height: 12),
             if (loading && sessions.isEmpty)
               const Center(child: CircularProgressIndicator())
             else if (sessions.isEmpty)
-              const Padding(
-                padding: EdgeInsets.only(top: 48),
-                child: Center(child: Text('暂无专注记录')),
+              Padding(
+                padding: const EdgeInsets.only(top: 48),
+                child: Center(
+                  child: Column(
+                    children: [
+                      Icon(Icons.timer_outlined,
+                          size: 64,
+                          color: Colors.teal.withValues(alpha: 0.4)),
+                      const SizedBox(height: 16),
+                      const Text('暂无专注记录',
+                          style:
+                              TextStyle(fontSize: 16, color: Colors.grey)),
+                      const SizedBox(height: 8),
+                      const Text('点击右下角按钮开始一次专注',
+                          style:
+                              TextStyle(fontSize: 13, color: Colors.grey)),
+                    ],
+                  ),
+                ),
               )
             else
               ...sessions.map((s) => _sessionCard(s)),
@@ -57,34 +73,55 @@ class PomodoroScreen extends StatelessWidget {
     AppProvider provider,
     PomodoroSession running,
   ) {
+    final theme = Theme.of(context);
     return Card(
-      color: Colors.orange.shade50,
+      color: theme.colorScheme.primaryContainer,
+      elevation: 3,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('进行中的专注', style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Text('任务: ${running.taskTitle}'),
+            Row(
+              children: [
+                Icon(Icons.timer,
+                    color: theme.colorScheme.primary, size: 22),
+                const SizedBox(width: 8),
+                Text('进行中的专注',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.onPrimaryContainer)),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text('任务: ${running.taskTitle}',
+                style: TextStyle(
+                    fontSize: 15,
+                    color: theme.colorScheme.onPrimaryContainer)),
             Text(
               '时长: ${running.durationMinutes} 分钟, 休息: ${running.breakMinutes} 分钟',
+              style:
+                  TextStyle(color: theme.colorScheme.onPrimaryContainer),
             ),
             const SizedBox(height: 12),
             Row(
               children: [
-                FilledButton(
+                FilledButton.icon(
                   onPressed: () async {
-                    await provider.endPomodoro(running.id, status: 'completed');
+                    await provider.endPomodoro(running.id,
+                        status: 'completed');
                   },
-                  child: const Text('完成'),
+                  icon: const Icon(Icons.check),
+                  label: const Text('完成'),
                 ),
                 const SizedBox(width: 8),
-                OutlinedButton(
+                OutlinedButton.icon(
                   onPressed: () async {
-                    await provider.endPomodoro(running.id, status: 'canceled');
+                    await provider.endPomodoro(running.id,
+                        status: 'canceled');
                   },
-                  child: const Text('取消'),
+                  icon: const Icon(Icons.close),
+                  label: const Text('取消'),
                 ),
               ],
             ),
@@ -95,16 +132,42 @@ class PomodoroScreen extends StatelessWidget {
   }
 
   Widget _sessionCard(PomodoroSession session) {
-    final ended = session.endedAt?.toLocal().toString().split('.').first ?? '-';
+    final ended =
+        session.endedAt?.toLocal().toString().split('.').first ?? '-';
+    final statusColor = session.status == 'completed'
+        ? Colors.green
+        : session.status == 'canceled'
+            ? Colors.grey
+            : Colors.orange;
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6),
       child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: statusColor,
+          radius: 18,
+          child: Icon(_statusIcon(session.status),
+              color: Colors.white, size: 18),
+        ),
         title: Text(session.taskTitle),
         subtitle: Text(
-          '状态: ${_statusZh(session.status)} | ${session.durationMinutes}m + ${session.breakMinutes}m\n结束时间: $ended',
+          '${_statusZh(session.status)} | ${session.durationMinutes}m + ${session.breakMinutes}m\n结束时间: $ended',
         ),
+        isThreeLine: true,
       ),
     );
+  }
+
+  IconData _statusIcon(String status) {
+    switch (status) {
+      case 'running':
+        return Icons.play_arrow;
+      case 'completed':
+        return Icons.check;
+      case 'canceled':
+        return Icons.close;
+      default:
+        return Icons.help_outline;
+    }
   }
 
   Future<void> _showStartDialog(BuildContext context) async {
@@ -148,15 +211,15 @@ class PomodoroScreen extends StatelessWidget {
               onPressed: () async {
                 final task = taskController.text.trim();
                 if (task.isEmpty) {
-                  ScaffoldMessenger.of(
-                    ctx,
-                  ).showSnackBar(const SnackBar(content: Text('任务名称不能为空')));
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                      const SnackBar(content: Text('任务名称不能为空')));
                   return;
                 }
 
                 final duration =
                     int.tryParse(durationController.text.trim()) ?? 25;
-                final breakMin = int.tryParse(breakController.text.trim()) ?? 5;
+                final breakMin =
+                    int.tryParse(breakController.text.trim()) ?? 5;
 
                 try {
                   await provider.startPomodoro(
@@ -164,14 +227,11 @@ class PomodoroScreen extends StatelessWidget {
                     durationMinutes: duration,
                     breakMinutes: breakMin,
                   );
-                  if (ctx.mounted) {
-                    Navigator.of(ctx).pop();
-                  }
+                  if (ctx.mounted) Navigator.of(ctx).pop();
                 } catch (e) {
                   if (ctx.mounted) {
-                    ScaffoldMessenger.of(
-                      ctx,
-                    ).showSnackBar(SnackBar(content: Text('开始失败：$e')));
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                        SnackBar(content: Text('开始失败：$e')));
                   }
                 }
               },

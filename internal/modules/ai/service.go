@@ -4,33 +4,208 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"net/url"
 	"strings"
+	"sync"
 
 	"self-study-tool/internal/modules/question"
 	"self-study-tool/internal/shared/errs"
 )
 
 type Service struct {
+	mu              sync.RWMutex
 	client          Client
 	questionService *question.Service
 	fallbackEnabled bool
+	runtime         RuntimeConfig
 }
 
-func NewService(client Client, questionService *question.Service, fallbackEnabled bool) *Service {
+func NewService(client Client, questionService *question.Service, fallbackEnabled bool, runtime RuntimeConfig) *Service {
+	runtime.Provider = strings.ToLower(strings.TrimSpace(runtime.Provider))
 	return &Service{
 		client:          client,
 		questionService: questionService,
 		fallbackEnabled: fallbackEnabled,
+		runtime:         runtime,
 	}
 }
 
 func (s *Service) ProviderStatus() ProviderStatus {
-	return ProviderStatus{
-		Provider: s.client.ProviderName(),
-		Model:    s.client.ModelName(),
-		Ready:    s.client.IsReady(),
-		Fallback: s.fallbackEnabled,
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.providerStatusLocked()
+}
+
+func (s *Service) UpdateProviderConfig(req UpdateProviderConfigRequest) (ProviderStatus, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	nextProvider := strings.ToLower(strings.TrimSpace(req.Provider))
+	if nextProvider == "" {
+		nextProvider = strings.ToLower(strings.TrimSpace(s.runtime.Provider))
 	}
+	if nextProvider == "" {
+		nextProvider = strings.ToLower(strings.TrimSpace(s.client.ProviderName()))
+	}
+	if !isSupportedProvider(nextProvider) {
+		return ProviderStatus{}, errs.BadRequest("provider must be one of: mock/openai/gemini/claude")
+	}
+
+	nextModel := strings.TrimSpace(req.Model)
+	nextAPIKey := strings.TrimSpace(req.APIKey)
+	nextOpenAIBaseURL := strings.TrimSpace(req.OpenAIBaseURL)
+	if nextOpenAIBaseURL != "" {
+		normalized, err := normalizeAbsoluteURL(nextOpenAIBaseURL)
+		if err != nil {
+			return ProviderStatus{}, err
+		}
+		nextOpenAIBaseURL = normalized
+	}
+
+	s.runtime.Provider = nextProvider
+	switch nextProvider {
+	case "openai":
+		if nextOpenAIBaseURL != "" {
+			s.runtime.OpenAIBaseURL = nextOpenAIBaseURL
+		}
+		if nextAPIKey != "" {
+			s.runtime.OpenAIAPIKey = nextAPIKey
+		}
+		if nextModel != "" {
+			s.runtime.OpenAIModel = nextModel
+		}
+	case "gemini":
+		if nextAPIKey != "" {
+			s.runtime.GeminiAPIKey = nextAPIKey
+		}
+		if nextModel != "" {
+			s.runtime.GeminiModel = nextModel
+		}
+	case "claude":
+		if nextAPIKey != "" {
+			s.runtime.ClaudeAPIKey = nextAPIKey
+		}
+		if nextModel != "" {
+			s.runtime.ClaudeModel = nextModel
+		}
+	}
+
+	if err := s.applyProviderConfigLocked(nextProvider); err != nil {
+		return ProviderStatus{}, err
+	}
+	return s.providerStatusLocked(), nil
+}
+
+func (s *Service) providerStatusLocked() ProviderStatus {
+	configuredProvider := strings.ToLower(strings.TrimSpace(s.runtime.Provider))
+	hasAPIKey := false
+	switch configuredProvider {
+	case "openai":
+		hasAPIKey = strings.TrimSpace(s.runtime.OpenAIAPIKey) != ""
+	case "gemini":
+		hasAPIKey = strings.TrimSpace(s.runtime.GeminiAPIKey) != ""
+	case "claude":
+		hasAPIKey = strings.TrimSpace(s.runtime.ClaudeAPIKey) != ""
+	}
+
+	status := ProviderStatus{
+		Provider:           s.client.ProviderName(),
+		ConfiguredProvider: configuredProvider,
+		Model:              s.client.ModelName(),
+		Ready:              s.client.IsReady(),
+		Fallback:           s.fallbackEnabled,
+		HasAPIKey:          hasAPIKey,
+	}
+	if configuredProvider == "openai" {
+		status.OpenAIBaseURL = strings.TrimSpace(s.runtime.OpenAIBaseURL)
+	}
+	return status
+}
+
+func (s *Service) applyProviderConfigLocked(provider string) error {
+	switch provider {
+	case "mock":
+		s.client = NewMockClient(s.runtime.MockLatency)
+		s.fallbackEnabled = false
+		return nil
+	case "openai":
+		client := NewOpenAIClient(OpenAIConfig{
+			BaseURL: s.runtime.OpenAIBaseURL,
+			APIKey:  s.runtime.OpenAIAPIKey,
+			Model:   s.runtime.OpenAIModel,
+			Timeout: s.runtime.AIHTTPTimeout,
+		})
+		if client.IsReady() {
+			s.client = client
+			s.fallbackEnabled = false
+			return nil
+		}
+		if s.runtime.FallbackToMock {
+			s.client = NewMockClient(s.runtime.MockLatency)
+			s.fallbackEnabled = true
+			return nil
+		}
+		return errs.BadRequest("openai provider is not ready, check api key/model")
+	case "gemini":
+		client := NewGeminiClient(GeminiConfig{
+			APIKey:  s.runtime.GeminiAPIKey,
+			Model:   s.runtime.GeminiModel,
+			Timeout: s.runtime.AIHTTPTimeout,
+		})
+		if client.IsReady() {
+			s.client = client
+			s.fallbackEnabled = false
+			return nil
+		}
+		if s.runtime.FallbackToMock {
+			s.client = NewMockClient(s.runtime.MockLatency)
+			s.fallbackEnabled = true
+			return nil
+		}
+		return errs.BadRequest("gemini provider is not ready, check api key/model")
+	case "claude":
+		client := NewClaudeClient(ClaudeConfig{
+			APIKey:  s.runtime.ClaudeAPIKey,
+			Model:   s.runtime.ClaudeModel,
+			Timeout: s.runtime.AIHTTPTimeout,
+		})
+		if client.IsReady() {
+			s.client = client
+			s.fallbackEnabled = false
+			return nil
+		}
+		if s.runtime.FallbackToMock {
+			s.client = NewMockClient(s.runtime.MockLatency)
+			s.fallbackEnabled = true
+			return nil
+		}
+		return errs.BadRequest("claude provider is not ready, check api key/model")
+	default:
+		return errs.BadRequest("provider must be one of: mock/openai/gemini/claude")
+	}
+}
+
+func isSupportedProvider(provider string) bool {
+	switch provider {
+	case "mock", "openai", "gemini", "claude":
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizeAbsoluteURL(raw string) (string, error) {
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return "", errs.BadRequest("openai_base_url must be a valid absolute URL")
+	}
+	return strings.TrimRight(strings.TrimSpace(raw), "/"), nil
+}
+
+func (s *Service) currentClient() Client {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.client
 }
 
 func (s *Service) Generate(ctx context.Context, req GenerateRequest, persist bool) ([]question.Question, error) {
@@ -38,7 +213,8 @@ func (s *Service) Generate(ctx context.Context, req GenerateRequest, persist boo
 		return nil, errs.BadRequest("topic is required")
 	}
 
-	items, err := s.client.GenerateQuestions(ctx, req)
+	client := s.currentClient()
+	items, err := client.GenerateQuestions(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +248,7 @@ func (s *Service) Generate(ctx context.Context, req GenerateRequest, persist boo
 }
 
 func (s *Service) Grade(ctx context.Context, req GradeRequest) (GradeResult, error) {
-	return s.client.GradeAnswer(ctx, req)
+	return s.currentClient().GradeAnswer(ctx, req)
 }
 
 func (s *Service) Learn(ctx context.Context, req LearnRequest) (LearnResult, error) {
@@ -82,7 +258,7 @@ func (s *Service) Learn(ctx context.Context, req LearnRequest) (LearnResult, err
 	if strings.TrimSpace(req.Subject) == "" {
 		return LearnResult{}, errs.BadRequest("subject is required")
 	}
-	return s.client.BuildLearningPlan(ctx, req)
+	return s.currentClient().BuildLearningPlan(ctx, req)
 }
 
 func (s *Service) Evaluate(ctx context.Context, req EvaluateRequest) (EvaluateResult, error) {
@@ -92,7 +268,7 @@ func (s *Service) Evaluate(ctx context.Context, req EvaluateRequest) (EvaluateRe
 	if req.Question.ID == "" && strings.TrimSpace(req.Context) == "" {
 		return EvaluateResult{}, errs.BadRequest("question or context is required")
 	}
-	return s.client.EvaluateLearning(ctx, req)
+	return s.currentClient().EvaluateLearning(ctx, req)
 }
 
 func (s *Service) Score(ctx context.Context, req ScoreRequest) (ScoreResult, error) {
@@ -103,7 +279,7 @@ func (s *Service) Score(ctx context.Context, req ScoreRequest) (ScoreResult, err
 		return ScoreResult{}, errs.BadRequest("accuracy/stability/speed must be in [0, 100]")
 	}
 
-	res, err := s.client.ScoreLearning(ctx, req)
+	res, err := s.currentClient().ScoreLearning(ctx, req)
 	if err != nil {
 		return ScoreResult{}, err
 	}

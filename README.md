@@ -51,6 +51,7 @@ flutter run
   - `GET /api/v1/pomodoro`
 - AI：
   - `GET /api/v1/ai/provider`
+  - `PUT /api/v1/ai/provider/config`
   - `POST /api/v1/ai/learning`
   - `POST /api/v1/ai/questions/generate?persist=true`
   - `GET /api/v1/ai/questions/search`

@@ -6,7 +6,6 @@ import 'package:provider/provider.dart';
 import 'core/logging/app_logger.dart';
 import 'providers/app_provider.dart';
 import 'screens/ai_screen.dart';
-import 'screens/debug_log_screen.dart';
 import 'screens/mistakes_screen.dart';
 import 'screens/plans_screen.dart';
 import 'screens/pomodoro_screen.dart';
@@ -92,7 +91,44 @@ class _MainScreenState extends State<MainScreen> {
     PlansScreen(),
     PomodoroScreen(),
     AIScreen(),
-    DebugLogScreen(),
+  ];
+
+  static const _destinations = [
+    _NavItem(
+      icon: Icons.question_answer_outlined,
+      selectedIcon: Icons.question_answer,
+      label: '题库',
+    ),
+    _NavItem(
+      icon: Icons.menu_book_outlined,
+      selectedIcon: Icons.menu_book,
+      label: '错题',
+    ),
+    _NavItem(
+      icon: Icons.edit_note_outlined,
+      selectedIcon: Icons.edit_note,
+      label: '练习',
+    ),
+    _NavItem(
+      icon: Icons.folder_outlined,
+      selectedIcon: Icons.folder,
+      label: '资料',
+    ),
+    _NavItem(
+      icon: Icons.event_note_outlined,
+      selectedIcon: Icons.event_note,
+      label: '计划',
+    ),
+    _NavItem(
+      icon: Icons.timer_outlined,
+      selectedIcon: Icons.timer,
+      label: '专注',
+    ),
+    _NavItem(
+      icon: Icons.psychology_outlined,
+      selectedIcon: Icons.psychology,
+      label: 'AI',
+    ),
   ];
 
   @override
@@ -107,60 +143,70 @@ class _MainScreenState extends State<MainScreen> {
     setState(() {
       _currentIndex = index;
     });
-
     context.read<AppProvider>().ensureDataForTab(index);
   }
 
   @override
   Widget build(BuildContext context) {
+    final isWide = MediaQuery.sizeOf(context).width >= 800;
+
+    if (isWide) {
+      return Scaffold(
+        body: Row(
+          children: [
+            NavigationRail(
+              extended: MediaQuery.sizeOf(context).width >= 1100,
+              selectedIndex: _currentIndex,
+              onDestinationSelected: _onDestinationSelected,
+              labelType: MediaQuery.sizeOf(context).width >= 1100
+                  ? NavigationRailLabelType.none
+                  : NavigationRailLabelType.all,
+              destinations: _destinations
+                  .map(
+                    (d) => NavigationRailDestination(
+                      icon: Icon(d.icon),
+                      selectedIcon: Icon(d.selectedIcon),
+                      label: Text(d.label),
+                    ),
+                  )
+                  .toList(),
+            ),
+            const VerticalDivider(width: 1, thickness: 1),
+            Expanded(
+              child: IndexedStack(index: _currentIndex, children: _screens),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Scaffold(
       body: IndexedStack(index: _currentIndex, children: _screens),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: _onDestinationSelected,
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.question_answer_outlined),
-            selectedIcon: Icon(Icons.question_answer),
-            label: '题库',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.menu_book_outlined),
-            selectedIcon: Icon(Icons.menu_book),
-            label: '错题',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.edit_note_outlined),
-            selectedIcon: Icon(Icons.edit_note),
-            label: '练习',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.folder_outlined),
-            selectedIcon: Icon(Icons.folder),
-            label: '资料',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.event_note_outlined),
-            selectedIcon: Icon(Icons.event_note),
-            label: '计划',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.timer_outlined),
-            selectedIcon: Icon(Icons.timer),
-            label: '专注',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.psychology_outlined),
-            selectedIcon: Icon(Icons.psychology),
-            label: 'AI',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.bug_report_outlined),
-            selectedIcon: Icon(Icons.bug_report),
-            label: '日志',
-          ),
-        ],
+        destinations: _destinations
+            .map(
+              (d) => NavigationDestination(
+                icon: Icon(d.icon),
+                selectedIcon: Icon(d.selectedIcon),
+                label: d.label,
+              ),
+            )
+            .toList(),
       ),
     );
   }
+}
+
+class _NavItem {
+  const _NavItem({
+    required this.icon,
+    required this.selectedIcon,
+    required this.label,
+  });
+
+  final IconData icon;
+  final IconData selectedIcon;
+  final String label;
 }

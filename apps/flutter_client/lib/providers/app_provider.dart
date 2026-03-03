@@ -231,6 +231,15 @@ class AppProvider with ChangeNotifier {
     });
   }
 
+  Future<void> createMistake(Map<String, dynamic> input) async {
+    await _runAction('新建错题', () async {
+      final m = await _api.createMistake(input);
+      _mistakes.insert(0, m);
+      _isSectionLoaded[DataSection.mistakes] = true;
+      notifyListeners();
+    });
+  }
+
   Future<void> fetchAttempts({bool force = false, String? questionId}) async {
     if (!force && isSectionLoading(DataSection.attempts)) {
       return;
@@ -389,6 +398,24 @@ class AppProvider with ChangeNotifier {
     await _runSection(DataSection.ai, () async {
       _aiProviderStatus = await _api.getAIProviderStatus();
       _isSectionLoaded[DataSection.ai] = true;
+    });
+  }
+
+  Future<void> updateAIProviderConfig({
+    required String provider,
+    String? apiKey,
+    String? model,
+    String? openAIBaseURL,
+  }) async {
+    await _runAction('更新AI模型API地址', () async {
+      _aiProviderStatus = await _api.updateAIProviderConfig(
+        provider: provider,
+        apiKey: apiKey,
+        model: model,
+        openAIBaseURL: openAIBaseURL,
+      );
+      _isSectionLoaded[DataSection.ai] = true;
+      notifyListeners();
     });
   }
 

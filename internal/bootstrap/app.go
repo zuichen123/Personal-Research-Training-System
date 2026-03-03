@@ -64,7 +64,19 @@ func NewApp(cfg config.Config) (*App, error) {
 		return nil, err
 	}
 
-	aiService := ai.NewService(aiClient, questionService, fallbackUsed)
+	aiService := ai.NewService(aiClient, questionService, fallbackUsed, ai.RuntimeConfig{
+		Provider:       cfg.AIProvider,
+		FallbackToMock: cfg.AIFallbackToMock,
+		MockLatency:    cfg.AIMockLatency,
+		AIHTTPTimeout:  cfg.AIHTTPTimeout,
+		OpenAIBaseURL:  cfg.AIOpenAIBaseURL,
+		OpenAIAPIKey:   cfg.AIOpenAIAPIKey,
+		OpenAIModel:    cfg.AIOpenAIModel,
+		GeminiAPIKey:   cfg.AIGeminiAPIKey,
+		GeminiModel:    cfg.AIGeminiModel,
+		ClaudeAPIKey:   cfg.AIClaudeAPIKey,
+		ClaudeModel:    cfg.AIClaudeModel,
+	})
 	practiceService := practice.NewService(practiceRepo, questionService, aiService, mistakeService)
 
 	questionHandler := question.NewHandler(questionService)

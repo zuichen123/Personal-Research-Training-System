@@ -67,11 +67,15 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
     final subjects = <String>{
       for (final q in questions)
         if (q.subject.trim().isNotEmpty) q.subject.trim(),
-    }.toList()..sort();
+    }.toList()
+      ..sort();
     final sources = <String>{
       for (final q in questions)
         if (q.source.trim().isNotEmpty) q.source.trim(),
-    }.toList()..sort();
+    }.toList()
+      ..sort();
+
+    final hasFilter = _subjectFilter.isNotEmpty || _sourceFilter.isNotEmpty;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
@@ -101,11 +105,25 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
                 isDense: true,
               ),
               items: sources
-                  .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                  .map((e) =>
+                      DropdownMenuItem(value: e, child: Text(_sourceZh(e))))
                   .toList(),
               onChanged: (v) => setState(() => _sourceFilter = v ?? ''),
             ),
           ),
+          if (hasFilter) ...[
+            const SizedBox(width: 4),
+            IconButton(
+              icon: const Icon(Icons.clear),
+              tooltip: '清除筛选',
+              onPressed: () {
+                setState(() {
+                  _subjectFilter = '';
+                  _sourceFilter = '';
+                });
+              },
+            ),
+          ],
         ],
       ),
     );
@@ -131,9 +149,23 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
 
     if (questions.isEmpty) {
       return ListView(
-        children: const [
-          SizedBox(height: 96),
-          Center(child: Text('暂无题目')),
+        children: [
+          const SizedBox(height: 64),
+          Center(
+            child: Column(
+              children: [
+                Icon(Icons.quiz_outlined,
+                    size: 64,
+                    color: Colors.blue.withValues(alpha: 0.4)),
+                const SizedBox(height: 16),
+                const Text('暂无题目',
+                    style: TextStyle(fontSize: 16, color: Colors.grey)),
+                const SizedBox(height: 8),
+                const Text('点击右下角按钮新建第一个题目',
+                    style: TextStyle(fontSize: 13, color: Colors.grey)),
+              ],
+            ),
+          ),
         ],
       );
     }
@@ -146,9 +178,46 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           child: ListTile(
-            title: Text(q.title.isNotEmpty ? q.title : q.stem),
-            subtitle: Text(
-              '科目:${q.subject}  来源:${_sourceZh(q.source)}\n类型:${_typeZh(q.type)}  难度:${q.difficulty}/5  掌握:${q.masteryLevel}%',
+            leading: CircleAvatar(
+              backgroundColor: _difficultyColor(q.difficulty),
+              radius: 18,
+              child: Text(
+                '${q.difficulty}',
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14),
+              ),
+            ),
+            title: Text(
+              q.title.isNotEmpty ? q.title : q.stem,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: [
+                Chip(
+                  label: Text(q.subject, style: const TextStyle(fontSize: 11)),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                Chip(
+                  label: Text(_sourceZh(q.source),
+                      style: const TextStyle(fontSize: 11)),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                Chip(
+                  label: Text(_typeZh(q.type),
+                      style: const TextStyle(fontSize: 11)),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                Text('掌握:${q.masteryLevel}%',
+                    style: const TextStyle(fontSize: 12)),
+              ],
             ),
             isThreeLine: true,
             trailing: PopupMenuButton<String>(
@@ -168,6 +237,14 @@ class _QuestionsScreenState extends State<QuestionsScreen> {
         );
       },
     );
+  }
+
+  Color _difficultyColor(int difficulty) {
+    if (difficulty <= 1) return Colors.green;
+    if (difficulty == 2) return Colors.lightGreen;
+    if (difficulty == 3) return Colors.orange;
+    if (difficulty == 4) return Colors.deepOrange;
+    return Colors.red;
   }
 
   Future<void> _showEditDialog(

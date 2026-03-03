@@ -362,6 +362,30 @@ class ApiService {
     return _extractDataMap(response);
   }
 
+  Future<Map<String, dynamic>> updateAIProviderConfig({
+    required String provider,
+    String? apiKey,
+    String? model,
+    String? openAIBaseURL,
+  }) async {
+    final body = <String, dynamic>{'provider': provider};
+    if (apiKey != null && apiKey.trim().isNotEmpty) {
+      body['api_key'] = apiKey.trim();
+    }
+    if (model != null && model.trim().isNotEmpty) {
+      body['model'] = model.trim();
+    }
+    if (openAIBaseURL != null && openAIBaseURL.trim().isNotEmpty) {
+      body['openai_base_url'] = openAIBaseURL.trim();
+    }
+    final response = await _request(
+      method: 'PUT',
+      path: '/ai/provider/config',
+      jsonBody: body,
+    );
+    return _extractDataMap(response);
+  }
+
   Future<Map<String, dynamic>> buildLearningPlan(
     Map<String, dynamic> input,
   ) async {

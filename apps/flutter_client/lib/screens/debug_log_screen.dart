@@ -9,7 +9,9 @@ import '../core/logging/log_level.dart';
 import '../core/logging/log_record.dart';
 
 class DebugLogScreen extends StatefulWidget {
-  const DebugLogScreen({super.key});
+  const DebugLogScreen({super.key, this.embedded = false});
+
+  final bool embedded;
 
   @override
   State<DebugLogScreen> createState() => _DebugLogScreenState();
@@ -33,22 +35,49 @@ class _DebugLogScreenState extends State<DebugLogScreen> {
       builder: (context, _) {
         final records = _filtered(logger.records);
         return Scaffold(
-          appBar: AppBar(
-            title: const Text('调试日志'),
-            actions: [
-              IconButton(icon: const Icon(Icons.copy_all), onPressed: _copyAll),
-              IconButton(
-                icon: const Icon(Icons.download),
-                onPressed: _exportFile,
-              ),
-              IconButton(
-                icon: const Icon(Icons.delete_sweep),
-                onPressed: _clearLogs,
-              ),
-            ],
-          ),
+          appBar: widget.embedded
+              ? null
+              : AppBar(
+                  title: const Text('调试日志'),
+                  actions: [
+                    IconButton(
+                        icon: const Icon(Icons.copy_all),
+                        onPressed: _copyAll),
+                    IconButton(
+                      icon: const Icon(Icons.download),
+                      onPressed: _exportFile,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_sweep),
+                      onPressed: _clearLogs,
+                    ),
+                  ],
+                ),
           body: Column(
             children: [
+              if (widget.embedded)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      IconButton(
+                          icon: const Icon(Icons.copy_all),
+                          tooltip: '复制全部',
+                          onPressed: _copyAll),
+                      IconButton(
+                        icon: const Icon(Icons.download),
+                        tooltip: '导出文件',
+                        onPressed: _exportFile,
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_sweep),
+                        tooltip: '清空日志',
+                        onPressed: _clearLogs,
+                      ),
+                    ],
+                  ),
+                ),
               Padding(
                 padding: const EdgeInsets.all(12),
                 child: Column(

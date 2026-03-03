@@ -56,9 +56,23 @@ class PracticeScreen extends StatelessWidget {
 
     if (attempts.isEmpty) {
       return ListView(
-        children: const [
-          SizedBox(height: 96),
-          Center(child: Text('暂无练习记录')),
+        children: [
+          const SizedBox(height: 64),
+          Center(
+            child: Column(
+              children: [
+                Icon(Icons.edit_note_outlined,
+                    size: 64,
+                    color: Colors.purple.withValues(alpha: 0.4)),
+                const SizedBox(height: 16),
+                const Text('暂无练习记录',
+                    style: TextStyle(fontSize: 16, color: Colors.grey)),
+                const SizedBox(height: 8),
+                const Text('点击右下角按钮开始你的第一次练习',
+                    style: TextStyle(fontSize: 13, color: Colors.grey)),
+              ],
+            ),
+          ),
         ],
       );
     }
@@ -68,23 +82,45 @@ class PracticeScreen extends StatelessWidget {
       itemCount: attempts.length,
       itemBuilder: (context, index) {
         final a = attempts[index];
+        final scoreColor = a.score >= 80
+            ? Colors.green
+            : a.score >= 60
+                ? Colors.orange
+                : Colors.red;
         return Card(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           child: ListTile(
             leading: CircleAvatar(
-              backgroundColor: a.correct ? Colors.green : Colors.red,
-              child: Icon(
-                a.correct ? Icons.check : Icons.close,
-                color: Colors.white,
+              backgroundColor: scoreColor,
+              child: Text(
+                a.score.toStringAsFixed(0),
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13),
               ),
             ),
-            title: Text('得分: ${a.score.toStringAsFixed(1)}'),
+            title: Row(
+              children: [
+                Expanded(
+                  child: Text('题目ID: ${a.questionId}',
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                ),
+                Icon(
+                  a.correct ? Icons.check_circle : Icons.cancel,
+                  color: a.correct ? Colors.green : Colors.red,
+                  size: 20,
+                ),
+              ],
+            ),
             subtitle: Text(
-              '题目ID: ${a.questionId}\n反馈: ${a.feedback}',
+              '反馈: ${a.feedback}',
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
-            trailing: Text(a.submittedAt.toLocal().toString().split(' ')[0]),
+            trailing:
+                Text(a.submittedAt.toLocal().toString().split(' ')[0],
+                    style: const TextStyle(fontSize: 12)),
           ),
         );
       },
@@ -95,9 +131,7 @@ class PracticeScreen extends StatelessWidget {
     final provider = context.read<AppProvider>();
     if (provider.questions.isEmpty) {
       await provider.fetchQuestions(force: true);
-      if (!context.mounted) {
-        return;
-      }
+      if (!context.mounted) return;
     }
     String? selectedQuestionId = provider.questions.isEmpty
         ? null
@@ -118,7 +152,8 @@ class PracticeScreen extends StatelessWidget {
                   if (provider.questions.isNotEmpty)
                     DropdownButtonFormField<String>(
                       value: selectedQuestionId,
-                      decoration: const InputDecoration(labelText: '选择题目'),
+                      decoration:
+                          const InputDecoration(labelText: '选择题目'),
                       items: provider.questions
                           .map(
                             (Question q) => DropdownMenuItem(
@@ -182,15 +217,13 @@ class PracticeScreen extends StatelessWidget {
                       await provider.submitPractice(questionId, answers);
                       if (ctx.mounted) {
                         Navigator.of(ctx).pop();
-                        ScaffoldMessenger.of(
-                          ctx,
-                        ).showSnackBar(const SnackBar(content: Text('提交成功')));
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                            const SnackBar(content: Text('提交成功')));
                       }
                     } catch (e) {
                       if (ctx.mounted) {
-                        ScaffoldMessenger.of(
-                          ctx,
-                        ).showSnackBar(SnackBar(content: Text('提交失败：$e')));
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                            SnackBar(content: Text('提交失败：$e')));
                       }
                     }
                   },
