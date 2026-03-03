@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 
 import 'core/logging/app_logger.dart';
 import 'providers/app_provider.dart';
-import 'screens/ai_screen.dart';
+import 'screens/ai_tutor_team_screen.dart';
 import 'screens/mistakes_screen.dart';
 import 'screens/plans_screen.dart';
 import 'screens/pomodoro_screen.dart';
@@ -129,7 +129,7 @@ class _MainScreenState extends State<MainScreen> {
     MistakesScreen(),
     PracticeScreen(),
     PomodoroScreen(),
-    AIScreen(),
+    AITutorTeamScreen(),
   ];
 
   static const _destinations = [
