@@ -62,6 +62,7 @@ func NewApp(cfg config.Config) (*App, error) {
 	resourceService := resource.NewService(resourceRepo, questionService)
 	profileService := profile.NewService(profileRepo)
 	aiConfigRepo := ai.NewSQLiteProviderConfigRepository(db)
+	aiAgentRepo := ai.NewSQLiteAgentRepository(db)
 
 	aiRuntime := runtimeConfigFromConfig(cfg)
 	dbAIConfig, hasDBAIConfig, err := aiConfigRepo.LoadProviderConfig(context.Background())
@@ -77,7 +78,15 @@ func NewApp(cfg config.Config) (*App, error) {
 		return nil, err
 	}
 
-	aiService := ai.NewServiceWithStore(aiClient, questionService, fallbackUsed, aiRuntime, aiConfigRepo)
+	aiService := ai.NewServiceWithStoreAndDeps(
+		aiClient,
+		questionService,
+		planService,
+		fallbackUsed,
+		aiRuntime,
+		aiConfigRepo,
+		aiAgentRepo,
+	)
 	if err := aiService.LoadPromptTemplates(context.Background()); err != nil {
 		_ = db.Close()
 		return nil, err

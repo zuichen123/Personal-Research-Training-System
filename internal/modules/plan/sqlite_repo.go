@@ -19,20 +19,21 @@ func NewSQLiteRepository(db *sql.DB) *SQLiteRepository {
 
 func (r *SQLiteRepository) Create(ctx context.Context, item Item) (Item, error) {
 	_, err := r.db.ExecContext(ctx, `
-		INSERT INTO plans (
-			id, plan_type, title, content, target_date, status, priority, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`,
-		item.ID,
-		string(item.PlanType),
-		item.Title,
-		item.Content,
-		nullableString(item.TargetDate),
-		item.Status,
-		item.Priority,
-		item.CreatedAt.Format(time.RFC3339Nano),
-		item.UpdatedAt.Format(time.RFC3339Nano),
-	)
+			INSERT INTO plans (
+				id, plan_type, title, content, target_date, status, priority, source, created_at, updated_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`,
+			item.ID,
+			string(item.PlanType),
+			item.Title,
+			item.Content,
+			nullableString(item.TargetDate),
+			item.Status,
+			item.Priority,
+			string(item.Source),
+			item.CreatedAt.Format(time.RFC3339Nano),
+			item.UpdatedAt.Format(time.RFC3339Nano),
+		)
 	if err != nil {
 		return Item{}, errs.Internal(fmt.Sprintf("failed to create plan: %v", err))
 	}
@@ -41,10 +42,10 @@ func (r *SQLiteRepository) Create(ctx context.Context, item Item) (Item, error) 
 
 func (r *SQLiteRepository) GetByID(ctx context.Context, id string) (Item, error) {
 	row := r.db.QueryRowContext(ctx, `
-		SELECT id, plan_type, title, content, target_date, status, priority, created_at, updated_at
-		FROM plans
-		WHERE id = ?
-	`, id)
+			SELECT id, plan_type, title, content, target_date, status, priority, source, created_at, updated_at
+			FROM plans
+			WHERE id = ?
+		`, id)
 
 	item, err := scanPlan(row)
 	if err != nil {
@@ -58,9 +59,9 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, id string) (Item, error)
 
 func (r *SQLiteRepository) List(ctx context.Context, planType string) ([]Item, error) {
 	baseSQL := `
-		SELECT id, plan_type, title, content, target_date, status, priority, created_at, updated_at
-		FROM plans
-	`
+			SELECT id, plan_type, title, content, target_date, status, priority, source, created_at, updated_at
+			FROM plans
+		`
 
 	var (
 		rows *sql.Rows
@@ -94,19 +95,20 @@ func (r *SQLiteRepository) List(ctx context.Context, planType string) ([]Item, e
 
 func (r *SQLiteRepository) Update(ctx context.Context, item Item) (Item, error) {
 	res, err := r.db.ExecContext(ctx, `
-		UPDATE plans
-		SET plan_type = ?, title = ?, content = ?, target_date = ?, status = ?, priority = ?, updated_at = ?
-		WHERE id = ?
-	`,
-		string(item.PlanType),
-		item.Title,
-		item.Content,
-		nullableString(item.TargetDate),
-		item.Status,
-		item.Priority,
-		item.UpdatedAt.Format(time.RFC3339Nano),
-		item.ID,
-	)
+			UPDATE plans
+			SET plan_type = ?, title = ?, content = ?, target_date = ?, status = ?, priority = ?, source = ?, updated_at = ?
+			WHERE id = ?
+		`,
+			string(item.PlanType),
+			item.Title,
+			item.Content,
+			nullableString(item.TargetDate),
+			item.Status,
+			item.Priority,
+			string(item.Source),
+			item.UpdatedAt.Format(time.RFC3339Nano),
+			item.ID,
+		)
 	if err != nil {
 		return Item{}, errs.Internal(fmt.Sprintf("failed to update plan: %v", err))
 	}
@@ -138,26 +140,32 @@ func scanPlan(s planScanner) (Item, error) {
 	var (
 		item      Item
 		typeValue string
+		typeSource string
 		targetRaw sql.NullString
 		created   string
 		updated   string
 	)
 
-	if err := s.Scan(
-		&item.ID,
-		&typeValue,
-		&item.Title,
-		&item.Content,
-		&targetRaw,
-		&item.Status,
-		&item.Priority,
-		&created,
-		&updated,
-	); err != nil {
-		return Item{}, err
-	}
+		if err := s.Scan(
+			&item.ID,
+			&typeValue,
+			&item.Title,
+			&item.Content,
+			&targetRaw,
+			&item.Status,
+			&item.Priority,
+			&typeSource,
+			&created,
+			&updated,
+		); err != nil {
+			return Item{}, err
+		}
 
 	item.PlanType = PlanType(typeValue)
+	item.Source = PlanSource(typeSource)
+	if item.Source == "" {
+		item.Source = SourceManual
+	}
 	if targetRaw.Valid {
 		item.TargetDate = targetRaw.String
 	}

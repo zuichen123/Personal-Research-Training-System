@@ -268,6 +268,51 @@ speed=%.1f`,
 	return out, nil
 }
 
+func (c *remoteLLMClient) Chat(ctx context.Context, req ChatRequest) (ChatResponse, error) {
+	if !c.ready {
+		return ChatResponse{}, errs.BadRequest("ai provider is not ready")
+	}
+	lines := make([]string, 0, len(req.Messages)+2)
+	if strings.TrimSpace(req.SystemPrompt) != "" {
+		lines = append(lines, "system: "+strings.TrimSpace(req.SystemPrompt))
+	}
+	for _, message := range req.Messages {
+		role := strings.TrimSpace(message.Role)
+		if role == "" {
+			role = "user"
+		}
+		content := strings.TrimSpace(message.Content)
+		if content == "" {
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("%s: %s", role, content))
+	}
+	userInput := strings.Join(lines, "\n")
+	if userInput == "" {
+		userInput = "user: hello"
+	}
+
+	mode := strings.ToLower(strings.TrimSpace(req.Mode))
+	key := PromptKeyAgentChat
+	operation := "agent_chat"
+	if mode == "detect_intent" {
+		key = PromptKeyDetectIntent
+		operation = "detect_intent"
+	}
+	prompt := c.buildOperationPrompt(key, userInput)
+	var out ChatResponse
+	if err := c.invokeJSON(ctx, operation, prompt, nil, &out); err != nil {
+		return ChatResponse{}, err
+	}
+	if strings.TrimSpace(out.Content) == "" && mode != "detect_intent" {
+		out.Content = "I have processed your message."
+	}
+	if out.Intent.Params == nil {
+		out.Intent.Params = map[string]any{}
+	}
+	return out, nil
+}
+
 func (c *remoteLLMClient) invokeJSON(
 	ctx context.Context,
 	operation, prompt string,

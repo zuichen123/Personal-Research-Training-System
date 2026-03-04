@@ -12,6 +12,8 @@ const (
 	PromptKeyOptimizeLearning  = "optimize_learning_plan"
 	PromptKeyEvaluateLearning  = "evaluate_learning"
 	PromptKeyScoreLearning     = "score_learning"
+	PromptKeyDetectIntent      = "detect_intent"
+	PromptKeyAgentChat         = "agent_chat"
 )
 
 type promptTemplatePreset struct {
@@ -207,7 +209,35 @@ Score learning performance from accuracy, stability and speed, and provide actio
   "advice":["string"]
 }`,
 	},
-}
+	{
+		Key:  PromptKeyDetectIntent,
+		Name: "Agent Intent Detection",
+		PresetPrompt: `Detect whether the latest user request should trigger a tool action.
+Allowed actions: generate_questions, build_plan, none.
+Return confidence in [0,1] and include key params when possible.`,
+		PresetOutputFormatPrompt: `Return ONLY JSON:
+{
+  "content":"",
+  "intent":{
+    "action":"generate_questions|build_plan|none",
+    "confidence":0.0,
+    "reason":"string",
+    "params":{"topic":"string","subject":"string","count":3,"difficulty":3}
+  }
+}`,
+	},
+		{
+			Key:  PromptKeyAgentChat,
+			Name: "Agent Chat",
+			PresetPrompt: `You are a tutoring agent in a self-study system.
+Respond clearly and concisely based on the conversation.`,
+			PresetOutputFormatPrompt: `Return ONLY JSON:
+{
+  "content":"string",
+  "intent":{"action":"none","confidence":0,"reason":"","params":{}}
+}`,
+		},
+	}
 
 var promptTemplatePresetByKey = func() map[string]promptTemplatePreset {
 	out := make(map[string]promptTemplatePreset, len(promptTemplatePresetList))
@@ -386,3 +416,4 @@ func buildPromptConfig(preset promptTemplatePreset, override promptTemplateOverr
 		UpdatedAt:                   strings.TrimSpace(override.UpdatedAt),
 	}
 }
+

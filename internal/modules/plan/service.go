@@ -31,6 +31,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (Item, error) {
 		TargetDate: strings.TrimSpace(in.TargetDate),
 		Status:     normalizeStatus(in.Status),
 		Priority:   normalizePriority(in.Priority),
+		Source:     normalizeSource(in.Source),
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	}
@@ -68,6 +69,7 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (Item, 
 	item.TargetDate = strings.TrimSpace(in.TargetDate)
 	item.Status = normalizeStatus(in.Status)
 	item.Priority = normalizePriority(in.Priority)
+	item.Source = normalizeSource(in.Source)
 	item.UpdatedAt = time.Now().UTC()
 
 	return s.repo.Update(ctx, item)
@@ -123,4 +125,17 @@ func normalizePriority(v int) int {
 		return 5
 	}
 	return v
+}
+
+func normalizeSource(v PlanSource) PlanSource {
+	source := PlanSource(strings.TrimSpace(string(v)))
+	if source == "" {
+		return SourceManual
+	}
+	switch source {
+	case SourceManual, SourceAILearning, SourceAIAgent:
+		return source
+	default:
+		return SourceManual
+	}
 }

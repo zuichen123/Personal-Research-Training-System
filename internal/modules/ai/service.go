@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"self-study-tool/internal/modules/plan"
 	"self-study-tool/internal/modules/question"
 	"self-study-tool/internal/shared/errs"
 )
@@ -17,9 +18,11 @@ type Service struct {
 	mu              sync.RWMutex
 	client          Client
 	questionService *question.Service
+	planService     *plan.Service
 	fallbackEnabled bool
 	runtime         RuntimeConfig
 	configStore     ProviderConfigStore
+	agentStore      AgentChatStore
 
 	promptStore   PromptTemplateStore
 	promptRuntime *PromptTemplateRuntime
@@ -40,6 +43,26 @@ func NewServiceWithStore(
 	runtime RuntimeConfig,
 	configStore ProviderConfigStore,
 ) *Service {
+	return NewServiceWithStoreAndDeps(
+		client,
+		questionService,
+		nil,
+		fallbackEnabled,
+		runtime,
+		configStore,
+		nil,
+	)
+}
+
+func NewServiceWithStoreAndDeps(
+	client Client,
+	questionService *question.Service,
+	planService *plan.Service,
+	fallbackEnabled bool,
+	runtime RuntimeConfig,
+	configStore ProviderConfigStore,
+	agentStore AgentChatStore,
+) *Service {
 	var promptStore PromptTemplateStore
 	if s, ok := configStore.(PromptTemplateStore); ok {
 		promptStore = s
@@ -48,9 +71,11 @@ func NewServiceWithStore(
 	service := &Service{
 		client:          client,
 		questionService: questionService,
+		planService:     planService,
 		fallbackEnabled: fallbackEnabled,
 		runtime:         runtime,
 		configStore:     configStore,
+		agentStore:      agentStore,
 		promptStore:     promptStore,
 		promptRuntime:   NewPromptTemplateRuntime(),
 	}

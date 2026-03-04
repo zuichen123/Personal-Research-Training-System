@@ -90,6 +90,9 @@ func TestService_CreateValidation_ValidPlanType(t *testing.T) {
 	if item.PlanType != DayPlan {
 		t.Fatalf("expected plan type %s, got %s", DayPlan, item.PlanType)
 	}
+	if item.Source != SourceManual {
+		t.Fatalf("expected default source %s, got %s", SourceManual, item.Source)
+	}
 }
 
 func TestService_CreateValidation_ValidYearAndWeekPlanType(t *testing.T) {

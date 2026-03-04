@@ -366,6 +366,54 @@ func (m *MockClient) ScoreLearning(ctx context.Context, req ScoreRequest) (Score
 	}, nil
 }
 
+func (m *MockClient) Chat(ctx context.Context, req ChatRequest) (ChatResponse, error) {
+	select {
+	case <-ctx.Done():
+		return ChatResponse{}, ctx.Err()
+	case <-time.After(m.latency):
+	}
+
+	lastUser := ""
+	for i := len(req.Messages) - 1; i >= 0; i-- {
+		if strings.EqualFold(strings.TrimSpace(req.Messages[i].Role), "user") {
+			lastUser = strings.TrimSpace(req.Messages[i].Content)
+			break
+		}
+	}
+	mode := strings.ToLower(strings.TrimSpace(req.Mode))
+	if mode == "detect_intent" {
+		intent := IntentResult{
+			Action:     "none",
+			Confidence: 0.1,
+			Reason:     "no clear execution intent",
+			Params:     map[string]any{},
+		}
+		lower := strings.ToLower(lastUser)
+		if strings.Contains(lower, "题") || strings.Contains(lower, "question") {
+			intent.Action = "generate_questions"
+			intent.Confidence = 0.85
+			intent.Reason = "question generation keyword detected"
+		} else if strings.Contains(lower, "计划") || strings.Contains(lower, "plan") {
+			intent.Action = "build_plan"
+			intent.Confidence = 0.85
+			intent.Reason = "learning plan keyword detected"
+		}
+		return ChatResponse{Intent: intent}, nil
+	}
+
+	content := "Mock agent response: I have received your message."
+	if lastUser != "" {
+		content = "Mock agent response: " + lastUser
+	}
+	return ChatResponse{
+		Content: content,
+		Intent: IntentResult{
+			Action: "none",
+			Params: map[string]any{},
+		},
+	}, nil
+}
+
 func normalizeThemes(themes []string, subject string) []string {
 	result := make([]string, 0, len(themes))
 	for _, theme := range themes {

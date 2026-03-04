@@ -67,6 +67,7 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 			target_date TEXT,
 			status TEXT NOT NULL,
 			priority INTEGER NOT NULL,
+			source TEXT NOT NULL DEFAULT 'manual',
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL
 		);`,
@@ -99,6 +100,53 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 			output_format_prompt TEXT NOT NULL DEFAULT '',
 			updated_at TEXT NOT NULL
 		);`,
+		`CREATE TABLE IF NOT EXISTS ai_agents (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			protocol TEXT NOT NULL,
+			primary_config_json TEXT NOT NULL,
+			fallback_config_json TEXT NOT NULL,
+			system_prompt TEXT NOT NULL DEFAULT '',
+			intent_capabilities_json TEXT NOT NULL DEFAULT '[]',
+			enabled INTEGER NOT NULL DEFAULT 1,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		);`,
+		`CREATE TABLE IF NOT EXISTS ai_agent_sessions (
+			id TEXT PRIMARY KEY,
+			agent_id TEXT NOT NULL,
+			title TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL,
+			archived_at TEXT,
+			FOREIGN KEY(agent_id) REFERENCES ai_agents(id) ON DELETE CASCADE
+		);`,
+		`CREATE TABLE IF NOT EXISTS ai_agent_messages (
+			id TEXT PRIMARY KEY,
+			session_id TEXT NOT NULL,
+			role TEXT NOT NULL,
+			content TEXT NOT NULL,
+			intent_json TEXT NOT NULL DEFAULT '',
+			pending_confirmation_json TEXT NOT NULL DEFAULT '',
+			provider_used TEXT NOT NULL DEFAULT '',
+			model_used TEXT NOT NULL DEFAULT '',
+			fallback_used INTEGER NOT NULL DEFAULT 0,
+			latency_ms INTEGER NOT NULL DEFAULT 0,
+			created_at TEXT NOT NULL,
+			FOREIGN KEY(session_id) REFERENCES ai_agent_sessions(id) ON DELETE CASCADE
+		);`,
+		`CREATE TABLE IF NOT EXISTS ai_agent_artifacts (
+			id TEXT PRIMARY KEY,
+			session_id TEXT NOT NULL,
+			message_id TEXT NOT NULL,
+			type TEXT NOT NULL,
+			payload_json TEXT NOT NULL,
+			import_status TEXT NOT NULL DEFAULT 'pending',
+			created_at TEXT NOT NULL,
+			imported_at TEXT,
+			FOREIGN KEY(session_id) REFERENCES ai_agent_sessions(id) ON DELETE CASCADE,
+			FOREIGN KEY(message_id) REFERENCES ai_agent_messages(id) ON DELETE CASCADE
+		);`,
 		`CREATE TABLE IF NOT EXISTS user_profiles (
 			user_id TEXT PRIMARY KEY,
 			nickname TEXT NOT NULL DEFAULT '',
@@ -125,7 +173,11 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_practice_attempts_question_id ON practice_attempts(question_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_resources_question_id ON resources(question_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_plans_type_date ON plans(plan_type, target_date);`,
+		`CREATE INDEX IF NOT EXISTS idx_plans_source_updated ON plans(source, updated_at DESC);`,
 		`CREATE INDEX IF NOT EXISTS idx_pomodoro_status_start ON pomodoro_sessions(status, started_at);`,
+		`CREATE INDEX IF NOT EXISTS idx_ai_sessions_agent_updated ON ai_agent_sessions(agent_id, updated_at DESC);`,
+		`CREATE INDEX IF NOT EXISTS idx_ai_messages_session_created ON ai_agent_messages(session_id, created_at DESC);`,
+		`CREATE INDEX IF NOT EXISTS idx_ai_artifacts_session_status ON ai_agent_artifacts(session_id, import_status, created_at DESC);`,
 	}
 
 	for _, stmt := range baseStmts {
@@ -141,6 +193,7 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 		`ALTER TABLE mistakes ADD COLUMN subject TEXT NOT NULL DEFAULT 'general';`,
 		`ALTER TABLE mistakes ADD COLUMN difficulty INTEGER NOT NULL DEFAULT 1;`,
 		`ALTER TABLE mistakes ADD COLUMN mastery_level INTEGER NOT NULL DEFAULT 0;`,
+		`ALTER TABLE plans ADD COLUMN source TEXT NOT NULL DEFAULT 'manual';`,
 	}
 
 	for _, stmt := range optionalStmts {

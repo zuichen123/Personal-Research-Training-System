@@ -203,6 +203,47 @@ type UpdatePromptTemplateRequest struct {
 	OutputFormatPrompt *string `json:"output_format_prompt"`
 }
 
+type ChatMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+type IntentResult struct {
+	Action     string         `json:"action"`
+	Confidence float64        `json:"confidence"`
+	Reason     string         `json:"reason,omitempty"`
+	Params     map[string]any `json:"params,omitempty"`
+}
+
+type PendingConfirmation struct {
+	Action  string         `json:"action"`
+	Prompt  string         `json:"prompt"`
+	Params  map[string]any `json:"params,omitempty"`
+	Created string         `json:"created_at,omitempty"`
+}
+
+type AgentArtifact struct {
+	ID           string         `json:"id"`
+	SessionID    string         `json:"session_id"`
+	MessageID    string         `json:"message_id"`
+	Type         string         `json:"type"`
+	Payload      map[string]any `json:"payload"`
+	ImportStatus string         `json:"import_status"`
+	CreatedAt    string         `json:"created_at"`
+	ImportedAt   string         `json:"imported_at,omitempty"`
+}
+
+type ChatRequest struct {
+	SystemPrompt string        `json:"system_prompt,omitempty"`
+	Messages     []ChatMessage `json:"messages"`
+	Mode         string        `json:"mode,omitempty"`
+}
+
+type ChatResponse struct {
+	Content string       `json:"content"`
+	Intent  IntentResult `json:"intent"`
+}
+
 type Client interface {
 	GenerateQuestions(ctx context.Context, req GenerateRequest) ([]question.CreateInput, error)
 	GradeAnswer(ctx context.Context, req GradeRequest) (GradeResult, error)
@@ -210,6 +251,7 @@ type Client interface {
 	OptimizeLearningPlan(ctx context.Context, req OptimizeLearnRequest) (OptimizeLearnResult, error)
 	EvaluateLearning(ctx context.Context, req EvaluateRequest) (EvaluateResult, error)
 	ScoreLearning(ctx context.Context, req ScoreRequest) (ScoreResult, error)
+	Chat(ctx context.Context, req ChatRequest) (ChatResponse, error)
 	ProviderName() string
 	ModelName() string
 	IsReady() bool

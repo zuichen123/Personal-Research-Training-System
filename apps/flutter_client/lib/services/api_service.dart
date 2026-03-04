@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../core/logging/app_logger.dart';
+import '../models/ai_agent_chat.dart';
 import '../core/logging/trace_id.dart';
 import '../models/mistake.dart';
 import '../models/plan.dart';
@@ -476,6 +477,173 @@ class ApiService {
   Future<List<Map<String, dynamic>>> reloadAIPromptTemplates() async {
     final response = await _request(method: 'POST', path: '/ai/prompts/reload');
     return _extractDataList(response);
+  }
+
+  Future<List<AIAgentSummary>> getAIAgents() async {
+    final response = await _request(method: 'GET', path: '/ai/agents');
+    return _extractDataList(response).map(AIAgentSummary.fromJson).toList();
+  }
+
+  Future<AIAgentSummary> createAIAgent(Map<String, dynamic> input) async {
+    final response = await _request(
+      method: 'POST',
+      path: '/ai/agents',
+      jsonBody: input,
+      timeout: _aiRequestTimeout,
+    );
+    return AIAgentSummary.fromJson(_extractDataMap(response));
+  }
+
+  Future<AIAgentSummary> updateAIAgent(
+    String id,
+    Map<String, dynamic> input,
+  ) async {
+    final response = await _request(
+      method: 'PUT',
+      path: '/ai/agents/$id',
+      jsonBody: input,
+      timeout: _aiRequestTimeout,
+    );
+    return AIAgentSummary.fromJson(_extractDataMap(response));
+  }
+
+  Future<void> deleteAIAgent(String id) async {
+    await _request(method: 'DELETE', path: '/ai/agents/$id');
+  }
+
+  Future<List<AIAgentSession>> getAIAgentSessions(
+    String agentId, {
+    int limit = 20,
+    String cursor = '',
+  }) async {
+    final query = <String, String>{
+      'limit': '$limit',
+      if (cursor.trim().isNotEmpty) 'cursor': cursor.trim(),
+    };
+    final response = await _request(
+      method: 'GET',
+      path: '/ai/agents/$agentId/sessions',
+      query: query,
+      timeout: _aiRequestTimeout,
+    );
+    return _extractDataList(response).map(AIAgentSession.fromJson).toList();
+  }
+
+  Future<AIAgentSession> createAIAgentSession(
+    String agentId, {
+    String title = '',
+  }) async {
+    final response = await _request(
+      method: 'POST',
+      path: '/ai/agents/$agentId/sessions',
+      jsonBody: {'title': title},
+      timeout: _aiRequestTimeout,
+    );
+    return AIAgentSession.fromJson(_extractDataMap(response));
+  }
+
+  Future<void> deleteAIAgentSession(String sessionId) async {
+    await _request(method: 'DELETE', path: '/ai/sessions/$sessionId');
+  }
+
+  Future<List<AIAgentMessage>> getAISessionMessages(
+    String sessionId, {
+    int limit = 40,
+    String beforeId = '',
+  }) async {
+    final query = <String, String>{
+      'limit': '$limit',
+      if (beforeId.trim().isNotEmpty) 'before_id': beforeId.trim(),
+    };
+    final response = await _request(
+      method: 'GET',
+      path: '/ai/sessions/$sessionId/messages',
+      query: query,
+      timeout: _aiRequestTimeout,
+    );
+    return _extractDataList(response).map(AIAgentMessage.fromJson).toList();
+  }
+
+  Future<AISendMessageResult> sendAISessionMessage(
+    String sessionId, {
+    required String content,
+  }) async {
+    final response = await _request(
+      method: 'POST',
+      path: '/ai/sessions/$sessionId/messages',
+      jsonBody: {'content': content},
+      timeout: _aiRequestTimeout,
+    );
+    return AISendMessageResult.fromJson(_extractDataMap(response));
+  }
+
+  Future<AISendMessageResult> confirmAISessionAction(
+    String sessionId, {
+    required String messageId,
+    String action = '',
+    Map<String, dynamic>? params,
+  }) async {
+    final body = <String, dynamic>{
+      'message_id': messageId,
+      if (action.trim().isNotEmpty) 'action': action.trim(),
+      if (params != null && params.isNotEmpty) 'params': params,
+    };
+    final response = await _request(
+      method: 'POST',
+      path: '/ai/sessions/$sessionId/confirm',
+      jsonBody: body,
+      timeout: _aiRequestTimeout,
+    );
+    return AISendMessageResult.fromJson(_extractDataMap(response));
+  }
+
+  Future<List<AIAgentArtifact>> getAISessionArtifacts(
+    String sessionId, {
+    String status = '',
+  }) async {
+    final query = <String, String>{
+      if (status.trim().isNotEmpty) 'status': status.trim(),
+    };
+    final response = await _request(
+      method: 'GET',
+      path: '/ai/sessions/$sessionId/artifacts',
+      query: query,
+      timeout: _aiRequestTimeout,
+    );
+    return _extractDataList(response).map(AIAgentArtifact.fromJson).toList();
+  }
+
+  Future<Map<String, dynamic>> importAIArtifactQuestions(
+    String artifactId, {
+    required List<int> selectedIndexes,
+    String subjectOverride = '',
+    int difficultyOverride = 0,
+  }) async {
+    final response = await _request(
+      method: 'POST',
+      path: '/ai/artifacts/$artifactId/import/questions',
+      jsonBody: {
+        'selected_indexes': selectedIndexes,
+        if (subjectOverride.trim().isNotEmpty)
+          'subject_override': subjectOverride.trim(),
+        if (difficultyOverride > 0) 'difficulty_override': difficultyOverride,
+      },
+      timeout: _aiRequestTimeout,
+    );
+    return _extractDataMap(response);
+  }
+
+  Future<Map<String, dynamic>> importAIArtifactPlan(
+    String artifactId, {
+    bool append = true,
+  }) async {
+    final response = await _request(
+      method: 'POST',
+      path: '/ai/artifacts/$artifactId/import/plan',
+      jsonBody: {'append': append},
+      timeout: _aiRequestTimeout,
+    );
+    return _extractDataMap(response);
   }
 
   Future<Map<String, dynamic>> buildLearningPlan(
