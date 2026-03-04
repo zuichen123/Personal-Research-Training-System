@@ -219,6 +219,7 @@ Use manage_app for software management requests such as creating/updating/deleti
 - agents, sessions, prompts, provider config
 - questions, mistakes, practice attempts, plans, pomodoro sessions, profile, resources
 When action is manage_app, extract "module" and "operation" with required fields in params.
+If id is unknown for get/update/delete, include searchable fields such as title/name/keyword/target_date/status/source so the backend can resolve the target.
 Return confidence in [0,1] and include key params when possible.`,
 		PresetOutputFormatPrompt: `Return ONLY JSON:
 {
@@ -230,6 +231,12 @@ Return confidence in [0,1] and include key params when possible.`,
     "params":{
       "module":"agent|session|provider|prompt|question|mistake|practice|plan|pomodoro|profile|resource",
       "operation":"create|update|delete|get|list|submit|start|end|reload|upsert",
+      "id":"string",
+      "title":"string",
+      "keyword":"string",
+      "target_date":"YYYY-MM-DD",
+      "status":"string",
+      "source":"string",
       "topic":"string",
       "subject":"string",
       "count":3,

@@ -240,17 +240,51 @@ func (c *aiAppControl) executePractice(ctx context.Context, operation string, pa
 func (c *aiAppControl) executePlan(ctx context.Context, operation string, params map[string]any) (ai.AppControlResult, error) {
 	switch operation {
 	case "list":
-		items, err := c.planService.List(ctx, asString(params["plan_type"]))
+		planType := firstNonEmpty(asString(params["plan_type"]), asString(params["type"]))
+		items, err := c.planService.List(ctx, planType)
 		if err != nil {
 			return ai.AppControlResult{}, err
 		}
-		return ai.AppControlResult{Summary: fmt.Sprintf("已获取 %d 条计划。", len(items)), Data: map[string]any{"items": items}}, nil
+		filtered := filterPlanItems(items, params)
+		limit := asInt(params["limit"], len(filtered))
+		if limit < 0 {
+			limit = len(filtered)
+		}
+		truncated := false
+		if limit > 0 && len(filtered) > limit {
+			filtered = filtered[:limit]
+			truncated = true
+		}
+		summary := fmt.Sprintf("Retrieved %d plan(s).", len(filtered))
+		preview := summarizePlanItems(filtered, 5)
+		if preview != "" {
+			summary = fmt.Sprintf("%s Preview: %s", summary, preview)
+		}
+		if truncated {
+			summary = fmt.Sprintf("%s (result truncated by limit=%d)", summary, limit)
+		}
+		return ai.AppControlResult{
+			Summary: summary,
+			Data: map[string]any{
+				"items":          filtered,
+				"count":          len(filtered),
+				"source_count":   len(items),
+				"effective_type": planType,
+			},
+		}, nil
 	case "get":
-		item, err := c.planService.GetByID(ctx, asString(params["id"]))
+		id, candidates, err := c.resolvePlanID(ctx, params)
 		if err != nil {
 			return ai.AppControlResult{}, err
 		}
-		return ai.AppControlResult{Summary: fmt.Sprintf("已获取计划 %s。", item.ID), Data: map[string]any{"item": item}}, nil
+		if id == "" {
+			return ai.AppControlResult{}, buildPlanResolveError("get", candidates)
+		}
+		item, err := c.planService.GetByID(ctx, id)
+		if err != nil {
+			return ai.AppControlResult{}, err
+		}
+		return ai.AppControlResult{Summary: fmt.Sprintf("Plan %s loaded.", item.ID), Data: map[string]any{"item": item}}, nil
 	case "create":
 		in := plan.CreateInput{
 			PlanType:   plan.PlanType(asString(params["plan_type"])),
@@ -265,9 +299,15 @@ func (c *aiAppControl) executePlan(ctx context.Context, operation string, params
 		if err != nil {
 			return ai.AppControlResult{}, err
 		}
-		return ai.AppControlResult{Summary: fmt.Sprintf("已创建计划 %s。", item.ID), Data: map[string]any{"item": item}}, nil
+		return ai.AppControlResult{Summary: fmt.Sprintf("Plan %s created.", item.ID), Data: map[string]any{"item": item}}, nil
 	case "update":
-		id := asString(params["id"])
+		id, candidates, err := c.resolvePlanID(ctx, params)
+		if err != nil {
+			return ai.AppControlResult{}, err
+		}
+		if id == "" {
+			return ai.AppControlResult{}, buildPlanResolveError("update", candidates)
+		}
 		oldItem, err := c.planService.GetByID(ctx, id)
 		if err != nil {
 			return ai.AppControlResult{}, err
@@ -285,18 +325,161 @@ func (c *aiAppControl) executePlan(ctx context.Context, operation string, params
 		if err != nil {
 			return ai.AppControlResult{}, err
 		}
-		return ai.AppControlResult{Summary: fmt.Sprintf("已更新计划 %s。", item.ID), Data: map[string]any{"item": item}}, nil
+		return ai.AppControlResult{Summary: fmt.Sprintf("Plan %s updated.", item.ID), Data: map[string]any{"item": item}}, nil
 	case "delete":
-		id := asString(params["id"])
+		id, candidates, err := c.resolvePlanID(ctx, params)
+		if err != nil {
+			return ai.AppControlResult{}, err
+		}
+		if id == "" {
+			return ai.AppControlResult{}, buildPlanResolveError("delete", candidates)
+		}
 		if err := c.planService.Delete(ctx, id); err != nil {
 			return ai.AppControlResult{}, err
 		}
-		return ai.AppControlResult{Summary: fmt.Sprintf("已删除计划 %s。", id)}, nil
+		return ai.AppControlResult{Summary: fmt.Sprintf("Deleted plan %s.", id)}, nil
 	default:
 		return ai.AppControlResult{}, errs.BadRequest("unsupported plan operation")
 	}
 }
 
+func filterPlanItems(items []plan.Item, params map[string]any) []plan.Item {
+	keyword := strings.ToLower(
+		firstNonEmpty(
+			asString(params["keyword"]),
+			asString(params["query"]),
+			asString(params["q"]),
+			asString(params["title"]),
+			asString(params["name"]),
+		),
+	)
+	targetDate := firstNonEmpty(asString(params["target_date"]), asString(params["date"]))
+	status := strings.ToLower(asString(params["status"]))
+	source := strings.ToLower(asString(params["source"]))
+	priority := -1
+	if hasValue(params, "priority") {
+		priority = asInt(params["priority"], -1)
+	}
+
+	out := make([]plan.Item, 0, len(items))
+	for _, item := range items {
+		if targetDate != "" && strings.TrimSpace(item.TargetDate) != targetDate {
+			continue
+		}
+		if status != "" && strings.ToLower(strings.TrimSpace(item.Status)) != status {
+			continue
+		}
+		if source != "" && strings.ToLower(strings.TrimSpace(string(item.Source))) != source {
+			continue
+		}
+		if priority > 0 && item.Priority != priority {
+			continue
+		}
+		if keyword != "" {
+			title := strings.ToLower(strings.TrimSpace(item.Title))
+			content := strings.ToLower(strings.TrimSpace(item.Content))
+			if !strings.Contains(title, keyword) && !strings.Contains(content, keyword) {
+				continue
+			}
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
+func summarizePlanItems(items []plan.Item, limit int) string {
+	if len(items) == 0 || limit == 0 {
+		return ""
+	}
+	if limit < 0 || limit > len(items) {
+		limit = len(items)
+	}
+	chunks := make([]string, 0, limit)
+	for i := 0; i < limit; i++ {
+		item := items[i]
+		date := strings.TrimSpace(item.TargetDate)
+		if date == "" {
+			date = "-"
+		}
+		chunks = append(
+			chunks,
+			fmt.Sprintf(
+				"id=%s title=%q date=%s status=%s",
+				item.ID,
+				item.Title,
+				date,
+				item.Status,
+			),
+		)
+	}
+	return strings.Join(chunks, "; ")
+}
+
+func (c *aiAppControl) resolvePlanID(
+	ctx context.Context,
+	params map[string]any,
+) (string, []plan.Item, error) {
+	directID := firstNonEmpty(
+		asString(params["id"]),
+		asString(params["plan_id"]),
+		asString(params["item_id"]),
+		asString(params["target_id"]),
+	)
+	if directID != "" {
+		return directID, nil, nil
+	}
+
+	planType := firstNonEmpty(asString(params["plan_type"]), asString(params["type"]))
+	items, err := c.planService.List(ctx, planType)
+	if err != nil {
+		return "", nil, err
+	}
+	candidates := filterPlanItems(items, params)
+	if len(candidates) == 1 {
+		return candidates[0].ID, candidates, nil
+	}
+
+	title := strings.TrimSpace(firstNonEmpty(asString(params["title"]), asString(params["name"])))
+	if title != "" && len(candidates) > 1 {
+		exact := make([]plan.Item, 0, len(candidates))
+		for _, item := range candidates {
+			if strings.EqualFold(strings.TrimSpace(item.Title), title) {
+				exact = append(exact, item)
+			}
+		}
+		if len(exact) == 1 {
+			return exact[0].ID, exact, nil
+		}
+		if len(exact) > 1 {
+			candidates = exact
+		}
+	}
+
+	return "", candidates, nil
+}
+
+func buildPlanResolveError(operation string, candidates []plan.Item) error {
+	op := strings.TrimSpace(operation)
+	if op == "" {
+		op = "operate"
+	}
+	if len(candidates) == 0 {
+		return errs.BadRequest(
+			fmt.Sprintf(
+				"plan %s requires id, or provide title/keyword/target_date/status/source to find a unique plan",
+				op,
+			),
+		)
+	}
+	return errs.BadRequest(
+		fmt.Sprintf(
+			"plan %s is ambiguous: matched %d item(s). Candidates: %s",
+			op,
+			len(candidates),
+			summarizePlanItems(candidates, 5),
+		),
+	)
+}
 func (c *aiAppControl) executePomodoro(ctx context.Context, operation string, params map[string]any) (ai.AppControlResult, error) {
 	switch operation {
 	case "list":
