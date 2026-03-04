@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../models/question.dart';
 import '../providers/app_provider.dart';
+import '../widgets/ai_formula_text.dart';
 
 class QuestionDetailScreen extends StatefulWidget {
   const QuestionDetailScreen({
@@ -55,7 +56,7 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
                       Icon(Icons.quiz_outlined, size: 20, color: cs.primary),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: Text(
+                        child: AIFormulaText(
                           q.title.isEmpty ? '题目' : q.title,
                           style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
@@ -65,7 +66,7 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  Text(q.stem, style: theme.textTheme.bodyLarge),
+                  AIFormulaText(q.stem, style: theme.textTheme.bodyLarge),
                   if (q.options.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     ...q.options.map(
@@ -92,7 +93,7 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
                               ),
                             ),
                             const SizedBox(width: 8),
-                            Expanded(child: Text(o.text)),
+                            Expanded(child: AIFormulaText(o.text)),
                           ],
                         ),
                       ),
@@ -286,8 +287,9 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
                       color: cs.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: SelectableText(
+                    child: AIFormulaText(
                       analysis.isEmpty ? '暂无题目解析' : analysis,
+                      selectable: true,
                     ),
                   ),
                 ],
@@ -319,7 +321,7 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    SelectableText(wrongReason),
+                    AIFormulaText(wrongReason, selectable: true),
                   ],
                 ),
               ),
@@ -356,7 +358,9 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text('• ', style: TextStyle(fontSize: 14)),
-                            Expanded(child: SelectableText('$s')),
+                            Expanded(
+                              child: AIFormulaText('$s', selectable: true),
+                            ),
                           ],
                         ),
                       ),

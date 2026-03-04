@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/mistake.dart';
 import '../models/question.dart';
+import '../widgets/ai_formula_text.dart';
 import 'question_detail_screen.dart';
 
 String _formatTime(DateTime dt) {
@@ -95,18 +96,18 @@ class MistakeDetailScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
+            AIFormulaText(
               question!.title.isNotEmpty ? question!.title : '题目',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
-            Text(question!.stem),
+            AIFormulaText(question!.stem),
             if (question!.options.isNotEmpty) ...[
               const SizedBox(height: 8),
               ...question!.options.map(
                 (option) => Padding(
                   padding: const EdgeInsets.only(bottom: 4),
-                  child: Text('${option.key}. ${option.text}'),
+                  child: AIFormulaText('${option.key}. ${option.text}'),
                 ),
               ),
             ],
@@ -123,7 +124,7 @@ class MistakeDetailScreen extends StatelessWidget {
               .map(
                 (answer) => Padding(
                   padding: const EdgeInsets.only(bottom: 6),
-                  child: SelectableText(answer),
+                  child: AIFormulaText(answer, selectable: true),
                 ),
               )
               .toList(growable: false);
@@ -177,10 +178,13 @@ class MistakeDetailScreen extends StatelessWidget {
           children: [
             Text('错因与反馈', style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 8),
-            Text(mistake.feedback.isEmpty ? '-' : mistake.feedback),
+            AIFormulaText(
+              mistake.feedback.isEmpty ? '-' : mistake.feedback,
+              selectable: true,
+            ),
             if (mistake.reason.isNotEmpty) ...[
               const SizedBox(height: 8),
-              Text('错因: ${mistake.reason}'),
+              AIFormulaText('错因: ${mistake.reason}', selectable: true),
             ],
           ],
         ),

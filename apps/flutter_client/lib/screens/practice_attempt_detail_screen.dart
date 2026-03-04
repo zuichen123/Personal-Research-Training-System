@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/practice.dart';
 import '../models/question.dart';
+import '../widgets/ai_formula_text.dart';
 import 'question_detail_screen.dart';
 
 String _formatTime(DateTime dt) {
@@ -109,18 +110,18 @@ class PracticeAttemptDetailScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
+            AIFormulaText(
               question!.title.isNotEmpty ? question!.title : '题目',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
-            Text(question!.stem),
+            AIFormulaText(question!.stem),
             if (question!.options.isNotEmpty) ...[
               const SizedBox(height: 8),
               ...question!.options.map(
                 (option) => Padding(
                   padding: const EdgeInsets.only(bottom: 4),
-                  child: Text('${option.key}. ${option.text}'),
+                  child: AIFormulaText('${option.key}. ${option.text}'),
                 ),
               ),
             ],
@@ -137,7 +138,7 @@ class PracticeAttemptDetailScreen extends StatelessWidget {
               .map(
                 (answer) => Padding(
                   padding: const EdgeInsets.only(bottom: 6),
-                  child: SelectableText(answer),
+                  child: AIFormulaText(answer, selectable: true),
                 ),
               )
               .toList(growable: false);
@@ -225,7 +226,10 @@ class PracticeAttemptDetailScreen extends StatelessWidget {
                   color: cs.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: SelectableText(analysis.isEmpty ? '暂无题目解析' : analysis),
+                child: AIFormulaText(
+                  analysis.isEmpty ? '暂无题目解析' : analysis,
+                  selectable: true,
+                ),
               ),
             ],
           ),

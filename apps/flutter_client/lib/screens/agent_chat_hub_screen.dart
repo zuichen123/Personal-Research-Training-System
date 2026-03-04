@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/ai_agent_chat.dart';
 import '../providers/ai_agent_provider.dart';
 import '../providers/app_provider.dart';
+import '../widgets/ai_formula_text.dart';
 import 'ai_screen.dart';
 
 class AgentChatHubScreen extends StatefulWidget {
@@ -784,7 +785,7 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(message.content),
+                AIFormulaText(message.content, selectable: true),
                 if (!isUser &&
                     (message.providerUsed.isNotEmpty ||
                         message.modelUsed.isNotEmpty))
@@ -865,7 +866,7 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
                 dense: true,
                 contentPadding: EdgeInsets.zero,
                 value: selected.contains(index),
-                title: Text(
+                title: AIFormulaText(
                   '${index + 1}. $title',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -920,7 +921,7 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
           children: [
             const Text('学习计划产物', style: TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 6),
-            Text('目标：$finalGoal'),
+            AIFormulaText('目标：$finalGoal', selectable: true),
             Text('周期：$startDate ~ $endDate'),
             const SizedBox(height: 8),
             FilledButton.icon(

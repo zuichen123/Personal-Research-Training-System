@@ -9,6 +9,7 @@ import 'package:signature/signature.dart';
 
 import '../models/question.dart';
 import '../providers/app_provider.dart';
+import '../widgets/ai_formula_text.dart';
 
 enum AIScreenFocusSection { none, generate, grade }
 
@@ -340,9 +341,13 @@ class _AIScreenState extends State<AIScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('计划目标: ${plan['final_goal'] ?? '-'}'),
-          Text(
+          AIFormulaText(
+            '计划目标: ${plan['final_goal'] ?? '-'}',
+            selectable: true,
+          ),
+          AIFormulaText(
             '计划周期: ${plan['plan_start_date'] ?? '-'} ~ ${plan['plan_end_date'] ?? '-'}',
+            selectable: true,
           ),
           Text('计划条目: $planItemCount'),
           if (missing.isNotEmpty) ...[
@@ -352,12 +357,12 @@ class _AIScreenState extends State<AIScreen> {
           if (follow.isNotEmpty) ...[
             const SizedBox(height: 6),
             const Text('AI追问建议:'),
-            ...follow.map((e) => Text('• $e')),
+            ...follow.map((e) => AIFormulaText('• $e', selectable: true)),
           ],
           if (hints.isNotEmpty) ...[
             const SizedBox(height: 6),
             const Text('优化提示:'),
-            ...hints.map((e) => Text('• $e')),
+            ...hints.map((e) => AIFormulaText('• $e', selectable: true)),
           ],
         ],
       ),
@@ -464,13 +469,13 @@ class _AIScreenState extends State<AIScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
+            AIFormulaText(
               '${index + 1}. ${question.title.isEmpty ? question.stem : question.title}',
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
             if (question.title.isNotEmpty) ...[
               const SizedBox(height: 4),
-              Text(question.stem),
+              AIFormulaText(question.stem),
             ],
             const SizedBox(height: 6),
             Row(
@@ -485,7 +490,7 @@ class _AIScreenState extends State<AIScreen> {
                 ),
                 const SizedBox(width: 6),
                 Expanded(
-                  child: Text(
+                  child: AIFormulaText(
                     '答案关键点: ${question.answerKey.join(', ')}',
                     style: const TextStyle(fontSize: 12, color: Colors.grey),
                   ),
@@ -508,7 +513,7 @@ class _AIScreenState extends State<AIScreen> {
                   value: option.key,
                   groupValue: groupValue,
                   contentPadding: EdgeInsets.zero,
-                  title: Text('${option.key}. ${option.text}'),
+                  title: AIFormulaText('${option.key}. ${option.text}'),
                   onChanged: submitting
                       ? null
                       : (value) {
@@ -528,7 +533,7 @@ class _AIScreenState extends State<AIScreen> {
                   contentPadding: EdgeInsets.zero,
                   controlAffinity: ListTileControlAffinity.leading,
                   value: selected.contains(option.key),
-                  title: Text('${option.key}. ${option.text}'),
+                  title: AIFormulaText('${option.key}. ${option.text}'),
                   onChanged: submitting
                       ? null
                       : (checked) {
@@ -1043,7 +1048,11 @@ class _AIScreenState extends State<AIScreen> {
           ),
           if (feedback.isNotEmpty) ...[
             const SizedBox(height: 6),
-            Text('反馈：$feedback', style: const TextStyle(fontSize: 12)),
+            AIFormulaText(
+              '反馈：$feedback',
+              style: const TextStyle(fontSize: 12),
+              selectable: true,
+            ),
           ],
           const SizedBox(height: 4),
           Theme(
@@ -1067,19 +1076,30 @@ class _AIScreenState extends State<AIScreen> {
                     color: theme.colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: SelectableText(analysis.isEmpty ? '暂无题目解析' : analysis),
+                  child: AIFormulaText(
+                    analysis.isEmpty ? '暂无题目解析' : analysis,
+                    selectable: true,
+                  ),
                 ),
               ],
             ),
           ),
           if (wrongReason.isNotEmpty && !isCorrect) ...[
             const SizedBox(height: 6),
-            Text('错误原因：$wrongReason', style: const TextStyle(fontSize: 12)),
+            AIFormulaText(
+              '错误原因：$wrongReason',
+              style: const TextStyle(fontSize: 12),
+              selectable: true,
+            ),
           ],
           if (suggestions.isNotEmpty) ...[
             const SizedBox(height: 6),
             ...suggestions.map(
-              (item) => Text('• $item', style: const TextStyle(fontSize: 12)),
+              (item) => AIFormulaText(
+                '• $item',
+                style: const TextStyle(fontSize: 12),
+                selectable: true,
+              ),
             ),
           ],
           _jsonBox('generated-raw-$qKey', result),
