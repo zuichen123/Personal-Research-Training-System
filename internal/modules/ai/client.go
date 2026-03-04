@@ -32,6 +32,8 @@ type GradeResult struct {
 	Score         float64 `json:"score"`
 	Correct       bool    `json:"correct"`
 	Feedback      string  `json:"feedback"`
+	Analysis      string  `json:"analysis,omitempty"`
+	Explanation   string  `json:"explanation,omitempty"`
 	WrongReason   string  `json:"wrong_reason,omitempty"`
 	ModelMetadata string  `json:"model_metadata,omitempty"`
 }

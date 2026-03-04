@@ -582,32 +582,45 @@ class AppProvider with ChangeNotifier {
   Future<int> importLearningPlanToPlans() async {
     var imported = 0;
     await _runAction('导入AI计划到计划表', () async {
-      final raw = _aiLearningPlan?['plan_items'];
-      if (raw is! List) {
+      final items = _normalizeLearningPlanItems(_aiLearningPlan);
+      if (items.isEmpty) {
         throw StateError('learning plan has no plan_items');
       }
-      for (final item in raw) {
-        if (item is! Map) {
-          continue;
-        }
-        final mapped = Map<String, dynamic>.from(item.cast<dynamic, dynamic>());
-        final planType = mapped['plan_type']?.toString().trim() ?? '';
-        final title = mapped['title']?.toString().trim() ?? '';
+      for (final mapped in items) {
+        final planType = _firstNonEmptyKey(
+          mapped,
+          const ['plan_type', 'planType', 'type'],
+        );
+        final title = _firstNonEmptyKey(
+          mapped,
+          const ['title', 'name', 'final_goal'],
+        );
         if (planType.isEmpty || title.isEmpty) {
           continue;
         }
         final created = await _api.createPlan({
           'plan_type': planType,
           'title': title,
-          'content': mapped['content']?.toString() ?? '',
-          'target_date': mapped['target_date']?.toString() ?? '',
-          'status': mapped['status']?.toString().trim().isNotEmpty == true
-              ? mapped['status']?.toString()
-              : 'pending',
-          'priority': int.tryParse('${mapped['priority'] ?? ''}') ?? 3,
+          'content': _firstNonEmptyKey(
+            mapped,
+            const ['content', 'description', 'detail'],
+          ),
+          'target_date': _firstNonEmptyKey(
+            mapped,
+            const ['target_date', 'targetDate', 'end_date', 'endDate'],
+          ),
+          'status': _firstNonEmptyKey(
+            mapped,
+            const ['status', 'current_status'],
+            fallback: 'pending',
+          ),
+          'priority': _parsePlanPriority(mapped['priority']),
         });
         _plans.insert(0, created);
         imported++;
+      }
+      if (imported == 0) {
+        throw StateError('learning plan has no valid plan_items');
       }
       _isSectionLoaded[DataSection.plans] = true;
       notifyListeners();
@@ -727,6 +740,71 @@ class AppProvider with ChangeNotifier {
   void clearError() {
     _errorMessage = null;
     notifyListeners();
+  }
+
+  List<Map<String, dynamic>> _normalizeLearningPlanItems(
+    Map<String, dynamic>? plan,
+  ) {
+    if (plan == null) {
+      return const [];
+    }
+
+    final out = <Map<String, dynamic>>[];
+    final raw = plan['plan_items'];
+    if (raw is List) {
+      for (final item in raw) {
+        if (item is! Map) {
+          continue;
+        }
+        out.add(Map<String, dynamic>.from(item.cast<dynamic, dynamic>()));
+      }
+    }
+    if (out.isNotEmpty) {
+      return out;
+    }
+
+    final goal = _firstNonEmptyKey(plan, const ['final_goal', 'goal', 'title']);
+    if (goal.isEmpty) {
+      return const [];
+    }
+    return [
+      {
+        'plan_type': 'current_phase',
+        'title': 'AI学习计划',
+        'content': goal,
+        'target_date': _firstNonEmptyKey(
+          plan,
+          const ['plan_end_date', 'end_date'],
+        ),
+        'status': _firstNonEmptyKey(
+          plan,
+          const ['current_status', 'status'],
+          fallback: 'pending',
+        ),
+        'priority': 1,
+      },
+    ];
+  }
+
+  String _firstNonEmptyKey(
+    Map<String, dynamic> raw,
+    List<String> keys, {
+    String fallback = '',
+  }) {
+    for (final key in keys) {
+      final value = raw[key]?.toString().trim() ?? '';
+      if (value.isNotEmpty) {
+        return value;
+      }
+    }
+    return fallback;
+  }
+
+  int _parsePlanPriority(dynamic raw) {
+    final value = int.tryParse('${raw ?? ''}') ?? 3;
+    if (value < 1) return 1;
+    if (value > 5) return 5;
+    return value;
   }
 
   void _upsertPromptTemplate(Map<String, dynamic> template) {

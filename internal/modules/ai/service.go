@@ -419,6 +419,32 @@ func (s *Service) Learn(ctx context.Context, req LearnRequest) (LearnResult, err
 	}
 	req.Themes = normalizeStringList(req.Themes)
 	req.Goals = normalizeStringList(req.Goals)
+	if req.CurrentStatus == "" && req.CurrentStage != "" {
+		req.CurrentStatus = req.CurrentStage
+	}
+	if req.CurrentStatus == "" {
+		req.CurrentStatus = "pending"
+	}
+	if req.FinalGoal == "" && len(req.Goals) > 0 {
+		req.FinalGoal = strings.Join(req.Goals, "; ")
+	}
+	if req.FinalGoal == "" {
+		req.FinalGoal = "建立稳定学习节奏"
+	}
+	if len(req.Themes) == 0 {
+		if req.Unit != "" {
+			req.Themes = []string{req.Unit}
+		} else {
+			req.Themes = []string{req.Subject}
+		}
+	}
+	now := time.Now().UTC()
+	if req.StartDate == "" {
+		req.StartDate = now.Format("2006-01-02")
+	}
+	if req.EndDate == "" {
+		req.EndDate = now.AddDate(0, 3, 0).Format("2006-01-02")
+	}
 
 	return s.currentClient().BuildLearningPlan(ctx, req)
 }

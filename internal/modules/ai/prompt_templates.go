@@ -56,6 +56,8 @@ Evaluate the answer against the answer key and provide concise feedback.`,
   "score":0-100,
   "correct":true|false,
   "feedback":"string",
+  "analysis":"string",
+  "explanation":"string",
   "wrong_reason":"string"
 }`,
 	},

@@ -420,3 +420,60 @@ func TestService_UpdatePromptTemplate_RollsBackOnPersistError(t *testing.T) {
 		t.Fatalf("expected rollback to no custom prompt, got: %s", cfg.CustomPrompt)
 	}
 }
+
+func TestService_Learn_DefaultsAndFallbacks(t *testing.T) {
+	svc := NewService(
+		NewMockClient(0),
+		newQuestionServiceForTest(),
+		false,
+		RuntimeConfig{Provider: "mock"},
+	)
+
+	result, err := svc.Learn(context.Background(), LearnRequest{
+		Subject:      "math",
+		Goals:        []string{"提升代数能力"},
+		CurrentStage: "in_progress",
+	})
+	if err != nil {
+		t.Fatalf("Learn() error = %v", err)
+	}
+	if result.CurrentStatus != "in_progress" {
+		t.Fatalf("expected current_status=in_progress, got %s", result.CurrentStatus)
+	}
+	if strings.TrimSpace(result.FinalGoal) == "" {
+		t.Fatal("expected final_goal fallback to be populated")
+	}
+	if strings.TrimSpace(result.PlanStartDate) == "" || strings.TrimSpace(result.PlanEndDate) == "" {
+		t.Fatalf("expected non-empty plan dates, got start=%s end=%s", result.PlanStartDate, result.PlanEndDate)
+	}
+	if len(result.Themes) == 0 {
+		t.Fatal("expected fallback themes")
+	}
+}
+
+func TestService_Grade_MockContainsAnalysisFields(t *testing.T) {
+	svc := NewService(
+		NewMockClient(0),
+		newQuestionServiceForTest(),
+		false,
+		RuntimeConfig{Provider: "mock"},
+	)
+
+	result, err := svc.Grade(context.Background(), GradeRequest{
+		Question: question.Question{
+			Title:     "函数题",
+			Stem:      "解释单调递增",
+			AnswerKey: []string{"单调", "区间"},
+		},
+		UserAnswer: []string{"只写了单调"},
+	})
+	if err != nil {
+		t.Fatalf("Grade() error = %v", err)
+	}
+	if strings.TrimSpace(result.Analysis) == "" {
+		t.Fatal("expected analysis field to be populated")
+	}
+	if strings.TrimSpace(result.Explanation) == "" {
+		t.Fatal("expected explanation field to be populated")
+	}
+}

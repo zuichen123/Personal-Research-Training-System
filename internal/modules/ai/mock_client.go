@@ -84,6 +84,8 @@ func (m *MockClient) GradeAnswer(ctx context.Context, req GradeRequest) (GradeRe
 			Score:       0,
 			Correct:     false,
 			Feedback:    "mock provider cannot interpret media attachments yet",
+			Analysis:    "No text answer was provided; only media attachments were received.",
+			Explanation: "Mock provider does not parse image/audio content. Please add a text answer for deterministic grading.",
 			WrongReason: "media understanding unavailable in mock provider",
 		}, nil
 	}
@@ -93,6 +95,7 @@ func (m *MockClient) GradeAnswer(ctx context.Context, req GradeRequest) (GradeRe
 			Score:    0,
 			Correct:  false,
 			Feedback: "question has no answer key configured",
+			Analysis: "Cannot evaluate because answer_key is empty.",
 		}, nil
 	}
 
@@ -111,6 +114,8 @@ func (m *MockClient) GradeAnswer(ctx context.Context, req GradeRequest) (GradeRe
 		Score:         score,
 		Correct:       correct,
 		Feedback:      fmt.Sprintf("hit key points %d/%d", hits, len(req.Question.AnswerKey)),
+		Analysis:      fmt.Sprintf("Matched %d expected key points out of %d.", hits, len(req.Question.AnswerKey)),
+		Explanation:   "Compare the expected key points with your answer and fill in missing concepts.",
 		ModelMetadata: "provider=mock",
 	}
 	if !correct {
