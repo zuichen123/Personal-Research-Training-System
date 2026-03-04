@@ -177,7 +177,6 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_practice_attempts_question_id ON practice_attempts(question_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_resources_question_id ON resources(question_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_plans_type_date ON plans(plan_type, target_date);`,
-		`CREATE INDEX IF NOT EXISTS idx_plans_source_updated ON plans(source, updated_at DESC);`,
 		`CREATE INDEX IF NOT EXISTS idx_pomodoro_status_start ON pomodoro_sessions(status, started_at);`,
 		`CREATE INDEX IF NOT EXISTS idx_ai_sessions_agent_updated ON ai_agent_sessions(agent_id, updated_at DESC);`,
 		`CREATE INDEX IF NOT EXISTS idx_ai_messages_session_created ON ai_agent_messages(session_id, created_at DESC);`,
@@ -207,6 +206,16 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 	for _, stmt := range optionalStmts {
 		if err := execOptional(ctx, db, stmt); err != nil {
 			return err
+		}
+	}
+
+	postOptionalStmts := []string{
+		`CREATE INDEX IF NOT EXISTS idx_plans_source_updated ON plans(source, updated_at DESC);`,
+	}
+
+	for _, stmt := range postOptionalStmts {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			return fmt.Errorf("migrate sqlite: %w", err)
 		}
 	}
 
