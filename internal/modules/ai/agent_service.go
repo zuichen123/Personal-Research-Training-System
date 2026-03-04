@@ -213,7 +213,7 @@ func (s *Service) CreateAgentSession(
 	}
 	title := strings.TrimSpace(req.Title)
 	if title == "" {
-		title = "New Session"
+		title = "新会话"
 	}
 	now := nowRFC3339()
 	session := AgentSession{
@@ -832,7 +832,7 @@ func (s *Service) executeAgentAction(
 			"items":   items,
 		}
 		return actionExecutionResult{
-			Content:         fmt.Sprintf("Generated %d questions for topic \"%s\".", len(items), req.Topic),
+			Content:         fmt.Sprintf("已为主题“%s”生成 %d 道题。", req.Topic, len(items)),
 			ArtifactType:    "question_set",
 			ArtifactPayload: payload,
 			Meta:            meta,
@@ -854,13 +854,123 @@ func (s *Service) executeAgentAction(
 			"plan":    planResult,
 		}
 		return actionExecutionResult{
-			Content:         fmt.Sprintf("Built a learning plan (%s -> %s).", planResult.PlanStartDate, planResult.PlanEndDate),
+			Content:         fmt.Sprintf("已生成学习计划（%s 至 %s）。", planResult.PlanStartDate, planResult.PlanEndDate),
 			ArtifactType:    "learning_plan",
 			ArtifactPayload: payload,
 			Meta:            meta,
 		}, nil
+	case "manage_app":
+		req := buildAppControlRequest(params)
+		if strings.TrimSpace(req.Module) == "" {
+			return actionExecutionResult{}, errs.BadRequest("manage_app requires module")
+		}
+		if strings.TrimSpace(req.Operation) == "" {
+			return actionExecutionResult{}, errs.BadRequest("manage_app requires operation")
+		}
+		if s.appControl == nil {
+			return actionExecutionResult{}, errs.BadRequest("app management is not enabled")
+		}
+		result, err := s.appControl.Execute(ctx, req)
+		if err != nil {
+			return actionExecutionResult{}, err
+		}
+		logx.LoggerFromContext(ctx).Info("ai agent tool execution success",
+			slog.String("event", "ai.agent.tool_call"),
+			slog.String("session_id", session.ID),
+			slog.String("agent_id", agent.ID),
+			slog.String("action", "manage_app"),
+			slog.String("module", req.Module),
+			slog.String("operation", req.Operation),
+		)
+		content := strings.TrimSpace(result.Summary)
+		if content == "" {
+			content = fmt.Sprintf("已执行 %s/%s。", req.Module, req.Operation)
+		}
+		return actionExecutionResult{
+			Content: content,
+			Meta: agentCallMeta{
+				ProviderUsed: "internal",
+				ModelUsed:    "app_control",
+				FallbackUsed: false,
+				LatencyMS:    0,
+			},
+		}, nil
 	default:
 		return actionExecutionResult{}, errs.BadRequest("unsupported action")
+	}
+}
+
+func buildAppControlRequest(params map[string]any) AppControlRequest {
+	module := firstNonEmptyAsString(params, "module", "")
+	if module == "" {
+		module = firstNonEmptyAsString(params, "domain", "")
+	}
+	if module == "" {
+		module = firstNonEmptyAsString(params, "resource", "")
+	}
+	operation := firstNonEmptyAsString(params, "operation", "")
+	if operation == "" {
+		operation = firstNonEmptyAsString(params, "op", "")
+	}
+	if operation == "" {
+		operation = firstNonEmptyAsString(params, "action", "")
+	}
+	payload := map[string]any{}
+	if params != nil {
+		for k, v := range params {
+			switch strings.ToLower(strings.TrimSpace(k)) {
+			case "module", "domain", "resource", "operation", "op", "action":
+				continue
+			case "payload", "params", "input", "data", "arguments":
+				m, ok := toAnyMap(v)
+				if !ok {
+					payload[k] = v
+					continue
+				}
+				if module == "" {
+					module = firstNonEmptyAsString(m, "module", "")
+					if module == "" {
+						module = firstNonEmptyAsString(m, "domain", "")
+					}
+					if module == "" {
+						module = firstNonEmptyAsString(m, "resource", "")
+					}
+				}
+				if operation == "" {
+					operation = firstNonEmptyAsString(m, "operation", "")
+					if operation == "" {
+						operation = firstNonEmptyAsString(m, "op", "")
+					}
+					if operation == "" {
+						operation = firstNonEmptyAsString(m, "action", "")
+					}
+				}
+				for mk, mv := range m {
+					switch strings.ToLower(strings.TrimSpace(mk)) {
+					case "module", "domain", "resource", "operation", "op", "action":
+						continue
+					default:
+						payload[mk] = mv
+					}
+				}
+			default:
+				payload[k] = v
+			}
+		}
+	}
+	return AppControlRequest{
+		Module:    strings.ToLower(strings.TrimSpace(module)),
+		Operation: strings.ToLower(strings.TrimSpace(operation)),
+		Params:    payload,
+	}
+}
+
+func toAnyMap(raw any) (map[string]any, bool) {
+	switch m := raw.(type) {
+	case map[string]any:
+		return m, true
+	default:
+		return nil, false
 	}
 }
 
@@ -1430,7 +1540,7 @@ func shouldAskConfirmation(intent IntentResult) bool {
 
 func isSupportedIntentAction(action string) bool {
 	switch strings.ToLower(strings.TrimSpace(action)) {
-	case "generate_questions", "build_plan":
+	case "generate_questions", "build_plan", "manage_app":
 		return true
 	default:
 		return false
@@ -1440,11 +1550,13 @@ func isSupportedIntentAction(action string) bool {
 func confirmationPromptForAction(action string) string {
 	switch strings.ToLower(strings.TrimSpace(action)) {
 	case "generate_questions":
-		return "I detected a question-generation request. Confirm to generate questions now?"
+		return "识别到出题请求，是否立即生成题目？"
 	case "build_plan":
-		return "I detected a learning-plan request. Confirm to build the plan now?"
+		return "识别到学习计划请求，是否立即生成计划？"
+	case "manage_app":
+		return "识别到系统管理请求，是否立即执行？"
 	default:
-		return "Please confirm the action."
+		return "请确认是否执行该操作。"
 	}
 }
 

@@ -214,16 +214,27 @@ Score learning performance from accuracy, stability and speed, and provide actio
 		Key:  PromptKeyDetectIntent,
 		Name: "Agent Intent Detection",
 		PresetPrompt: `Detect whether the latest user request should trigger a tool action.
-Allowed actions: generate_questions, build_plan, none.
+Allowed actions: generate_questions, build_plan, manage_app, none.
+Use manage_app for software management requests such as creating/updating/deleting/listing:
+- agents, sessions, prompts, provider config
+- questions, mistakes, practice attempts, plans, pomodoro sessions, profile, resources
+When action is manage_app, extract "module" and "operation" with required fields in params.
 Return confidence in [0,1] and include key params when possible.`,
 		PresetOutputFormatPrompt: `Return ONLY JSON:
 {
   "content":"",
   "intent":{
-    "action":"generate_questions|build_plan|none",
+    "action":"generate_questions|build_plan|manage_app|none",
     "confidence":0.0,
     "reason":"string",
-    "params":{"topic":"string","subject":"string","count":3,"difficulty":3}
+    "params":{
+      "module":"agent|session|provider|prompt|question|mistake|practice|plan|pomodoro|profile|resource",
+      "operation":"create|update|delete|get|list|submit|start|end|reload|upsert",
+      "topic":"string",
+      "subject":"string",
+      "count":3,
+      "difficulty":3
+    }
   }
 }`,
 	},
@@ -231,7 +242,8 @@ Return confidence in [0,1] and include key params when possible.`,
 		Key:  PromptKeyAgentChat,
 		Name: "Agent Chat",
 		PresetPrompt: `You are a tutoring agent in a self-study system.
-Respond clearly and concisely based on the conversation.`,
+Respond clearly and concisely based on the conversation.
+For software-management requests, prefer intent.manage_app instead of only verbal replies.`,
 		PresetOutputFormatPrompt: `Return ONLY JSON:
 {
   "content":"string",

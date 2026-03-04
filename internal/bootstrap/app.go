@@ -92,6 +92,16 @@ func NewApp(cfg config.Config) (*App, error) {
 		return nil, err
 	}
 	practiceService := practice.NewService(practiceRepo, questionService, aiService, mistakeService)
+	aiService.SetAppControl(newAIAppControl(
+		aiService,
+		questionService,
+		mistakeService,
+		practiceService,
+		planService,
+		pomodoroService,
+		resourceService,
+		profileService,
+	))
 
 	questionHandler := question.NewHandler(questionService)
 	mistakeHandler := mistake.NewHandler(mistakeService)

@@ -402,7 +402,20 @@ func (m *MockClient) Chat(ctx context.Context, req ChatRequest) (ChatResponse, e
 			Params:     map[string]any{},
 		}
 		lower := strings.ToLower(lastUser)
-		if strings.Contains(lower, "题") || strings.Contains(lower, "question") {
+		if strings.Contains(lower, "agent") || strings.Contains(lower, "智能体") {
+			intent.Action = "manage_app"
+			intent.Confidence = 0.88
+			intent.Reason = "agent management keyword detected"
+			intent.Params = map[string]any{
+				"module":    "agent",
+				"operation": "create",
+				"name":      "new-agent",
+				"protocol":  "openai_compatible",
+				"primary": map[string]any{
+					"model": "gpt-4o-mini",
+				},
+			}
+		} else if strings.Contains(lower, "题目") || strings.Contains(lower, "question") {
 			intent.Action = "generate_questions"
 			intent.Confidence = 0.85
 			intent.Reason = "question generation keyword detected"
@@ -410,6 +423,14 @@ func (m *MockClient) Chat(ctx context.Context, req ChatRequest) (ChatResponse, e
 			intent.Action = "build_plan"
 			intent.Confidence = 0.85
 			intent.Reason = "learning plan keyword detected"
+		} else if strings.Contains(lower, "删除") && strings.Contains(lower, "题目") {
+			intent.Action = "manage_app"
+			intent.Confidence = 0.86
+			intent.Reason = "question delete command detected"
+			intent.Params = map[string]any{
+				"module":    "question",
+				"operation": "delete",
+			}
 		}
 		return ChatResponse{Intent: intent}, nil
 	}

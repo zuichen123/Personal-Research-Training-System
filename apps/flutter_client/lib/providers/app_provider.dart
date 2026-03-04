@@ -117,19 +117,19 @@ class AppProvider with ChangeNotifier {
   Future<void> ensureDataForTab(int tabIndex) async {
     switch (tabIndex) {
       case 0:
-        await ensureQuestionsLoaded();
+        await ensureAILoaded();
         break;
       case 1:
-        await ensureMistakesLoaded();
+        await ensureQuestionsLoaded();
         break;
       case 2:
-        await ensureAttemptsLoaded();
+        await ensureMistakesLoaded();
         break;
       case 3:
-        await ensurePomodoroLoaded();
+        await ensureAttemptsLoaded();
         break;
       case 4:
-        await ensureAILoaded();
+        await ensurePomodoroLoaded();
         break;
       default:
         return;

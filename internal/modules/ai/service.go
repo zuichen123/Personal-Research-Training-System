@@ -19,6 +19,7 @@ type Service struct {
 	client          Client
 	questionService *question.Service
 	planService     *plan.Service
+	appControl      AppControl
 	fallbackEnabled bool
 	runtime         RuntimeConfig
 	configStore     ProviderConfigStore
@@ -30,6 +31,21 @@ type Service struct {
 
 type promptTemplateRuntimeAware interface {
 	SetPromptTemplateRuntime(runtime *PromptTemplateRuntime)
+}
+
+type AppControlRequest struct {
+	Module    string         `json:"module"`
+	Operation string         `json:"operation"`
+	Params    map[string]any `json:"params"`
+}
+
+type AppControlResult struct {
+	Summary string         `json:"summary"`
+	Data    map[string]any `json:"data,omitempty"`
+}
+
+type AppControl interface {
+	Execute(ctx context.Context, req AppControlRequest) (AppControlResult, error)
 }
 
 func NewService(client Client, questionService *question.Service, fallbackEnabled bool, runtime RuntimeConfig) *Service {
@@ -81,6 +97,12 @@ func NewServiceWithStoreAndDeps(
 	}
 	service.bindPromptRuntimeLocked()
 	return service
+}
+
+func (s *Service) SetAppControl(control AppControl) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.appControl = control
 }
 
 func (s *Service) bindPromptRuntimeLocked() {

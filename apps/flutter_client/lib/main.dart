@@ -129,14 +129,19 @@ class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
 
   final List<Widget> _screens = const [
+    AgentChatHubScreen(),
     QuestionsScreen(),
     MistakesScreen(),
     PracticeScreen(),
     PomodoroScreen(),
-    AgentChatHubScreen(),
   ];
 
   static const _destinations = [
+    _NavItem(
+      icon: Icons.psychology_outlined,
+      selectedIcon: Icons.psychology,
+      label: 'AI',
+    ),
     _NavItem(
       icon: Icons.question_answer_outlined,
       selectedIcon: Icons.question_answer,
@@ -156,11 +161,6 @@ class _MainScreenState extends State<MainScreen> {
       icon: Icons.timer_outlined,
       selectedIcon: Icons.timer,
       label: '专注',
-    ),
-    _NavItem(
-      icon: Icons.psychology_outlined,
-      selectedIcon: Icons.psychology,
-      label: 'AI',
     ),
   ];
 
