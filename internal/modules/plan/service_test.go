@@ -111,3 +111,35 @@ func TestService_CreateValidation_ValidYearAndWeekPlanType(t *testing.T) {
 		}
 	}
 }
+
+func TestService_CreateValidation_InvalidStatusNormalized(t *testing.T) {
+	svc := NewService(newTestRepo())
+
+	item, err := svc.Create(context.Background(), CreateInput{
+		PlanType: DayPlan,
+		Title:    "plan",
+		Status:   "foo_bar",
+	})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if item.Status != string(StatusPending) {
+		t.Fatalf("expected status %s, got %s", StatusPending, item.Status)
+	}
+}
+
+func TestService_CreateValidation_ValidStatusPreserved(t *testing.T) {
+	svc := NewService(newTestRepo())
+
+	item, err := svc.Create(context.Background(), CreateInput{
+		PlanType: DayPlan,
+		Title:    "plan",
+		Status:   "in_progress",
+	})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if item.Status != string(StatusInProgress) {
+		t.Fatalf("expected status %s, got %s", StatusInProgress, item.Status)
+	}
+}

@@ -145,16 +145,25 @@ class _PlansScreenState extends State<PlansScreen> {
 
     if (plans.isEmpty) {
       return ListView(
-        children: const [
-          SizedBox(height: 64),
+        children: [
+          const SizedBox(height: 64),
           Center(
             child: Column(
               children: [
-                Icon(Icons.event_note_outlined, size: 64, color: Colors.grey),
-                SizedBox(height: 16),
-                Text(
+                Icon(
+                  Icons.event_note_outlined,
+                  size: 64,
+                  color: Colors.indigo.withValues(alpha: 0.35),
+                ),
+                const SizedBox(height: 16),
+                const Text(
                   '暂无计划',
                   style: TextStyle(fontSize: 16, color: Colors.grey),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  '点击右下角按钮创建你的第一个计划',
+                  style: TextStyle(fontSize: 13, color: Colors.grey),
                 ),
               ],
             ),
@@ -230,8 +239,10 @@ class _PlansScreenState extends State<PlansScreen> {
         return Colors.grey;
       case 'in_progress':
         return Colors.blue;
-      case 'done':
+      case 'completed':
         return Colors.green;
+      case 'archived':
+        return Colors.deepPurple;
       default:
         return Colors.grey;
     }
@@ -243,8 +254,10 @@ class _PlansScreenState extends State<PlansScreen> {
         return Icons.schedule;
       case 'in_progress':
         return Icons.play_arrow;
-      case 'done':
+      case 'completed':
         return Icons.check;
+      case 'archived':
+        return Icons.archive_outlined;
       default:
         return Icons.help_outline;
     }
@@ -358,7 +371,7 @@ class _PlansScreenState extends State<PlansScreen> {
                     _input(titleController, '标题'),
                     _input(contentController, '内容', maxLines: 3),
                     _input(targetController, '目标日期(YYYY-MM-DD)'),
-                    _input(statusController, '状态(pending/in_progress/done)'),
+                    _input(statusController, '状态(pending/in_progress/completed/archived)'),
                     _input(priorityController, '优先级(1-5)'),
                   ],
                 ),
@@ -459,8 +472,10 @@ class _PlansScreenState extends State<PlansScreen> {
         return '待开始';
       case 'in_progress':
         return '进行中';
-      case 'done':
+      case 'completed':
         return '已完成';
+      case 'archived':
+        return '已归档';
       default:
         return status;
     }

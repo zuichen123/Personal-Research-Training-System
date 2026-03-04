@@ -52,6 +52,8 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   bool? _backendHealthy;
   bool _checkingHealth = false;
+  int? _healthLatencyMs;
+  DateTime? _lastHealthCheck;
 
   static const String _customAcademicStatus = '自定义';
   static const List<String> _academicStatusPresets = [
@@ -122,15 +124,26 @@ class _SettingsScreenState extends State<SettingsScreen>
   Future<void> _checkBackendHealth() async {
     if (_checkingHealth) return;
     setState(() => _checkingHealth = true);
+    final stopwatch = Stopwatch()..start();
     try {
       final provider = context.read<AppProvider>();
       final healthy = await provider.apiService.checkHealth();
+      stopwatch.stop();
       if (mounted) {
-        setState(() => _backendHealthy = healthy);
+        setState(() {
+          _backendHealthy = healthy;
+          _healthLatencyMs = stopwatch.elapsedMilliseconds;
+          _lastHealthCheck = DateTime.now();
+        });
       }
     } catch (_) {
+      stopwatch.stop();
       if (mounted) {
-        setState(() => _backendHealthy = false);
+        setState(() {
+          _backendHealthy = false;
+          _healthLatencyMs = stopwatch.elapsedMilliseconds;
+          _lastHealthCheck = DateTime.now();
+        });
       }
     } finally {
       if (mounted) {
@@ -1468,6 +1481,15 @@ class _SettingsScreenState extends State<SettingsScreen>
       label = '未检测';
     }
 
+    String? subtitle;
+    if (_healthLatencyMs != null && _lastHealthCheck != null) {
+      final time = _lastHealthCheck!;
+      final hh = time.hour.toString().padLeft(2, '0');
+      final mm = time.minute.toString().padLeft(2, '0');
+      final ss = time.second.toString().padLeft(2, '0');
+      subtitle = '延迟 ${_healthLatencyMs}ms · 上次检查 $hh:$mm:$ss';
+    }
+
     return Card(
       color: color.withValues(alpha: 0.08),
       margin: const EdgeInsets.only(bottom: 12),
@@ -1477,6 +1499,9 @@ class _SettingsScreenState extends State<SettingsScreen>
           label,
           style: TextStyle(color: color, fontWeight: FontWeight.w600),
         ),
+        subtitle: subtitle != null
+            ? Text(subtitle, style: TextStyle(fontSize: 12, color: cs.outline))
+            : null,
         trailing: IconButton(
           icon: Icon(Icons.refresh, color: cs.outline),
           tooltip: '重新检测',

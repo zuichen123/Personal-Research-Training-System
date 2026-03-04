@@ -5,8 +5,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"self-study-tool/internal/shared/errs"
+
+	"github.com/google/uuid"
 )
 
 type Service struct {
@@ -112,9 +113,14 @@ func isValidPlanType(planType PlanType) bool {
 func normalizeStatus(v string) string {
 	t := strings.TrimSpace(v)
 	if t == "" {
-		return "pending"
+		return string(StatusPending)
 	}
-	return t
+	switch PlanStatus(t) {
+	case StatusPending, StatusInProgress, StatusCompleted, StatusArchived:
+		return t
+	default:
+		return string(StatusPending)
+	}
 }
 
 func normalizePriority(v int) int {

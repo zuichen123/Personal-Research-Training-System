@@ -22,35 +22,44 @@ const (
 	SourceAIAgent    PlanSource = "ai_agent"
 )
 
+type PlanStatus string
+
+const (
+	StatusPending    PlanStatus = "pending"
+	StatusInProgress PlanStatus = "in_progress"
+	StatusCompleted  PlanStatus = "completed"
+	StatusArchived   PlanStatus = "archived"
+)
+
 type Item struct {
-	ID         string    `json:"id"`
-	PlanType   PlanType  `json:"plan_type"`
-	Title      string    `json:"title"`
-	Content    string    `json:"content"`
-	TargetDate string    `json:"target_date,omitempty"`
-	Status     string    `json:"status"`
-	Priority   int       `json:"priority"`
+	ID         string     `json:"id"`
+	PlanType   PlanType   `json:"plan_type"`
+	Title      string     `json:"title"`
+	Content    string     `json:"content"`
+	TargetDate string     `json:"target_date,omitempty"`
+	Status     string     `json:"status"`
+	Priority   int        `json:"priority"`
 	Source     PlanSource `json:"source"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	CreatedAt  time.Time  `json:"created_at"`
+	UpdatedAt  time.Time  `json:"updated_at"`
 }
 
 type CreateInput struct {
-	PlanType   PlanType `json:"plan_type"`
-	Title      string   `json:"title"`
-	Content    string   `json:"content"`
-	TargetDate string   `json:"target_date"`
-	Status     string   `json:"status"`
-	Priority   int      `json:"priority"`
+	PlanType   PlanType   `json:"plan_type"`
+	Title      string     `json:"title"`
+	Content    string     `json:"content"`
+	TargetDate string     `json:"target_date"`
+	Status     string     `json:"status"`
+	Priority   int        `json:"priority"`
 	Source     PlanSource `json:"source"`
 }
 
 type UpdateInput struct {
-	PlanType   PlanType `json:"plan_type"`
-	Title      string   `json:"title"`
-	Content    string   `json:"content"`
-	TargetDate string   `json:"target_date"`
-	Status     string   `json:"status"`
-	Priority   int      `json:"priority"`
+	PlanType   PlanType   `json:"plan_type"`
+	Title      string     `json:"title"`
+	Content    string     `json:"content"`
+	TargetDate string     `json:"target_date"`
+	Status     string     `json:"status"`
+	Priority   int        `json:"priority"`
 	Source     PlanSource `json:"source"`
 }

@@ -21,6 +21,8 @@ type MiddlewareConfig struct {
 	AppEnv           string
 }
 
+const defaultMaxBodyBytes int64 = 1 << 20 // 1 MB
+
 func RequestMiddleware(cfg MiddlewareConfig) func(http.Handler) http.Handler {
 	logCfg := logx.ConfigSnapshot()
 	logCfg.HTTPBodyEnabled = cfg.HTTPBodyEnabled
@@ -34,8 +36,29 @@ func RequestMiddleware(cfg MiddlewareConfig) func(http.Handler) http.Handler {
 		handler = traceMiddleware(handler)
 		handler = middleware.RequestID(handler)
 		handler = middleware.RealIP(handler)
+		handler = securityHeaders(handler)
+		handler = maxBodySize(defaultMaxBodyBytes)(handler)
 		handler = recoverer(handler)
 		return handler
+	}
+}
+
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		next.ServeHTTP(w, r)
+	})
+}
+
+func maxBodySize(maxBytes int64) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Body != nil {
+				r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+			}
+			next.ServeHTTP(w, r)
+		})
 	}
 }
 

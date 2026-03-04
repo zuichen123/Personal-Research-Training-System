@@ -45,21 +45,23 @@ Future<void> main() async {
 }
 
 CardThemeData _cardTheme(ColorScheme cs) => CardThemeData(
-  elevation: 0.5,
-  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+  elevation: 1,
+  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
   clipBehavior: Clip.antiAlias,
 );
 
 AppBarTheme _appBarTheme(ColorScheme cs) => AppBarTheme(
   centerTitle: true,
-  scrolledUnderElevation: 1,
+  scrolledUnderElevation: 2,
   backgroundColor: cs.surface,
+  surfaceTintColor: cs.primary,
 );
 
 NavigationBarThemeData _navBarTheme(ColorScheme cs) => NavigationBarThemeData(
-  indicatorColor: cs.primaryContainer.withValues(alpha: 0.7),
+  indicatorColor: cs.primaryContainer.withValues(alpha: 0.8),
+  indicatorShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
   labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-  height: 68,
+  height: 72,
 );
 
 FloatingActionButtonThemeData _fabTheme(ColorScheme cs) =>
@@ -101,7 +103,7 @@ class MyApp extends StatelessWidget {
 
   ThemeData _buildTheme(Brightness brightness) {
     final cs = ColorScheme.fromSeed(
-      seedColor: const Color(0xFF0D47A1),
+      seedColor: const Color(0xFF4338CA),
       brightness: brightness,
     );
     return ThemeData(
@@ -323,6 +325,16 @@ class _MainScreenState extends State<MainScreen> {
 
     return Scaffold(
       drawer: _buildDrawer(context),
+      appBar: AppBar(
+        leading: Builder(
+          builder: (ctx) => IconButton(
+            icon: const Icon(Icons.menu),
+            tooltip: '更多功能',
+            onPressed: () => Scaffold.of(ctx).openDrawer(),
+          ),
+        ),
+        title: Text(_destinations[_currentIndex].label),
+      ),
       body: IndexedStack(index: _currentIndex, children: _screens),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,

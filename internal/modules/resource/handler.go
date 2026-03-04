@@ -6,9 +6,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/go-chi/chi/v5"
 	"self-study-tool/internal/shared/errs"
 	"self-study-tool/internal/shared/httpx"
+
+	"github.com/go-chi/chi/v5"
 )
 
 type Handler struct {
@@ -125,7 +126,11 @@ func splitCSV(raw string) []string {
 }
 
 func sanitizeFilename(name string) string {
-	replacer := strings.NewReplacer("\r", "", "\n", "", `"`, "")
+	replacer := strings.NewReplacer(
+		"\r", "", "\n", "", `"`, "",
+		"/", "", "\\", "",
+		"..", "", "\x00", "",
+	)
 	return replacer.Replace(name)
 }
 

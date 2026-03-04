@@ -132,9 +132,19 @@ class _PomodoroScreenState extends State<PomodoroScreen> {
     final displaySeconds = isOvertime ? 0 : remaining.inSeconds % 60;
 
     return Card(
-      color: cs.primaryContainer,
       elevation: 3,
-      child: Padding(
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: LinearGradient(
+            colors: [
+              cs.primaryContainer,
+              cs.primary.withValues(alpha: 0.18),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
