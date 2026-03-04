@@ -116,6 +116,39 @@ func TestSQLiteAgentRepository_ListMessagesByOffset(t *testing.T) {
 	}
 }
 
+func TestSQLiteAgentRepository_ListMessages_NullJSONDoesNotCreatePending(t *testing.T) {
+	ctx := context.Background()
+	repo := newAgentRepoForTest(t)
+
+	_, sessionID := seedAgentSessionWithMessages(
+		t,
+		ctx,
+		repo,
+		AgentProtocolMock,
+		AgentProviderConfig{Model: "mock"},
+		AgentProviderConfig{},
+		1,
+	)
+
+	items, err := repo.ListMessages(ctx, sessionID, 10, "")
+	if err != nil {
+		t.Fatalf("ListMessages() error = %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(items))
+	}
+
+	if items[0].Intent != nil {
+		t.Fatalf("expected intent to be nil for null intent_json, got %+v", *items[0].Intent)
+	}
+	if items[0].PendingConfirmation != nil {
+		t.Fatalf(
+			"expected pending confirmation to be nil for null pending_confirmation_json, got %+v",
+			*items[0].PendingConfirmation,
+		)
+	}
+}
+
 func newAgentRepoForTest(t *testing.T) *SQLiteAgentRepository {
 	t.Helper()
 

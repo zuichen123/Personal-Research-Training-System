@@ -766,7 +766,7 @@ func scanAgentMessage(s agentScanner) (AgentMessage, error) {
 	}
 	item.FallbackUsed = fallbackUsedInt > 0
 	intentJSON = strings.TrimSpace(intentJSON)
-	if intentJSON != "" {
+	if intentJSON != "" && !strings.EqualFold(intentJSON, "null") {
 		intent := IntentResult{}
 		if err := json.Unmarshal([]byte(intentJSON), &intent); err == nil {
 			if intent.Params == nil {
@@ -776,7 +776,7 @@ func scanAgentMessage(s agentScanner) (AgentMessage, error) {
 		}
 	}
 	pendingJSON = strings.TrimSpace(pendingJSON)
-	if pendingJSON != "" {
+	if pendingJSON != "" && !strings.EqualFold(pendingJSON, "null") {
 		pending := PendingConfirmation{}
 		if err := json.Unmarshal([]byte(pendingJSON), &pending); err == nil {
 			if pending.Params == nil {
@@ -829,7 +829,11 @@ func mustJSONString(v any) string {
 	if err != nil {
 		return ""
 	}
-	return string(data)
+	serialized := strings.TrimSpace(string(data))
+	if strings.EqualFold(serialized, "null") {
+		return ""
+	}
+	return serialized
 }
 
 func boolToInt(v bool) int {

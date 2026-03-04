@@ -798,7 +798,9 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
               ],
             ),
           ),
-          if (!isUser && message.pendingConfirmation != null)
+          if (!isUser &&
+              message.pendingConfirmation != null &&
+              message.pendingConfirmation!.action.trim().isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: FilledButton.tonalIcon(
