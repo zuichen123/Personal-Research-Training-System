@@ -75,6 +75,8 @@ class _AITutorTeamScreenState extends State<AITutorTeamScreen> {
             children: [
               _teamOverviewCard(controllerAgent, controllerContext),
               const SizedBox(height: 10),
+              _controllerSchedulingCard(),
+              const SizedBox(height: 10),
               _subjectAgentsCard(),
               const SizedBox(height: 10),
               _toolCallCard(),
@@ -122,15 +124,67 @@ class _AITutorTeamScreenState extends State<AITutorTeamScreen> {
                   visualDensity: VisualDensity.compact,
                 ),
                 Chip(
-                  label: Text('Controller 记录 ${controllerContext.toolCalls.length}'),
+                  label: Text('Controller tokens ${controllerContext.tokenEstimate}'),
+                  visualDensity: VisualDensity.compact,
+                ),
+                Chip(
+                  label: Text('压缩次数 ${controllerContext.compressionCount}'),
                   visualDensity: VisualDensity.compact,
                 ),
                 const Chip(
-                  label: Text('学科 Agent 上下文隔离'),
+                  label: Text('自动压缩 >100k tokens 或 >7天'),
+                  visualDensity: VisualDensity.compact,
+                ),
+                const Chip(
+                  label: Text('学科 Agent 上下文独立'),
                   visualDensity: VisualDensity.compact,
                 ),
               ],
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _controllerSchedulingCard() {
+    final decisions = _teamController.latestScheduleDecisions(limit: 6);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Controller Scheduling',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            ),
+            const SizedBox(height: 8),
+            if (decisions.isEmpty)
+              ..._toolSpecs.map((spec) {
+                final hint = _teamController.scheduleHint(
+                  tool: spec.tool,
+                  defaultAgentId: spec.agentId,
+                );
+                final base = '${spec.tool.label} -> ${hint.assignedAgentName}';
+                final msg = hint.hasSuggestion
+                    ? '$base（建议切换到 ${hint.suggestedAgentName}）'
+                    : base;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Text(msg, style: const TextStyle(fontSize: 12)),
+                );
+              })
+            else
+              ...decisions.map(
+                (item) => Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Text(
+                    '${_formatTime(item.scheduledAt)} · ${item.tool.label} -> ${item.assignedAgentName} · ${item.reason}',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -158,29 +212,88 @@ class _AITutorTeamScreenState extends State<AITutorTeamScreen> {
   }
 
   Widget _subjectAgentTile(AITutorAgent agent) {
-    final context = _teamController.contextOf(agent.id);
-    final latestNote = context.notes.isNotEmpty ? context.notes.first : '暂无上下文';
+    final contextData = _teamController.contextOf(agent.id);
+    final latestNote = contextData.notes.isNotEmpty
+        ? contextData.notes.first
+        : '暂无上下文';
+    final compressedAt = contextData.lastCompressedAt == null
+        ? '未压缩'
+        : _formatDateTime(contextData.lastCompressedAt!);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
         borderRadius: BorderRadius.circular(10),
       ),
-      child: ListTile(
-        dense: true,
-        leading: CircleAvatar(
-          child: Text(agent.subject.isEmpty ? '-' : agent.subject.substring(0, 1)),
-        ),
-        title: Text('${agent.name} · ${agent.role}'),
-        subtitle: Text(
-          '${agent.mission}\n最近上下文: $latestNote',
-          maxLines: 3,
-          overflow: TextOverflow.ellipsis,
-        ),
-        trailing: Chip(
-          label: Text('调用 ${_teamController.toolCallCount(agent.id)}'),
-          visualDensity: VisualDensity.compact,
-        ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            child: Text(agent.subject.isEmpty ? '-' : agent.subject.substring(0, 1)),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${agent.name} · ${agent.role}',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 2),
+                Text(agent.mission, style: const TextStyle(fontSize: 12)),
+                const SizedBox(height: 4),
+                Text(
+                  '最近上下文: $latestNote',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    Chip(
+                      label: Text(
+                        '调用 ${_teamController.toolCallCount(agent.id)}',
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    Chip(
+                      label: Text(
+                        'tokens ${contextData.tokenEstimate}',
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    Chip(
+                      label: Text(
+                        '压缩 ${contextData.compressionCount}',
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    Chip(
+                      label: Text(
+                        '最近压缩 $compressedAt',
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -206,7 +319,7 @@ class _AITutorTeamScreenState extends State<AITutorTeamScreen> {
                 crossAxisCount: wide ? 2 : 1,
                 mainAxisSpacing: 8,
                 crossAxisSpacing: 8,
-                childAspectRatio: wide ? 3.4 : 3.6,
+                childAspectRatio: wide ? 3.0 : 3.3,
               ),
               itemBuilder: (context, index) {
                 final spec = _toolSpecs[index];
@@ -220,16 +333,11 @@ class _AITutorTeamScreenState extends State<AITutorTeamScreen> {
   }
 
   Widget _toolTile(_ToolCardSpec spec) {
-    final assignedAgent = _teamController.subjectAgents.firstWhere(
-      (agent) => agent.id == spec.agentId,
-      orElse: () => const AITutorAgent(
-        id: 'unknown',
-        name: 'Unknown Agent',
-        role: '未分配',
-        subject: '-',
-        mission: '-',
-      ),
+    final hint = _teamController.scheduleHint(
+      tool: spec.tool,
+      defaultAgentId: spec.agentId,
     );
+    final assignedAgent = _agentByID(hint.assignedAgentId);
     return InkWell(
       borderRadius: BorderRadius.circular(10),
       onTap: () => _triggerToolCall(spec),
@@ -264,9 +372,18 @@ class _AITutorTeamScreenState extends State<AITutorTeamScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Agent: ${assignedAgent.name}',
+                    '分派: ${assignedAgent.name}',
                     style: const TextStyle(fontSize: 11),
                   ),
+                  if (hint.hasSuggestion)
+                    Text(
+                      '建议切换 -> ${hint.suggestedAgentName}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -297,7 +414,7 @@ class _AITutorTeamScreenState extends State<AITutorTeamScreen> {
                 (record) => Padding(
                   padding: const EdgeInsets.only(bottom: 6),
                   child: Text(
-                    '${_formatTime(record.triggeredAt)} · ${record.tool.label} -> ${record.routeLabel}',
+                    '${_formatTime(record.triggeredAt)} · ${record.tool.label} -> ${record.routeLabel} · ${record.agentName}${record.switchedByController ? ' · switched' : ''}',
                     style: const TextStyle(fontSize: 12),
                   ),
                 ),
@@ -309,9 +426,9 @@ class _AITutorTeamScreenState extends State<AITutorTeamScreen> {
   }
 
   Future<void> _triggerToolCall(_ToolCardSpec spec) async {
-    _teamController.recordToolCall(
-      agentId: spec.agentId,
+    final decision = _teamController.dispatchToolCall(
       tool: spec.tool,
+      defaultAgentId: spec.agentId,
       routeLabel: spec.targetLabel,
     );
     await Navigator.of(
@@ -320,9 +437,26 @@ class _AITutorTeamScreenState extends State<AITutorTeamScreen> {
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('已返回 Team 页面')));
+
+    final message = decision.autoSwitched
+        ? 'Controller 已自动切换到 ${decision.assignedAgentName}'
+        : decision.hasSuggestion
+            ? '建议切换到 ${decision.suggestedAgentName}'
+            : '已返回 Team 页面';
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  AITutorAgent _agentByID(String agentId) {
+    return _teamController.subjectAgents.firstWhere(
+      (agent) => agent.id == agentId,
+      orElse: () => const AITutorAgent(
+        id: 'unknown',
+        name: 'Unknown Agent',
+        role: '未分配',
+        subject: '-',
+        mission: '-',
+      ),
+    );
   }
 
   String _formatTime(DateTime value) {
@@ -330,6 +464,15 @@ class _AITutorTeamScreenState extends State<AITutorTeamScreen> {
     final minute = value.minute.toString().padLeft(2, '0');
     final second = value.second.toString().padLeft(2, '0');
     return '$hour:$minute:$second';
+  }
+
+  String _formatDateTime(DateTime value) {
+    final y = value.year.toString().padLeft(4, '0');
+    final m = value.month.toString().padLeft(2, '0');
+    final d = value.day.toString().padLeft(2, '0');
+    final h = value.hour.toString().padLeft(2, '0');
+    final min = value.minute.toString().padLeft(2, '0');
+    return '$y-$m-$d $h:$min';
   }
 }
 

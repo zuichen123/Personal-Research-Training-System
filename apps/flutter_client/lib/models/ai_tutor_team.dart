@@ -5,6 +5,9 @@ enum AITutorToolType {
   pomodoro,
 }
 
+const int aiTutorContextCompressTokenThreshold = 100000;
+const Duration aiTutorContextCompressAgeThreshold = Duration(days: 7);
+
 extension AITutorToolTypeX on AITutorToolType {
   String get label {
     switch (this) {
@@ -56,23 +59,67 @@ class AIToolCallRecord {
     required this.tool,
     required this.routeLabel,
     required this.triggeredAt,
+    required this.agentId,
+    required this.agentName,
+    this.switchedByController = false,
   });
 
   final AITutorToolType tool;
   final String routeLabel;
   final DateTime triggeredAt;
+  final String agentId;
+  final String agentName;
+  final bool switchedByController;
+}
+
+class AITutorScheduleDecision {
+  const AITutorScheduleDecision({
+    required this.tool,
+    required this.assignedAgentId,
+    required this.assignedAgentName,
+    this.suggestedAgentId,
+    this.suggestedAgentName,
+    this.reason = '',
+    this.autoSwitched = false,
+    required this.scheduledAt,
+  });
+
+  final AITutorToolType tool;
+  final String assignedAgentId;
+  final String assignedAgentName;
+  final String? suggestedAgentId;
+  final String? suggestedAgentName;
+  final String reason;
+  final bool autoSwitched;
+  final DateTime scheduledAt;
+
+  bool get hasSuggestion {
+    final suggested = suggestedAgentId;
+    return suggested != null &&
+        suggested.isNotEmpty &&
+        suggested != assignedAgentId;
+  }
 }
 
 class AITutorAgentContext {
   AITutorAgentContext({
     List<String>? notes,
     List<AIToolCallRecord>? toolCalls,
+    List<String>? compressedSummaries,
     DateTime? updatedAt,
+    this.tokenEstimate = 0,
+    this.compressionCount = 0,
+    this.lastCompressedAt,
   }) : notes = notes ?? <String>[],
        toolCalls = toolCalls ?? <AIToolCallRecord>[],
+       compressedSummaries = compressedSummaries ?? <String>[],
        updatedAt = updatedAt ?? DateTime.now();
 
   final List<String> notes;
   final List<AIToolCallRecord> toolCalls;
+  final List<String> compressedSummaries;
   DateTime updatedAt;
+  int tokenEstimate;
+  int compressionCount;
+  DateTime? lastCompressedAt;
 }
