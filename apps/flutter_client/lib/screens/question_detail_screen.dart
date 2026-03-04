@@ -177,6 +177,7 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
     final cs = theme.colorScheme;
     final score = result['score'];
     final correct = result['correct'];
+    final isCorrect = correct == true;
     final analysis = _extractAnalysisText(result);
     final wrongReason = result['wrong_reason']?.toString() ?? '';
     final suggestions = result['suggestions'];
@@ -267,7 +268,7 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
             Theme(
               data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
               child: ExpansionTile(
-                initiallyExpanded: false,
+                initiallyExpanded: isCorrect,
                 tilePadding: EdgeInsets.zero,
                 title: Text(
                   '题目解析',
@@ -294,7 +295,7 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
             ),
 
             // ── 错误原因 ──
-            if (wrongReason.isNotEmpty) ...[
+            if (wrongReason.isNotEmpty && !isCorrect) ...[
               const SizedBox(height: 8),
               Container(
                 width: double.infinity,

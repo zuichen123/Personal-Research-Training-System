@@ -976,6 +976,7 @@ class _AIScreenState extends State<AIScreen> {
     final theme = Theme.of(context);
     final score = result['score'];
     final correct = result['correct'];
+    final isCorrect = correct == true;
     final analysis = _extractAnalysisText(result);
     final feedback = result['feedback']?.toString().trim() ?? '';
     final wrongReason = result['wrong_reason']?.toString().trim() ?? '';
@@ -1049,7 +1050,7 @@ class _AIScreenState extends State<AIScreen> {
             data: theme.copyWith(dividerColor: Colors.transparent),
             child: ExpansionTile(
               tilePadding: EdgeInsets.zero,
-              initiallyExpanded: false,
+              initiallyExpanded: isCorrect,
               title: Text(
                 '题目解析',
                 style: TextStyle(
@@ -1071,7 +1072,7 @@ class _AIScreenState extends State<AIScreen> {
               ],
             ),
           ),
-          if (wrongReason.isNotEmpty) ...[
+          if (wrongReason.isNotEmpty && !isCorrect) ...[
             const SizedBox(height: 6),
             Text('错误原因：$wrongReason', style: const TextStyle(fontSize: 12)),
           ],
