@@ -624,9 +624,9 @@ class _AIScreenState extends State<AIScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.send),
-              label: Text(submitting ? '提交中..' : '提交批阅'),
+              label: Text(submitting ? '提交中...' : '提交批阅'),
             ),
-            if (result != null) _jsonBox('generated-$qKey', result),
+            if (result != null) _generatedGradeResultCard(qKey, result),
           ],
         ),
       ),
@@ -966,6 +966,132 @@ class _AIScreenState extends State<AIScreen> {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Widget _generatedGradeResultCard(String qKey, Map<String, dynamic> result) {
+    final theme = Theme.of(context);
+    final score = result['score'];
+    final correct = result['correct'];
+    final analysis = _extractAnalysisText(result);
+    final feedback = result['feedback']?.toString().trim() ?? '';
+    final wrongReason = result['wrong_reason']?.toString().trim() ?? '';
+    final suggestions = _asStringList(result['suggestions']);
+
+    final scoreNum = score is num ? score.toDouble() : 0.0;
+    final scoreColor = scoreNum >= 80
+        ? Colors.green
+        : scoreNum >= 60
+            ? Colors.orange
+            : Colors.red;
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.grading, size: 18, color: theme.colorScheme.primary),
+              const SizedBox(width: 6),
+              const Text(
+                '批阅结果',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: scoreColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: scoreColor.withValues(alpha: 0.4)),
+                ),
+                child: Text(
+                  '分数 ${score ?? '-'}',
+                  style: TextStyle(
+                    color: scoreColor,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (correct is bool)
+                Chip(
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  side: BorderSide.none,
+                  label: Text(correct ? '正确' : '错误'),
+                  avatar: Icon(
+                    correct ? Icons.check_circle : Icons.cancel,
+                    size: 16,
+                    color: correct ? Colors.green : Colors.red,
+                  ),
+                  backgroundColor: (correct ? Colors.green : Colors.red).withValues(
+                    alpha: 0.12,
+                  ),
+                ),
+            ],
+          ),
+          if (feedback.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text('反馈：$feedback', style: const TextStyle(fontSize: 12)),
+          ],
+          const SizedBox(height: 4),
+          Theme(
+            data: theme.copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              initiallyExpanded: false,
+              title: Text(
+                '题目解析',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: SelectableText(analysis.isEmpty ? '暂无题目解析' : analysis),
+                ),
+              ],
+            ),
+          ),
+          if (wrongReason.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text('错误原因：$wrongReason', style: const TextStyle(fontSize: 12)),
+          ],
+          if (suggestions.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            ...suggestions.map(
+              (item) => Text('• $item', style: const TextStyle(fontSize: 12)),
+            ),
+          ],
+          _jsonBox('generated-raw-$qKey', result),
+        ],
+      ),
+    );
+  }
+
+  String _extractAnalysisText(Map<String, dynamic> result) {
+    final candidates = [result['analysis'], result['explanation']];
+    for (final item in candidates) {
+      final text = item?.toString().trim() ?? '';
+      if (text.isNotEmpty) {
+        return text;
+      }
+    }
+    return '';
   }
 
   Widget _searchSection(AppProvider provider) {
