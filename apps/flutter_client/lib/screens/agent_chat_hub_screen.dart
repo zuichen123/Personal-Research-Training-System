@@ -25,11 +25,6 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
   }
 
   @override
-  void dispose() {
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final provider = context.watch<AIAgentProvider>();
     final agents = provider.agents;
@@ -41,10 +36,10 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
     if (agents.isEmpty) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text('Agent Chat Hub'),
+          title: const Text('多智能体对话'),
           actions: [
             IconButton(
-              tooltip: 'Legacy AI Tools',
+              tooltip: '旧版 AI 工具台',
               icon: const Icon(Icons.build_circle_outlined),
               onPressed: _openLegacyAIScreen,
             ),
@@ -58,12 +53,12 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
               children: [
                 const Icon(Icons.psychology_outlined, size: 42),
                 const SizedBox(height: 8),
-                const Text('No agents configured yet.'),
+                const Text('暂无已配置智能体'),
                 const SizedBox(height: 12),
                 FilledButton.icon(
                   onPressed: () => _showCreateAgentDialog(context),
                   icon: const Icon(Icons.add),
-                  label: const Text('Create Agent'),
+                  label: const Text('新建智能体'),
                 ),
               ],
             ),
@@ -79,15 +74,15 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
       initialIndex: selectedAgentIndex,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Agent Chat Hub'),
+          title: const Text('多智能体对话'),
           actions: [
             IconButton(
-              tooltip: 'Create Agent',
+              tooltip: '新建智能体',
               icon: const Icon(Icons.add),
               onPressed: () => _showCreateAgentDialog(context),
             ),
             IconButton(
-              tooltip: 'Legacy AI Tools',
+              tooltip: '旧版 AI 工具台',
               icon: const Icon(Icons.build_circle_outlined),
               onPressed: _openLegacyAIScreen,
             ),
@@ -155,6 +150,62 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
     return 0;
   }
 
+  AIAgentSummary? _preferredAgentTemplate(AIAgentProvider provider) {
+    if (provider.agents.isEmpty) {
+      return null;
+    }
+    final selected = provider.selectedAgentId.trim();
+    if (selected.isNotEmpty) {
+      for (final item in provider.agents) {
+        if (item.id == selected) {
+          return item;
+        }
+      }
+    }
+    return provider.agents.first;
+  }
+
+  String _providerToProtocol(String provider) {
+    switch (provider) {
+      case 'openai':
+        return 'openai_compatible';
+      case 'gemini':
+        return 'gemini_native';
+      case 'claude':
+        return 'claude_native';
+      case 'mock':
+        return 'mock';
+      default:
+        return '';
+    }
+  }
+
+  String _firstNonEmpty(List<String> values, {String fallback = ''}) {
+    for (final item in values) {
+      final text = item.trim();
+      if (text.isNotEmpty) {
+        return text;
+      }
+    }
+    return fallback;
+  }
+
+  bool _asBool(dynamic value, {bool fallback = true}) {
+    if (value is bool) {
+      return value;
+    }
+    if (value is String) {
+      final normalized = value.trim().toLowerCase();
+      if (normalized == 'true' || normalized == '1') {
+        return true;
+      }
+      if (normalized == 'false' || normalized == '0') {
+        return false;
+      }
+    }
+    return fallback;
+  }
+
   void _openLegacyAIScreen() {
     Navigator.of(
       context,
@@ -162,50 +213,117 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
   }
 
   Future<void> _showCreateAgentDialog(BuildContext context) async {
-    final nameController = TextEditingController();
-    final primaryModelController = TextEditingController(text: 'gpt-4o-mini');
-    final primaryApiKeyController = TextEditingController();
-    final primaryBaseUrlController = TextEditingController(
-      text: 'https://api.openai.com/v1',
+    final agentProvider = context.read<AIAgentProvider>();
+    final appProvider = context.read<AppProvider>();
+    final status = appProvider.aiProviderStatus;
+    final draft = agentProvider.createAgentDraft;
+    final template = _preferredAgentTemplate(agentProvider);
+
+    final statusProvider =
+        (status['configured_provider'] ?? status['provider'] ?? '')
+            .toString()
+            .trim()
+            .toLowerCase();
+    final statusProtocol = _providerToProtocol(statusProvider);
+    final statusModel = (status['configured_model'] ?? status['model'] ?? '')
+        .toString()
+        .trim();
+    final statusBaseUrl = (status['openai_base_url'] ?? '').toString().trim();
+
+    final initialProtocol = _firstNonEmpty([
+      (draft['protocol'] ?? '').toString(),
+      template?.protocol ?? '',
+      statusProtocol,
+    ], fallback: 'openai_compatible');
+    final initialPrimaryModel = _firstNonEmpty([
+      (draft['primary_model'] ?? '').toString(),
+      statusModel,
+      template?.primary.model ?? '',
+    ], fallback: 'gpt-4o-mini');
+    final initialPrimaryBaseUrl = _firstNonEmpty([
+      (draft['primary_base_url'] ?? '').toString(),
+      statusBaseUrl,
+      template?.primary.baseUrl ?? '',
+    ], fallback: 'https://api.openai.com/v1');
+    final initialPrimaryApiKey = _firstNonEmpty([
+      (draft['primary_api_key'] ?? '').toString(),
+      template?.primary.apiKey ?? '',
+    ]);
+    final initialFallbackModel = _firstNonEmpty([
+      (draft['fallback_model'] ?? '').toString(),
+      template?.fallback.model ?? '',
+    ]);
+    final initialFallbackApiKey = _firstNonEmpty([
+      (draft['fallback_api_key'] ?? '').toString(),
+      template?.fallback.apiKey ?? '',
+    ]);
+    final initialFallbackBaseUrl = _firstNonEmpty([
+      (draft['fallback_base_url'] ?? '').toString(),
+      template?.fallback.baseUrl ?? '',
+    ]);
+    final initialPrompt = _firstNonEmpty([
+      (draft['system_prompt'] ?? '').toString(),
+      template?.systemPrompt ?? '',
+    ]);
+    final initialEnabled = _asBool(
+      draft['enabled'],
+      fallback: template?.enabled ?? true,
     );
-    final fallbackModelController = TextEditingController();
-    final fallbackApiKeyController = TextEditingController();
-    final fallbackBaseUrlController = TextEditingController();
-    final promptController = TextEditingController();
-    var protocol = 'openai_compatible';
-    var enabled = true;
+
+    final nameController = TextEditingController();
+    final primaryModelController = TextEditingController(
+      text: initialPrimaryModel,
+    );
+    final primaryApiKeyController = TextEditingController(
+      text: initialPrimaryApiKey,
+    );
+    final primaryBaseUrlController = TextEditingController(
+      text: initialPrimaryBaseUrl,
+    );
+    final fallbackModelController = TextEditingController(
+      text: initialFallbackModel,
+    );
+    final fallbackApiKeyController = TextEditingController(
+      text: initialFallbackApiKey,
+    );
+    final fallbackBaseUrlController = TextEditingController(
+      text: initialFallbackBaseUrl,
+    );
+    final promptController = TextEditingController(text: initialPrompt);
+    var protocol = initialProtocol;
+    var enabled = initialEnabled;
 
     await showDialog<void>(
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          title: const Text('Create Agent'),
+          title: const Text('新建智能体'),
           content: SizedBox(
             width: 560,
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _dialogInput(nameController, 'Agent Name'),
+                  _dialogInput(nameController, '智能体名称'),
                   DropdownButtonFormField<String>(
                     value: protocol,
                     decoration: const InputDecoration(
-                      labelText: 'Protocol',
+                      labelText: '协议',
                       border: OutlineInputBorder(),
                     ),
                     items: const [
                       DropdownMenuItem(
                         value: 'openai_compatible',
-                        child: Text('openai_compatible'),
+                        child: Text('OpenAI 兼容'),
                       ),
-                      DropdownMenuItem(value: 'mock', child: Text('mock')),
+                      DropdownMenuItem(value: 'mock', child: Text('Mock（本地）')),
                       DropdownMenuItem(
                         value: 'gemini_native',
-                        child: Text('gemini_native'),
+                        child: Text('Gemini 原生'),
                       ),
                       DropdownMenuItem(
                         value: 'claude_native',
-                        child: Text('claude_native'),
+                        child: Text('Claude 原生'),
                       ),
                     ],
                     onChanged: (value) {
@@ -213,19 +331,19 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
                     },
                   ),
                   const SizedBox(height: 8),
-                  _dialogInput(primaryModelController, 'Primary Model'),
-                  _dialogInput(primaryApiKeyController, 'Primary API Key'),
-                  _dialogInput(primaryBaseUrlController, 'Primary Base URL'),
+                  _dialogInput(primaryModelController, '主模型'),
+                  _dialogInput(primaryApiKeyController, '主 API Key'),
+                  _dialogInput(primaryBaseUrlController, '主 Base URL'),
                   const SizedBox(height: 8),
-                  _dialogInput(fallbackModelController, 'Fallback Model'),
-                  _dialogInput(fallbackApiKeyController, 'Fallback API Key'),
-                  _dialogInput(fallbackBaseUrlController, 'Fallback Base URL'),
+                  _dialogInput(fallbackModelController, '备模型（可选）'),
+                  _dialogInput(fallbackApiKeyController, '备 API Key（可选）'),
+                  _dialogInput(fallbackBaseUrlController, '备 Base URL（可选）'),
                   const SizedBox(height: 8),
-                  _dialogInput(promptController, 'System Prompt', maxLines: 3),
+                  _dialogInput(promptController, '系统提示词', maxLines: 3),
                   const SizedBox(height: 8),
                   SwitchListTile(
                     value: enabled,
-                    title: const Text('Enabled'),
+                    title: const Text('启用'),
                     contentPadding: EdgeInsets.zero,
                     onChanged: (v) {
                       enabled = v;
@@ -239,7 +357,7 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Cancel'),
+              child: const Text('取消'),
             ),
             FilledButton(
               onPressed: () async {
@@ -261,14 +379,13 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
                 } catch (_) {
                   if (!ctx.mounted) return;
                   final msg =
-                      context.read<AIAgentProvider>().errorMessage ??
-                      'Create agent failed';
+                      context.read<AIAgentProvider>().errorMessage ?? '创建智能体失败';
                   ScaffoldMessenger.of(
                     context,
                   ).showSnackBar(SnackBar(content: Text(msg)));
                 }
               },
-              child: const Text('Create'),
+              child: const Text('创建'),
             ),
           ],
         );
@@ -282,16 +399,16 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          title: const Text('Delete Agent'),
-          content: Text('Delete agent "${agent.name}"?'),
+          title: const Text('删除智能体'),
+          content: Text('确认删除智能体 "${agent.name}"？'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Cancel'),
+              child: const Text('取消'),
             ),
             FilledButton(
               onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('Delete'),
+              child: const Text('删除'),
             ),
           ],
         );
@@ -314,9 +431,7 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
     await appProvider.fetchQuestions(force: true);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Imported ${result['imported_count'] ?? 0} questions'),
-      ),
+      SnackBar(content: Text('已导入 ${result['imported_count'] ?? 0} 道题目')),
     );
   }
 
@@ -327,9 +442,7 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
     await appProvider.fetchPlans(force: true);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Imported ${result['imported_count'] ?? 0} plans'),
-      ),
+      SnackBar(content: Text('已导入 ${result['imported_count'] ?? 0} 条计划')),
     );
   }
 
@@ -343,12 +456,12 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
       final summarized = (result['summarized_count'] ?? 0).toString();
       final updatedAt = (result['summary_updated_at'] ?? '').toString();
       final text = status == 'compressed'
-          ? 'Compressed $summarized messages${updatedAt.isEmpty ? '' : ' at $updatedAt'}'
-          : 'Compression skipped';
+          ? '已压缩 $summarized 条消息${updatedAt.isEmpty ? '' : '（$updatedAt）'}'
+          : '本次无需压缩';
       messenger.showSnackBar(SnackBar(content: Text(text)));
     } catch (_) {
       if (!mounted) return;
-      final msg = provider.errorMessage ?? 'Compress failed';
+      final msg = provider.errorMessage ?? '压缩失败';
       messenger.showSnackBar(SnackBar(content: Text(msg)));
     }
   }
@@ -482,25 +595,25 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Delete Agent',
+                  tooltip: '删除智能体',
                   onPressed: widget.onDeleteAgent,
                   icon: const Icon(Icons.delete_outline),
                 ),
               ],
             ),
             Text(
-              'protocol: ${widget.agent.protocol}',
+              '协议: ${widget.agent.protocol}',
               style: const TextStyle(color: Colors.grey, fontSize: 12),
             ),
             const SizedBox(height: 8),
             FilledButton.tonalIcon(
               onPressed: () {
                 provider.createSession(
-                  title: 'Session ${DateTime.now().toIso8601String()}',
+                  title: '会话 ${DateTime.now().toIso8601String()}',
                 );
               },
               icon: const Icon(Icons.add_comment_outlined),
-              label: const Text('New Session'),
+              label: const Text('新建会话'),
             ),
             const SizedBox(height: 8),
             FilledButton.tonalIcon(
@@ -508,7 +621,7 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
                   ? null
                   : widget.onCompressSession,
               icon: const Icon(Icons.compress_outlined),
-              label: const Text('Compress Session'),
+              label: const Text('压缩当前会话'),
             ),
             if (selectedSession != null) ...[
               const SizedBox(height: 6),
@@ -520,7 +633,7 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
                     visualDensity: VisualDensity.compact,
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     label: Text(
-                      'summary ${selectedSession.summaryMessageCount}',
+                      '摘要消息 ${selectedSession.summaryMessageCount}',
                       style: const TextStyle(fontSize: 11),
                     ),
                   ),
@@ -529,8 +642,8 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     label: Text(
                       selectedSession.summaryUpdatedAt == null
-                          ? 'summary never'
-                          : 'summary ${selectedSession.summaryUpdatedAt!.toLocal().toString()}',
+                          ? '摘要未生成'
+                          : '摘要更新时间 ${selectedSession.summaryUpdatedAt!.toLocal()}',
                       style: const TextStyle(fontSize: 11),
                     ),
                   ),
@@ -541,7 +654,7 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
             if (sessions.isEmpty)
               const Padding(
                 padding: EdgeInsets.only(top: 12),
-                child: Text('No sessions yet'),
+                child: Text('暂无会话'),
               )
             else
               ...sessions.map(
@@ -560,7 +673,7 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
                     overflow: TextOverflow.ellipsis,
                   ),
                   trailing: IconButton(
-                    tooltip: 'Delete Session',
+                    tooltip: '删除会话',
                     onPressed: () => provider.deleteSession(session.id),
                     icon: const Icon(Icons.close, size: 18),
                   ),
@@ -585,7 +698,7 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
         children: [
           Expanded(
             child: messages.isEmpty
-                ? const Center(child: Text('No messages'))
+                ? const Center(child: Text('暂无消息'))
                 : ListView.builder(
                     padding: const EdgeInsets.all(10),
                     itemCount: messages.length,
@@ -606,9 +719,7 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
                     controller: _inputController,
                     minLines: 1,
                     maxLines: 4,
-                    decoration: const InputDecoration(
-                      hintText: 'Send a message...',
-                    ),
+                    decoration: const InputDecoration(hintText: '输入消息...'),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -623,7 +734,7 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
                             await provider.sendMessage(text);
                           } catch (_) {
                             if (!mounted) return;
-                            final msg = provider.errorMessage ?? 'Send failed';
+                            final msg = provider.errorMessage ?? '发送失败';
                             messenger.showSnackBar(
                               SnackBar(content: Text(msg)),
                             );
@@ -636,7 +747,7 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.send),
-                  label: const Text('Send'),
+                  label: const Text('发送'),
                 ),
               ],
             ),
@@ -680,7 +791,7 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
                   Padding(
                     padding: const EdgeInsets.only(top: 6),
                     child: Text(
-                      'provider=${message.providerUsed} model=${message.modelUsed}${message.fallbackUsed ? ' (fallback)' : ''}',
+                      '服务商=${message.providerUsed} 模型=${message.modelUsed}${message.fallbackUsed ? '（备份）' : ''}',
                       style: const TextStyle(fontSize: 11, color: Colors.grey),
                     ),
                   ),
@@ -702,12 +813,12 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
                           );
                         } catch (_) {
                           if (!mounted) return;
-                          final msg = provider.errorMessage ?? 'Confirm failed';
+                          final msg = provider.errorMessage ?? '确认失败';
                           messenger.showSnackBar(SnackBar(content: Text(msg)));
                         }
                       },
                 icon: const Icon(Icons.check_circle_outline),
-                label: const Text('Confirm Action'),
+                label: const Text('确认执行'),
               ),
             ),
           if (!isUser && artifact != null)
@@ -741,14 +852,13 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Question Artifact (${items.length})',
+              '题目产物（${items.length}）',
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 6),
             ...List.generate(items.length, (index) {
               final map = (items[index] as Map?)?.cast<dynamic, dynamic>();
-              final title = (map?['title'] ?? map?['stem'] ?? 'Question')
-                  .toString();
+              final title = (map?['title'] ?? map?['stem'] ?? '题目').toString();
               return CheckboxListTile(
                 dense: true,
                 contentPadding: EdgeInsets.zero,
@@ -780,7 +890,7 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
                       );
                     },
               icon: const Icon(Icons.download_done_outlined),
-              label: const Text('Import Selected Questions'),
+              label: const Text('导入选中题目'),
             ),
           ],
         ),
@@ -806,18 +916,15 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Learning Plan Artifact',
-              style: TextStyle(fontWeight: FontWeight.w600),
-            ),
+            const Text('学习计划产物', style: TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 6),
-            Text('Goal: $finalGoal'),
-            Text('Date: $startDate ~ $endDate'),
+            Text('目标：$finalGoal'),
+            Text('周期：$startDate ~ $endDate'),
             const SizedBox(height: 8),
             FilledButton.icon(
               onPressed: () => widget.onImportPlan(artifact),
               icon: const Icon(Icons.playlist_add_check_circle_outlined),
-              label: const Text('Import Plan Items'),
+              label: const Text('导入计划条目'),
             ),
           ],
         ),
@@ -831,7 +938,7 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
         border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
         borderRadius: BorderRadius.circular(10),
       ),
-      child: Text('Artifact type: ${artifact.type}'),
+      child: Text('产物类型：${artifact.type}'),
     );
   }
 }

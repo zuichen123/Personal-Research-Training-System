@@ -653,30 +653,110 @@ class _SettingsScreenState extends State<SettingsScreen>
     AIAgentSummary? agent,
   }) async {
     final isEdit = agent != null;
+    final appProvider = context.read<AppProvider>();
+    final status = appProvider.aiProviderStatus;
+    final draft = provider.createAgentDraft;
+    final template = _preferredAgentTemplate(provider);
+
+    final statusProvider =
+        (status['configured_provider'] ??
+                status['provider'] ??
+                _selectedProvider)
+            .toString()
+            .trim()
+            .toLowerCase();
+    final statusProtocol = _providerToAgentProtocol(statusProvider);
+    final statusModel = (status['configured_model'] ?? status['model'] ?? '')
+        .toString()
+        .trim();
+    final statusBaseUrl = (status['openai_base_url'] ?? '').toString().trim();
+
+    final currentConfigModel = _modelController.text.trim();
+    final currentConfigBaseUrl = _openAIBaseURLController.text.trim();
+    final currentConfigApiKey = _apiKeyController.text.trim();
+
+    final initialProtocol = isEdit
+        ? agent.protocol
+        : _firstNonEmpty([
+            (draft['protocol'] ?? '').toString(),
+            template?.protocol ?? '',
+            statusProtocol,
+          ], fallback: 'openai_compatible');
+    final initialPrimaryModel = isEdit
+        ? (agent.primary.model.isNotEmpty ? agent.primary.model : 'gpt-4o-mini')
+        : _firstNonEmpty([
+            (draft['primary_model'] ?? '').toString(),
+            currentConfigModel,
+            statusModel,
+            template?.primary.model ?? '',
+          ], fallback: 'gpt-4o-mini');
+    final initialPrimaryBaseUrl = isEdit
+        ? agent.primary.baseUrl
+        : _firstNonEmpty([
+            (draft['primary_base_url'] ?? '').toString(),
+            currentConfigBaseUrl,
+            statusBaseUrl,
+            template?.primary.baseUrl ?? '',
+          ], fallback: 'https://api.openai.com/v1');
+    final initialPrimaryApiKey = isEdit
+        ? ''
+        : _firstNonEmpty([
+            currentConfigApiKey,
+            (draft['primary_api_key'] ?? '').toString(),
+            template?.primary.apiKey ?? '',
+          ]);
+    final initialFallbackBaseUrl = isEdit
+        ? agent.fallback.baseUrl
+        : _firstNonEmpty([
+            (draft['fallback_base_url'] ?? '').toString(),
+            template?.fallback.baseUrl ?? '',
+          ]);
+    final initialFallbackApiKey = isEdit
+        ? ''
+        : _firstNonEmpty([
+            (draft['fallback_api_key'] ?? '').toString(),
+            template?.fallback.apiKey ?? '',
+          ]);
+    final initialFallbackModel = isEdit
+        ? agent.fallback.model
+        : _firstNonEmpty([
+            (draft['fallback_model'] ?? '').toString(),
+            template?.fallback.model ?? '',
+          ]);
+    final initialSystemPrompt = isEdit
+        ? agent.systemPrompt
+        : _firstNonEmpty([
+            (draft['system_prompt'] ?? '').toString(),
+            template?.systemPrompt ?? '',
+          ]);
+    final initialEnabled = isEdit
+        ? agent.enabled
+        : _asBool(draft['enabled'], fallback: template?.enabled ?? true);
+
     final nameController = TextEditingController(text: agent?.name ?? '');
-    final protocolController = ValueNotifier<String>(
-      agent?.protocol ?? 'openai_compatible',
-    );
+    final protocolController = ValueNotifier<String>(initialProtocol);
     final primaryBaseUrlController = TextEditingController(
-      text: agent?.primary.baseUrl ?? 'https://api.openai.com/v1',
+      text: initialPrimaryBaseUrl,
     );
-    final primaryApiKeyController = TextEditingController();
+    final primaryApiKeyController = TextEditingController(
+      text: initialPrimaryApiKey,
+    );
     final primaryModelController = TextEditingController(
-      text: agent?.primary.model.isNotEmpty == true
-          ? agent!.primary.model
-          : 'gpt-4o-mini',
+      text: initialPrimaryModel,
     );
     final fallbackBaseUrlController = TextEditingController(
-      text: agent?.fallback.baseUrl ?? '',
+      text: initialFallbackBaseUrl,
     );
-    final fallbackApiKeyController = TextEditingController();
+    final fallbackApiKeyController = TextEditingController(
+      text: initialFallbackApiKey,
+    );
     final fallbackModelController = TextEditingController(
-      text: agent?.fallback.model ?? '',
+      text: initialFallbackModel,
     );
     final systemPromptController = TextEditingController(
-      text: agent?.systemPrompt ?? '',
+      text: initialSystemPrompt,
     );
-    var enabled = agent?.enabled ?? true;
+    var enabled = initialEnabled;
     final messenger = ScaffoldMessenger.of(context);
 
     await showDialog<void>(
@@ -708,19 +788,19 @@ class _SettingsScreenState extends State<SettingsScreen>
                               items: const [
                                 DropdownMenuItem(
                                   value: 'openai_compatible',
-                                  child: Text('openai_compatible'),
+                                  child: Text('OpenAI 兼容'),
                                 ),
                                 DropdownMenuItem(
                                   value: 'gemini_native',
-                                  child: Text('gemini_native'),
+                                  child: Text('Gemini 原生'),
                                 ),
                                 DropdownMenuItem(
                                   value: 'claude_native',
-                                  child: Text('claude_native'),
+                                  child: Text('Claude 原生'),
                                 ),
                                 DropdownMenuItem(
                                   value: 'mock',
-                                  child: Text('mock'),
+                                  child: Text('Mock（本地）'),
                                 ),
                               ],
                               onChanged: (value) {
@@ -743,11 +823,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                         fallbackApiKeyController,
                         isEdit ? '备 API Key（留空=保持不变）' : '备 API Key（可选）',
                       ),
-                      _input(
-                        systemPromptController,
-                        'System Prompt',
-                        maxLines: 4,
-                      ),
+                      _input(systemPromptController, '系统提示词', maxLines: 4),
                       SwitchListTile(
                         value: enabled,
                         contentPadding: EdgeInsets.zero,
@@ -842,6 +918,62 @@ class _SettingsScreenState extends State<SettingsScreen>
     fallbackApiKeyController.dispose();
     fallbackModelController.dispose();
     systemPromptController.dispose();
+  }
+
+  AIAgentSummary? _preferredAgentTemplate(AIAgentProvider provider) {
+    if (provider.agents.isEmpty) {
+      return null;
+    }
+    final selected = provider.selectedAgentId.trim();
+    if (selected.isNotEmpty) {
+      for (final item in provider.agents) {
+        if (item.id == selected) {
+          return item;
+        }
+      }
+    }
+    return provider.agents.first;
+  }
+
+  String _providerToAgentProtocol(String provider) {
+    switch (provider) {
+      case 'openai':
+        return 'openai_compatible';
+      case 'gemini':
+        return 'gemini_native';
+      case 'claude':
+        return 'claude_native';
+      case 'mock':
+        return 'mock';
+      default:
+        return '';
+    }
+  }
+
+  String _firstNonEmpty(List<String> values, {String fallback = ''}) {
+    for (final item in values) {
+      final text = item.trim();
+      if (text.isNotEmpty) {
+        return text;
+      }
+    }
+    return fallback;
+  }
+
+  bool _asBool(dynamic value, {bool fallback = true}) {
+    if (value is bool) {
+      return value;
+    }
+    if (value is String) {
+      final normalized = value.trim().toLowerCase();
+      if (normalized == 'true' || normalized == '1') {
+        return true;
+      }
+      if (normalized == 'false' || normalized == '0') {
+        return false;
+      }
+    }
+    return fallback;
   }
 
   Future<void> _confirmDeleteAgent(

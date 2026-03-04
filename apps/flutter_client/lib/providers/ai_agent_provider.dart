@@ -30,6 +30,17 @@ class AIAgentProvider with ChangeNotifier {
   final Map<String, String> _selectedSessionByAgent = {};
   final Map<String, List<AIAgentMessage>> _messagesBySession = {};
   final Map<String, List<AIAgentArtifact>> _artifactsBySession = {};
+  final Map<String, dynamic> _createAgentDraft = <String, dynamic>{
+    'protocol': 'openai_compatible',
+    'primary_base_url': 'https://api.openai.com/v1',
+    'primary_api_key': '',
+    'primary_model': 'gpt-4o-mini',
+    'fallback_base_url': '',
+    'fallback_api_key': '',
+    'fallback_model': '',
+    'system_prompt': '',
+    'enabled': true,
+  };
 
   List<AIAgentSession> sessionsOf(String agentId) =>
       _sessionsByAgent[agentId] ?? const <AIAgentSession>[];
@@ -42,6 +53,9 @@ class AIAgentProvider with ChangeNotifier {
 
   List<AIAgentArtifact> artifactsOf(String sessionId) =>
       _artifactsBySession[sessionId] ?? const <AIAgentArtifact>[];
+
+  Map<String, dynamic> get createAgentDraft =>
+      Map<String, dynamic>.from(_createAgentDraft);
 
   Future<void> initialize() async {
     try {
@@ -83,6 +97,18 @@ class AIAgentProvider with ChangeNotifier {
       'build_plan',
     ],
   }) async {
+    _cacheCreateAgentDraft(
+      protocol: protocol,
+      primaryBaseUrl: primaryBaseUrl,
+      primaryApiKey: primaryApiKey,
+      primaryModel: primaryModel,
+      fallbackBaseUrl: fallbackBaseUrl,
+      fallbackApiKey: fallbackApiKey,
+      fallbackModel: fallbackModel,
+      systemPrompt: systemPrompt,
+      enabled: enabled,
+      preserveExistingApiKeys: false,
+    );
     await _runLoading(() async {
       await _api.createAIAgent({
         'name': name,
@@ -123,6 +149,18 @@ class AIAgentProvider with ChangeNotifier {
       'build_plan',
     ],
   }) async {
+    _cacheCreateAgentDraft(
+      protocol: protocol,
+      primaryBaseUrl: primaryBaseUrl,
+      primaryApiKey: primaryApiKey,
+      primaryModel: primaryModel,
+      fallbackBaseUrl: fallbackBaseUrl,
+      fallbackApiKey: fallbackApiKey,
+      fallbackModel: fallbackModel,
+      systemPrompt: systemPrompt,
+      enabled: enabled,
+      preserveExistingApiKeys: true,
+    );
     await _runLoading(() async {
       await _api.updateAIAgent(id, {
         'name': name,
@@ -444,6 +482,49 @@ class AIAgentProvider with ChangeNotifier {
     } finally {
       _loading = false;
       notifyListeners();
+    }
+  }
+
+  void _cacheCreateAgentDraft({
+    required String protocol,
+    required String primaryBaseUrl,
+    required String primaryApiKey,
+    required String primaryModel,
+    required String fallbackBaseUrl,
+    required String fallbackApiKey,
+    required String fallbackModel,
+    required String systemPrompt,
+    required bool enabled,
+    required bool preserveExistingApiKeys,
+  }) {
+    final normalizedProtocol = protocol.trim();
+    final normalizedPrimaryBaseUrl = primaryBaseUrl.trim();
+    final normalizedPrimaryApiKey = primaryApiKey.trim();
+    final normalizedPrimaryModel = primaryModel.trim();
+    final normalizedFallbackBaseUrl = fallbackBaseUrl.trim();
+    final normalizedFallbackApiKey = fallbackApiKey.trim();
+    final normalizedFallbackModel = fallbackModel.trim();
+    final normalizedSystemPrompt = systemPrompt.trim();
+
+    _createAgentDraft['protocol'] = normalizedProtocol.isEmpty
+        ? (_createAgentDraft['protocol'] ?? 'openai_compatible')
+        : normalizedProtocol;
+    _createAgentDraft['primary_base_url'] = normalizedPrimaryBaseUrl.isEmpty
+        ? (_createAgentDraft['primary_base_url'] ?? 'https://api.openai.com/v1')
+        : normalizedPrimaryBaseUrl;
+    _createAgentDraft['primary_model'] = normalizedPrimaryModel.isEmpty
+        ? (_createAgentDraft['primary_model'] ?? 'gpt-4o-mini')
+        : normalizedPrimaryModel;
+    _createAgentDraft['fallback_base_url'] = normalizedFallbackBaseUrl;
+    _createAgentDraft['fallback_model'] = normalizedFallbackModel;
+    _createAgentDraft['system_prompt'] = normalizedSystemPrompt;
+    _createAgentDraft['enabled'] = enabled;
+
+    if (!preserveExistingApiKeys || normalizedPrimaryApiKey.isNotEmpty) {
+      _createAgentDraft['primary_api_key'] = normalizedPrimaryApiKey;
+    }
+    if (!preserveExistingApiKeys || normalizedFallbackApiKey.isNotEmpty) {
+      _createAgentDraft['fallback_api_key'] = normalizedFallbackApiKey;
     }
   }
 }
