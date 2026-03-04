@@ -23,6 +23,7 @@ class AIFormulaText extends StatelessWidget {
     r'(\\\[(.*?)\\\]|\\\((.*?)\\\)|(?<!\\)\$\$(.*?)(?<!\\)\$\$|(?<!\\)\$(.+?)(?<!\\)\$)',
     dotAll: true,
   );
+  static final RegExp _caretSupPattern = RegExp(r'\^([+\-]?\d+|[+\-])');
 
   @override
   Widget build(BuildContext context) {
@@ -33,16 +34,17 @@ class AIFormulaText extends StatelessWidget {
     }
 
     if (!_mayContainFormula(normalized)) {
+      final plainText = _decoratePlainText(normalized);
       if (selectable) {
         return SelectableText(
-          normalized,
+          plainText,
           style: effectiveStyle,
           textAlign: textAlign,
           maxLines: maxLines,
         );
       }
       return Text(
-        normalized,
+        plainText,
         style: effectiveStyle,
         textAlign: textAlign,
         maxLines: maxLines,
@@ -84,7 +86,7 @@ class AIFormulaText extends StatelessWidget {
 
     for (final match in _formulaPattern.allMatches(input)) {
       if (match.start > cursor) {
-        final plain = _unescapePlain(input.substring(cursor, match.start));
+        final plain = _decoratePlainText(input.substring(cursor, match.start));
         if (plain.isNotEmpty) {
           spans.add(TextSpan(text: plain));
         }
@@ -132,16 +134,28 @@ class AIFormulaText extends StatelessWidget {
     }
 
     if (cursor < input.length) {
-      final plain = _unescapePlain(input.substring(cursor));
+      final plain = _decoratePlainText(input.substring(cursor));
       if (plain.isNotEmpty) {
         spans.add(TextSpan(text: plain));
       }
     }
 
     if (spans.isEmpty) {
-      spans.add(TextSpan(text: _unescapePlain(input)));
+      spans.add(TextSpan(text: _decoratePlainText(input)));
     }
     return spans;
+  }
+
+  String _decoratePlainText(String raw) {
+    final unescaped = _unescapePlain(raw);
+    return unescaped.replaceAllMapped(_caretSupPattern, (match) {
+      final body = match.group(1) ?? '';
+      final superscript = _toSuperscript(body);
+      if (superscript.isEmpty) {
+        return match.group(0) ?? '';
+      }
+      return superscript;
+    });
   }
 
   String _unescapePlain(String raw) {
@@ -151,6 +165,34 @@ class AIFormulaText extends StatelessWidget {
         .replaceAll(r'\\)', r'\)')
         .replaceAll(r'\\[', r'\[')
         .replaceAll(r'\\]', r'\]');
+  }
+
+  String _toSuperscript(String raw) {
+    const map = <String, String>{
+      '0': '⁰',
+      '1': '¹',
+      '2': '²',
+      '3': '³',
+      '4': '⁴',
+      '5': '⁵',
+      '6': '⁶',
+      '7': '⁷',
+      '8': '⁸',
+      '9': '⁹',
+      '+': '⁺',
+      '-': '⁻',
+    };
+
+    final out = StringBuffer();
+    for (var i = 0; i < raw.length; i++) {
+      final ch = raw[i];
+      final sup = map[ch];
+      if (sup == null) {
+        return '';
+      }
+      out.write(sup);
+    }
+    return out.toString();
   }
 
   _FormulaToken? _parseFormulaToken(String token) {
