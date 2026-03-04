@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -920,9 +919,14 @@ class _AIScreenState extends State<AIScreen> {
     }
     setState(() {
       _generatedEraserMode[qKey] = eraser;
-      controller.penColor = eraser ? Colors.white : Colors.black;
-      controller.penStrokeWidth = eraser ? 14 : 2.4;
+      _generatedSignatureControllers[qKey] = SignatureController(
+        points: List<Point>.from(controller.points),
+        penColor: eraser ? Colors.white : Colors.black,
+        penStrokeWidth: eraser ? 14 : 2.4,
+        exportBackgroundColor: Colors.white,
+      );
     });
+    controller.dispose();
   }
 
   void _clearSignature(String qKey) {

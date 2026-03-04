@@ -435,7 +435,7 @@ class AITutorTeamController extends ChangeNotifier {
     }
 
     final reason = overToken
-        ? 'token>${aiTutorContextCompressTokenThreshold}'
+        ? 'token>$aiTutorContextCompressTokenThreshold'
         : 'age>${aiTutorContextCompressAgeThreshold.inDays}d';
     final snapshotBefore = context.tokenEstimate;
     final summary = _buildCompressionSummary(
