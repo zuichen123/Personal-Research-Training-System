@@ -104,7 +104,10 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
                     spacing: 6,
                     runSpacing: 4,
                     children: [
-                      _infoChip('难度 ${q.difficulty}', _difficultyColor(q.difficulty)),
+                      _infoChip(
+                        '难度 ${q.difficulty}',
+                        _difficultyColor(q.difficulty),
+                      ),
                       _infoChip('掌握 ${q.masteryLevel}%', cs.secondary),
                       _infoChip(_typeZh(q.type), cs.tertiary),
                     ],
@@ -154,9 +157,12 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
               ),
             ],
           ),
-          if (_gradeResult != null) ...[
+          if (_submitting || _gradeResult != null) ...[
             const SizedBox(height: 16),
-            _resultCard(context, _gradeResult!),
+            if (_submitting)
+              _aiGeneratingCard()
+            else
+              _resultCard(context, _gradeResult!),
           ],
         ],
       ),
@@ -170,6 +176,34 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
       visualDensity: VisualDensity.compact,
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
       side: BorderSide.none,
+    );
+  }
+
+  Widget _aiGeneratingCard() {
+    final cs = Theme.of(context).colorScheme;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: AIFormulaText(
+                'AI 正在生成中...',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: cs.primary,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -188,8 +222,8 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
     final scoreColor = scoreNum >= 80
         ? Colors.green
         : scoreNum >= 60
-            ? Colors.orange
-            : Colors.red;
+        ? Colors.orange
+        : Colors.red;
 
     return Card(
       child: Padding(
@@ -214,8 +248,9 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
                   borderRadius: BorderRadius.circular(8),
                   onTap: () {
                     Clipboard.setData(ClipboardData(text: pretty));
-                    ScaffoldMessenger.of(context)
-                        .showSnackBar(const SnackBar(content: Text('已复制到剪贴板')));
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(const SnackBar(content: Text('已复制到剪贴板')));
                   },
                   child: Padding(
                     padding: const EdgeInsets.all(4),
@@ -258,8 +293,9 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
                       size: 18,
                     ),
                     label: Text(correct == true ? '正确' : '错误'),
-                    backgroundColor: (correct == true ? Colors.green : Colors.red)
-                        .withValues(alpha: 0.1),
+                    backgroundColor:
+                        (correct == true ? Colors.green : Colors.red)
+                            .withValues(alpha: 0.1),
                     side: BorderSide.none,
                   ),
               ],
@@ -267,7 +303,9 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
 
             const SizedBox(height: 12),
             Theme(
-              data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+              data: Theme.of(
+                context,
+              ).copyWith(dividerColor: Colors.transparent),
               child: ExpansionTile(
                 initiallyExpanded: isCorrect,
                 tilePadding: EdgeInsets.zero,
@@ -305,9 +343,7 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
                 decoration: BoxDecoration(
                   color: Colors.red.withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: Colors.red.withValues(alpha: 0.2),
-                  ),
+                  border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -373,7 +409,9 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
             // ── 原始 JSON 折叠 ──
             const SizedBox(height: 8),
             Theme(
-              data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+              data: Theme.of(
+                context,
+              ).copyWith(dividerColor: Colors.transparent),
               child: ExpansionTile(
                 tilePadding: EdgeInsets.zero,
                 childrenPadding: const EdgeInsets.only(bottom: 4),
@@ -479,10 +517,7 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
   }
 
   String _extractAnalysisText(Map<String, dynamic> result) {
-    final candidates = [
-      result['analysis'],
-      result['explanation'],
-    ];
+    final candidates = [result['analysis'], result['explanation']];
     for (final item in candidates) {
       final text = item?.toString().trim() ?? '';
       if (text.isNotEmpty) {

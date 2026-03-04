@@ -257,7 +257,29 @@ class AIAgentProvider with ChangeNotifier {
     if (activeSessionId.isEmpty) {
       return;
     }
+    final now = DateTime.now();
+    final localUserMessage = _buildLocalMessage(
+      id: 'local_user_${now.microsecondsSinceEpoch}',
+      sessionId: activeSessionId,
+      role: 'user',
+      content: text,
+      createdAt: now,
+    );
+    final localAssistantPlaceholder = _buildLocalMessage(
+      id: 'local_assistant_${now.microsecondsSinceEpoch}',
+      sessionId: activeSessionId,
+      role: 'assistant',
+      content: 'AI 正在生成中...',
+      createdAt: now.add(const Duration(milliseconds: 1)),
+    );
+    final pendingMessages = List<AIAgentMessage>.from(
+      _messagesBySession[activeSessionId] ?? const <AIAgentMessage>[],
+    );
+    pendingMessages.add(localUserMessage);
+    pendingMessages.add(localAssistantPlaceholder);
+    _messagesBySession[activeSessionId] = pendingMessages;
     _sending = true;
+    _errorMessage = null;
     notifyListeners();
     try {
       final result = await _api.sendAISessionMessage(
@@ -266,6 +288,9 @@ class AIAgentProvider with ChangeNotifier {
       );
       final currentMessages = List<AIAgentMessage>.from(
         _messagesBySession[activeSessionId] ?? const <AIAgentMessage>[],
+      );
+      currentMessages.removeWhere(
+        (item) => item.id == localAssistantPlaceholder.id,
       );
       final exists = currentMessages.any(
         (item) => item.id == result.assistantMessage.id,
@@ -287,6 +312,13 @@ class AIAgentProvider with ChangeNotifier {
       await _loadSessions(_selectedAgentId);
       await _loadMessages(activeSessionId);
     } catch (e) {
+      final currentMessages = List<AIAgentMessage>.from(
+        _messagesBySession[activeSessionId] ?? const <AIAgentMessage>[],
+      );
+      currentMessages.removeWhere(
+        (item) => item.id == localAssistantPlaceholder.id,
+      );
+      _messagesBySession[activeSessionId] = currentMessages;
       _errorMessage = mapErrorToZh(e);
       _logger.error(
         module: 'ai_agent_provider',
@@ -300,6 +332,29 @@ class AIAgentProvider with ChangeNotifier {
       _sending = false;
       notifyListeners();
     }
+  }
+
+  AIAgentMessage _buildLocalMessage({
+    required String id,
+    required String sessionId,
+    required String role,
+    required String content,
+    required DateTime createdAt,
+  }) {
+    return AIAgentMessage(
+      id: id,
+      sessionId: sessionId,
+      role: role,
+      content: content,
+      intent: null,
+      pendingConfirmation: null,
+      providerUsed: '',
+      modelUsed: '',
+      fallbackUsed: false,
+      latencyMs: 0,
+      artifactId: '',
+      createdAt: createdAt,
+    );
   }
 
   Future<void> confirmAction({

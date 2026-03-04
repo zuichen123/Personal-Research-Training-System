@@ -14,10 +14,7 @@ import '../widgets/ai_formula_text.dart';
 enum AIScreenFocusSection { none, generate, grade }
 
 class AIScreen extends StatefulWidget {
-  const AIScreen({
-    super.key,
-    this.focusSection = AIScreenFocusSection.none,
-  });
+  const AIScreen({super.key, this.focusSection = AIScreenFocusSection.none});
 
   final AIScreenFocusSection focusSection;
 
@@ -75,6 +72,12 @@ class _AIScreenState extends State<AIScreen> {
   final Map<String, SignatureController> _generatedSignatureControllers = {};
   final Map<String, bool> _generatedEraserMode = {};
   final Map<String, List<_AnswerImageAttachment>> _generatedAttachments = {};
+  bool _learningGenerating = false;
+  bool _questionGenerating = false;
+  bool _searchGenerating = false;
+  bool _scoreGenerating = false;
+  bool _gradeGenerating = false;
+  bool _evaluateGenerating = false;
 
   final ImagePicker _imagePicker = ImagePicker();
   final ScrollController _scrollController = ScrollController();
@@ -207,54 +210,74 @@ class _AIScreenState extends State<AIScreen> {
             runSpacing: 8,
             children: [
               FilledButton.icon(
-                onPressed: () async {
-                  await _runProviderAction(() {
-                    return provider.buildLearningPlan({
-                      'final_goal': _learnFinalGoalController.text.trim(),
-                      'total_hours':
-                          int.tryParse(
-                            _learnTotalHoursController.text.trim(),
-                          ) ??
-                          0,
-                      'start_date': _learnStartDateController.text.trim(),
-                      'end_date': _learnEndDateController.text.trim(),
-                      'current_status': _learnStatusController.text.trim(),
-                      'mode': _learnModeController.text.trim(),
-                      'subject': _learnSubjectController.text.trim(),
-                      'unit': _learnUnitController.text.trim(),
-                      'goals': _learnGoalsController.text
-                          .split(',')
-                          .map((e) => e.trim())
-                          .where((e) => e.isNotEmpty)
-                          .toList(),
-                      'themes': _learnThemesController.text
-                          .split(',')
-                          .map((e) => e.trim())
-                          .where((e) => e.isNotEmpty)
-                          .toList(),
-                      'supplement': _learnSupplementController.text.trim(),
-                    });
-                  });
-                },
+                onPressed: _learningGenerating
+                    ? null
+                    : () async {
+                        await _runAIGenerationAction(
+                          onLoadingChanged: (loading) =>
+                              _learningGenerating = loading,
+                          action: () {
+                            return _runProviderAction(() {
+                              return provider.buildLearningPlan({
+                                'final_goal': _learnFinalGoalController.text
+                                    .trim(),
+                                'total_hours':
+                                    int.tryParse(
+                                      _learnTotalHoursController.text.trim(),
+                                    ) ??
+                                    0,
+                                'start_date': _learnStartDateController.text
+                                    .trim(),
+                                'end_date': _learnEndDateController.text.trim(),
+                                'current_status': _learnStatusController.text
+                                    .trim(),
+                                'mode': _learnModeController.text.trim(),
+                                'subject': _learnSubjectController.text.trim(),
+                                'unit': _learnUnitController.text.trim(),
+                                'goals': _learnGoalsController.text
+                                    .split(',')
+                                    .map((e) => e.trim())
+                                    .where((e) => e.isNotEmpty)
+                                    .toList(),
+                                'themes': _learnThemesController.text
+                                    .split(',')
+                                    .map((e) => e.trim())
+                                    .where((e) => e.isNotEmpty)
+                                    .toList(),
+                                'supplement': _learnSupplementController.text
+                                    .trim(),
+                              });
+                            });
+                          },
+                        );
+                      },
                 icon: const Icon(Icons.auto_awesome),
                 label: const Text('生成学习计划'),
               ),
               FilledButton.tonalIcon(
-                onPressed: provider.aiLearningPlan == null
+                onPressed:
+                    provider.aiLearningPlan == null || _learningGenerating
                     ? null
                     : () async {
-                        await _runProviderAction(() {
-                          return provider.optimizeLearningPlan(
-                            action: _optimizeAction,
-                            days:
-                                int.tryParse(
-                                  _optimizeDaysController.text.trim(),
-                                ) ??
-                                0,
-                            reason: _optimizeReasonController.text.trim(),
-                            supplement: _learnSupplementController.text.trim(),
-                          );
-                        });
+                        await _runAIGenerationAction(
+                          onLoadingChanged: (loading) =>
+                              _learningGenerating = loading,
+                          action: () {
+                            return _runProviderAction(() {
+                              return provider.optimizeLearningPlan(
+                                action: _optimizeAction,
+                                days:
+                                    int.tryParse(
+                                      _optimizeDaysController.text.trim(),
+                                    ) ??
+                                    0,
+                                reason: _optimizeReasonController.text.trim(),
+                                supplement: _learnSupplementController.text
+                                    .trim(),
+                              );
+                            });
+                          },
+                        );
                       },
                 icon: const Icon(Icons.tune),
                 label: const Text('优化日程'),
@@ -314,7 +337,9 @@ class _AIScreenState extends State<AIScreen> {
             ],
           ),
           _input(_optimizeReasonController, '调整原因（如：考试冲突）'),
-          if (provider.aiLearningPlan != null) ...[
+          if (_learningGenerating)
+            _aiGeneratingPlaceholder('AI 正在生成中...')
+          else if (provider.aiLearningPlan != null) ...[
             _learningSummary(provider.aiLearningPlan!),
             _jsonBox('learn', provider.aiLearningPlan!),
           ],
@@ -341,10 +366,7 @@ class _AIScreenState extends State<AIScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          AIFormulaText(
-            '计划目标: ${plan['final_goal'] ?? '-'}',
-            selectable: true,
-          ),
+          AIFormulaText('计划目标: ${plan['final_goal'] ?? '-'}', selectable: true),
           AIFormulaText(
             '计划周期: ${plan['plan_start_date'] ?? '-'} ~ ${plan['plan_end_date'] ?? '-'}',
             selectable: true,
@@ -387,26 +409,43 @@ class _AIScreenState extends State<AIScreen> {
             onChanged: (v) => setState(() => _persist = v),
           ),
           FilledButton.icon(
-            onPressed: () async {
-              await _runProviderAction(() {
-                return provider.generateAIQuestions({
-                  'topic': _genTopicController.text.trim(),
-                  'subject': _genSubjectController.text.trim(),
-                  'scope': 'unit',
-                  'count': int.tryParse(_genCountController.text.trim()) ?? 3,
-                  'difficulty':
-                      int.tryParse(_genDifficultyController.text.trim()) ?? 3,
-                }, persist: _persist);
-              });
-              if (!mounted) return;
-              setState(_clearGeneratedPracticeState);
-            },
+            onPressed: _questionGenerating
+                ? null
+                : () async {
+                    await _runAIGenerationAction(
+                      onLoadingChanged: (loading) =>
+                          _questionGenerating = loading,
+                      action: () async {
+                        await _runProviderAction(() {
+                          return provider.generateAIQuestions({
+                            'topic': _genTopicController.text.trim(),
+                            'subject': _genSubjectController.text.trim(),
+                            'scope': 'unit',
+                            'count':
+                                int.tryParse(_genCountController.text.trim()) ??
+                                3,
+                            'difficulty':
+                                int.tryParse(
+                                  _genDifficultyController.text.trim(),
+                                ) ??
+                                3,
+                          }, persist: _persist);
+                        });
+                        if (!mounted) return;
+                        setState(_clearGeneratedPracticeState);
+                      },
+                    );
+                  },
             icon: const Icon(Icons.auto_fix_high),
             label: const Text('开始出题'),
           ),
           const SizedBox(height: 8),
-          Text('生成题目数量: ${provider.aiGeneratedQuestions.length}'),
-          _generatedPracticeSection(provider),
+          if (!_questionGenerating)
+            Text('生成题目数量: ${provider.aiGeneratedQuestions.length}'),
+          if (_questionGenerating)
+            _aiGeneratingPlaceholder('AI 正在生成中...')
+          else
+            _generatedPracticeSection(provider),
         ],
       ),
     );
@@ -449,8 +488,8 @@ class _AIScreenState extends State<AIScreen> {
   ) {
     final qKey = _generatedQuestionKey(index);
     final selected = _generatedSelections[qKey] ?? <String>{};
-    final noteController =
-        _generatedSupplementControllers[qKey] ??= TextEditingController();
+    final noteController = _generatedSupplementControllers[qKey] ??=
+        TextEditingController();
     final result = _generatedGradeResults[qKey];
     final submitting = _generatedSubmitting[qKey] == true;
     final attachments =
@@ -575,7 +614,9 @@ class _AIScreenState extends State<AIScreen> {
                   label: const Text('拍照'),
                 ),
                 OutlinedButton.icon(
-                  onPressed: submitting ? null : () => _pickAudioAttachment(qKey),
+                  onPressed: submitting
+                      ? null
+                      : () => _pickAudioAttachment(qKey),
                   icon: const Icon(Icons.mic_external_on_outlined),
                   label: const Text('上传语音'),
                 ),
@@ -630,7 +671,10 @@ class _AIScreenState extends State<AIScreen> {
                   : const Icon(Icons.send),
               label: Text(submitting ? '提交中...' : '提交批阅'),
             ),
-            if (result != null) _generatedGradeResultCard(qKey, result),
+            if (submitting)
+              _aiGeneratingPlaceholder('AI 正在批阅中...')
+            else if (result != null)
+              _generatedGradeResultCard(qKey, result),
           ],
         ),
       ),
@@ -728,7 +772,9 @@ class _AIScreenState extends State<AIScreen> {
               const Spacer(),
               IconButton(
                 tooltip: '画笔',
-                onPressed: submitting ? null : () => _setEraserMode(qKey, false),
+                onPressed: submitting
+                    ? null
+                    : () => _setEraserMode(qKey, false),
                 visualDensity: VisualDensity.compact,
                 icon: Icon(
                   Icons.edit,
@@ -828,14 +874,7 @@ class _AIScreenState extends State<AIScreen> {
       final result = await FilePicker.platform.pickFiles(
         withData: true,
         type: FileType.custom,
-        allowedExtensions: const [
-          'mp3',
-          'wav',
-          'm4a',
-          'aac',
-          'ogg',
-          'webm',
-        ],
+        allowedExtensions: const ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'webm'],
       );
       if (result == null || result.files.isEmpty) {
         return;
@@ -974,7 +1013,9 @@ class _AIScreenState extends State<AIScreen> {
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Widget _generatedGradeResultCard(String qKey, Map<String, dynamic> result) {
@@ -991,8 +1032,8 @@ class _AIScreenState extends State<AIScreen> {
     final scoreColor = scoreNum >= 80
         ? Colors.green
         : scoreNum >= 60
-            ? Colors.orange
-            : Colors.red;
+        ? Colors.orange
+        : Colors.red;
 
     return Container(
       margin: const EdgeInsets.only(top: 8),
@@ -1003,17 +1044,17 @@ class _AIScreenState extends State<AIScreen> {
             children: [
               Icon(Icons.grading, size: 18, color: theme.colorScheme.primary),
               const SizedBox(width: 6),
-              const Text(
-                '批阅结果',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
+              const Text('批阅结果', style: TextStyle(fontWeight: FontWeight.w600)),
             ],
           ),
           const SizedBox(height: 6),
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: scoreColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(999),
@@ -1040,9 +1081,8 @@ class _AIScreenState extends State<AIScreen> {
                     size: 16,
                     color: correct ? Colors.green : Colors.red,
                   ),
-                  backgroundColor: (correct ? Colors.green : Colors.red).withValues(
-                    alpha: 0.12,
-                  ),
+                  backgroundColor: (correct ? Colors.green : Colors.red)
+                      .withValues(alpha: 0.12),
                 ),
             ],
           ),
@@ -1129,20 +1169,35 @@ class _AIScreenState extends State<AIScreen> {
           _input(_searchSubjectController, '科目'),
           _input(_searchCountController, '数量'),
           FilledButton.icon(
-            onPressed: () async {
-              await _runProviderAction(() {
-                return provider.searchAIQuestions(
-                  topic: _searchTopicController.text.trim(),
-                  subject: _searchSubjectController.text.trim(),
-                  count: int.tryParse(_searchCountController.text.trim()) ?? 5,
-                );
-              });
-            },
+            onPressed: _searchGenerating
+                ? null
+                : () async {
+                    await _runAIGenerationAction(
+                      onLoadingChanged: (loading) =>
+                          _searchGenerating = loading,
+                      action: () {
+                        return _runProviderAction(() {
+                          return provider.searchAIQuestions(
+                            topic: _searchTopicController.text.trim(),
+                            subject: _searchSubjectController.text.trim(),
+                            count:
+                                int.tryParse(
+                                  _searchCountController.text.trim(),
+                                ) ??
+                                5,
+                          );
+                        });
+                      },
+                    );
+                  },
             icon: const Icon(Icons.search),
             label: const Text('联网搜题'),
           ),
           const SizedBox(height: 8),
-          Text('搜索结果数量: ${provider.aiSearchQuestions.length}'),
+          if (_searchGenerating)
+            _aiGeneratingPlaceholder('AI 正在生成中...')
+          else
+            Text('搜索结果数量: ${provider.aiSearchQuestions.length}'),
         ],
       ),
     );
@@ -1159,22 +1214,39 @@ class _AIScreenState extends State<AIScreen> {
           _input(_stabilityController, '稳定度(0-100)'),
           _input(_speedController, '速度(0-100)'),
           FilledButton.icon(
-            onPressed: () async {
-              await _runProviderAction(() {
-                return provider.scoreWithAI({
-                  'topic': _scoreTopicController.text.trim(),
-                  'accuracy':
-                      double.tryParse(_accuracyController.text.trim()) ?? 0,
-                  'stability':
-                      double.tryParse(_stabilityController.text.trim()) ?? 0,
-                  'speed': double.tryParse(_speedController.text.trim()) ?? 0,
-                });
-              });
-            },
+            onPressed: _scoreGenerating
+                ? null
+                : () async {
+                    await _runAIGenerationAction(
+                      onLoadingChanged: (loading) => _scoreGenerating = loading,
+                      action: () {
+                        return _runProviderAction(() {
+                          return provider.scoreWithAI({
+                            'topic': _scoreTopicController.text.trim(),
+                            'accuracy':
+                                double.tryParse(
+                                  _accuracyController.text.trim(),
+                                ) ??
+                                0,
+                            'stability':
+                                double.tryParse(
+                                  _stabilityController.text.trim(),
+                                ) ??
+                                0,
+                            'speed':
+                                double.tryParse(_speedController.text.trim()) ??
+                                0,
+                          });
+                        });
+                      },
+                    );
+                  },
             icon: const Icon(Icons.calculate),
             label: const Text('计算评分'),
           ),
-          if (provider.aiScoreResult != null)
+          if (_scoreGenerating)
+            _aiGeneratingPlaceholder('AI 正在生成中...')
+          else if (provider.aiScoreResult != null)
             _jsonBox('score', provider.aiScoreResult!),
         ],
       ),
@@ -1191,34 +1263,43 @@ class _AIScreenState extends State<AIScreen> {
           _input(_gradeQuestionIdController, '题目ID'),
           _input(_gradeAnswerController, '作答内容(逗号分隔)'),
           FilledButton.icon(
-            onPressed: () async {
-              final questionPayload = _questionPayloadById(
-                provider,
-                _gradeQuestionIdController.text.trim(),
-              );
-              if (questionPayload == null) {
-                if (mounted) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(const SnackBar(content: Text('请输入存在的题目ID')));
-                }
-                return;
-              }
-              await _runProviderAction(() {
-                return provider.gradeWithAI({
-                  'question': questionPayload,
-                  'user_answer': _gradeAnswerController.text
-                      .split(',')
-                      .map((e) => e.trim())
-                      .where((e) => e.isNotEmpty)
-                      .toList(),
-                });
-              });
-            },
+            onPressed: _gradeGenerating
+                ? null
+                : () async {
+                    final questionPayload = _questionPayloadById(
+                      provider,
+                      _gradeQuestionIdController.text.trim(),
+                    );
+                    if (questionPayload == null) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('请输入存在的题目ID')),
+                        );
+                      }
+                      return;
+                    }
+                    await _runAIGenerationAction(
+                      onLoadingChanged: (loading) => _gradeGenerating = loading,
+                      action: () {
+                        return _runProviderAction(() {
+                          return provider.gradeWithAI({
+                            'question': questionPayload,
+                            'user_answer': _gradeAnswerController.text
+                                .split(',')
+                                .map((e) => e.trim())
+                                .where((e) => e.isNotEmpty)
+                                .toList(),
+                          });
+                        });
+                      },
+                    );
+                  },
             icon: const Icon(Icons.rate_review),
             label: const Text('执行批阅'),
           ),
-          if (provider.aiGradeResult != null)
+          if (_gradeGenerating)
+            _aiGeneratingPlaceholder('AI 正在生成中...')
+          else if (provider.aiGradeResult != null)
             _jsonBox('grade', provider.aiGradeResult!),
         ],
       ),
@@ -1236,28 +1317,38 @@ class _AIScreenState extends State<AIScreen> {
           _input(_evaluateAnswerController, '作答内容(逗号分隔)'),
           _input(_evaluateContextController, '评估上下文'),
           FilledButton.icon(
-            onPressed: () async {
-              final questionPayload = _questionPayloadById(
-                provider,
-                _evaluateQuestionIdController.text.trim(),
-              );
-              await _runProviderAction(() {
-                return provider.evaluateWithAI({
-                  'mode': _evaluateModeController.text.trim(),
-                  'question': questionPayload ?? <String, dynamic>{},
-                  'user_answer': _evaluateAnswerController.text
-                      .split(',')
-                      .map((e) => e.trim())
-                      .where((e) => e.isNotEmpty)
-                      .toList(),
-                  'context': _evaluateContextController.text.trim(),
-                });
-              });
-            },
+            onPressed: _evaluateGenerating
+                ? null
+                : () async {
+                    final questionPayload = _questionPayloadById(
+                      provider,
+                      _evaluateQuestionIdController.text.trim(),
+                    );
+                    await _runAIGenerationAction(
+                      onLoadingChanged: (loading) =>
+                          _evaluateGenerating = loading,
+                      action: () {
+                        return _runProviderAction(() {
+                          return provider.evaluateWithAI({
+                            'mode': _evaluateModeController.text.trim(),
+                            'question': questionPayload ?? <String, dynamic>{},
+                            'user_answer': _evaluateAnswerController.text
+                                .split(',')
+                                .map((e) => e.trim())
+                                .where((e) => e.isNotEmpty)
+                                .toList(),
+                            'context': _evaluateContextController.text.trim(),
+                          });
+                        });
+                      },
+                    );
+                  },
             icon: const Icon(Icons.fact_check),
             label: const Text('执行评估'),
           ),
-          if (provider.aiEvaluateResult != null)
+          if (_evaluateGenerating)
+            _aiGeneratingPlaceholder('AI 正在生成中...')
+          else if (provider.aiEvaluateResult != null)
             _jsonBox('evaluate', provider.aiEvaluateResult!),
         ],
       ),
@@ -1354,6 +1445,56 @@ class _AIScreenState extends State<AIScreen> {
         ),
       ),
     );
+  }
+
+  Widget _aiGeneratingPlaceholder(String message) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: AIFormulaText(
+              message,
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _runAIGenerationAction({
+    required void Function(bool loading) onLoadingChanged,
+    required Future<void> Function() action,
+  }) async {
+    if (mounted) {
+      setState(() => onLoadingChanged(true));
+    } else {
+      onLoadingChanged(true);
+    }
+    try {
+      await action();
+    } finally {
+      if (mounted) {
+        setState(() => onLoadingChanged(false));
+      } else {
+        onLoadingChanged(false);
+      }
+    }
   }
 
   Widget _jsonBox(String key, Map<String, dynamic> map) {

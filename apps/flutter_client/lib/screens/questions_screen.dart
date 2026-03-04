@@ -607,103 +607,150 @@ Future<void> _showAICreateDialog(
   final topicController = TextEditingController(text: presetUnit);
   final countController = TextEditingController(text: '3');
   final difficultyController = TextEditingController(text: '3');
+  var generating = false;
 
   await showDialog<void>(
     context: context,
     builder: (ctx) {
-      return AlertDialog(
-        title: const Text('AI创建题库内容'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _dialogInput(subjectController, '科目'),
-              _dialogInput(unitController, '单元（可选）'),
-              _dialogInput(topicController, '主题（可选，默认取单元）'),
-              _dialogInput(countController, '题目数量'),
-              _dialogInput(difficultyController, '难度(1-5)'),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('取消'),
-          ),
-          FilledButton.icon(
-            onPressed: () async {
-              final subject = _normalizeSubject(subjectController.text);
-              final unit = unitController.text.trim();
-              final topic = topicController.text.trim().isNotEmpty
-                  ? topicController.text.trim()
-                  : (unit.isNotEmpty ? unit : subject);
-              final count = int.tryParse(countController.text.trim()) ?? 3;
-              final difficulty =
-                  int.tryParse(difficultyController.text.trim()) ?? 3;
-
-              if (subject.isEmpty) {
-                if (ctx.mounted) {
-                  ScaffoldMessenger.of(
-                    ctx,
-                  ).showSnackBar(const SnackBar(content: Text('科目不能为空')));
-                }
-                return;
-              }
-              if (topic.isEmpty) {
-                if (ctx.mounted) {
-                  ScaffoldMessenger.of(
-                    ctx,
-                  ).showSnackBar(const SnackBar(content: Text('主题不能为空')));
-                }
-                return;
-              }
-
-              try {
-                await provider.generateAIQuestions({
-                  'topic': topic,
-                  'subject': subject,
-                  'scope': 'unit',
-                  'count': count,
-                  'difficulty': difficulty,
-                }, persist: true);
-
-                if (unit.isNotEmpty) {
-                  final created = provider.aiGeneratedQuestions
-                      .where((q) => q.id.trim().isNotEmpty)
-                      .toList(growable: false);
-                  for (final q in created) {
-                    final input = _questionToInput(
-                      q,
-                      subject: subject,
-                      unit: unit,
-                    );
-                    await provider.updateQuestion(q.id, input);
-                  }
-                  await provider.fetchQuestions(force: true);
-                }
-
-                if (ctx.mounted) {
-                  Navigator.of(ctx).pop();
-                  ScaffoldMessenger.of(ctx).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'AI创建完成：${provider.aiGeneratedQuestions.length} 道题',
+      return StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return AlertDialog(
+            title: const Text('AI创建题库内容'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _dialogInput(subjectController, '科目'),
+                  _dialogInput(unitController, '单元（可选）'),
+                  _dialogInput(topicController, '主题（可选，默认取单元）'),
+                  _dialogInput(countController, '题目数量'),
+                  _dialogInput(difficultyController, '难度(1-5)'),
+                  if (generating)
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(top: 4),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        color: Theme.of(
+                          ctx,
+                        ).colorScheme.surfaceContainerHighest,
+                        border: Border.all(
+                          color: Theme.of(ctx).colorScheme.outlineVariant,
+                        ),
+                      ),
+                      child: const Row(
+                        children: [
+                          SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          SizedBox(width: 10),
+                          Expanded(child: Text('AI 正在生成中...')),
+                        ],
                       ),
                     ),
-                  );
-                }
-              } catch (e) {
-                if (ctx.mounted) {
-                  ScaffoldMessenger.of(
-                    ctx,
-                  ).showSnackBar(SnackBar(content: Text('AI创建失败：$e')));
-                }
-              }
-            },
-            icon: const Icon(Icons.auto_fix_high),
-            label: const Text('创建并写入题库'),
-          ),
-        ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: generating ? null : () => Navigator.of(ctx).pop(),
+                child: const Text('取消'),
+              ),
+              FilledButton.icon(
+                onPressed: generating
+                    ? null
+                    : () async {
+                        final subject = _normalizeSubject(
+                          subjectController.text,
+                        );
+                        final unit = unitController.text.trim();
+                        final topic = topicController.text.trim().isNotEmpty
+                            ? topicController.text.trim()
+                            : (unit.isNotEmpty ? unit : subject);
+                        final count =
+                            int.tryParse(countController.text.trim()) ?? 3;
+                        final difficulty =
+                            int.tryParse(difficultyController.text.trim()) ?? 3;
+
+                        if (subject.isEmpty) {
+                          if (ctx.mounted) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              const SnackBar(content: Text('科目不能为空')),
+                            );
+                          }
+                          return;
+                        }
+                        if (topic.isEmpty) {
+                          if (ctx.mounted) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              const SnackBar(content: Text('主题不能为空')),
+                            );
+                          }
+                          return;
+                        }
+
+                        setDialogState(() => generating = true);
+                        try {
+                          await provider.generateAIQuestions({
+                            'topic': topic,
+                            'subject': subject,
+                            'scope': 'unit',
+                            'count': count,
+                            'difficulty': difficulty,
+                          }, persist: true);
+
+                          if (unit.isNotEmpty) {
+                            final created = provider.aiGeneratedQuestions
+                                .where((q) => q.id.trim().isNotEmpty)
+                                .toList(growable: false);
+                            for (final q in created) {
+                              final input = _questionToInput(
+                                q,
+                                subject: subject,
+                                unit: unit,
+                              );
+                              await provider.updateQuestion(q.id, input);
+                            }
+                            await provider.fetchQuestions(force: true);
+                          }
+
+                          if (ctx.mounted) {
+                            Navigator.of(ctx).pop();
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'AI创建完成：${provider.aiGeneratedQuestions.length} 道题',
+                                ),
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          if (ctx.mounted) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              SnackBar(content: Text('AI创建失败：$e')),
+                            );
+                          }
+                        } finally {
+                          if (ctx.mounted) {
+                            setDialogState(() => generating = false);
+                          }
+                        }
+                      },
+                icon: generating
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.auto_fix_high),
+                label: Text(generating ? '生成中...' : '创建并写入题库'),
+              ),
+            ],
+          );
+        },
       );
     },
   );
