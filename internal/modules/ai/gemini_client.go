@@ -32,15 +32,28 @@ func NewGeminiClient(cfg GeminiConfig) Client {
 	modelPath := url.PathEscape(cfg.Model)
 	endpoint := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", modelPath, url.QueryEscape(cfg.APIKey))
 
-	invoker := func(ctx context.Context, prompt string) (string, error) {
+	invoker := func(ctx context.Context, input promptInvokeInput) (string, error) {
+		parts := []map[string]any{
+			{
+				"text": "You are a JSON API backend. Return strictly valid JSON and nothing else.\n" + input.Prompt,
+			},
+		}
+		for _, attachment := range input.Attachments {
+			mimeType, base64Data, err := parseBase64DataURL(attachment.DataURL)
+			if err != nil {
+				continue
+			}
+			parts = append(parts, map[string]any{
+				"inline_data": map[string]any{
+					"mime_type": mimeType,
+					"data":      base64Data,
+				},
+			})
+		}
 		payload := map[string]any{
 			"contents": []map[string]any{
 				{
-					"parts": []map[string]string{
-						{
-							"text": "You are a JSON API backend. Return strictly valid JSON and nothing else.\n" + prompt,
-						},
-					},
+					"parts": parts,
 				},
 			},
 			"generationConfig": map[string]any{

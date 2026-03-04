@@ -30,14 +30,48 @@ func NewClaudeClient(cfg ClaudeConfig) Client {
 	}
 	endpoint := "https://api.anthropic.com/v1/messages"
 
-	invoker := func(ctx context.Context, prompt string) (string, error) {
+	invoker := func(ctx context.Context, input promptInvokeInput) (string, error) {
+		contentBlocks := []map[string]any{
+			{
+				"type": "text",
+				"text": "You are a JSON API backend. Return strictly valid JSON and nothing else.\n" + input.Prompt,
+			},
+		}
+		audioCount := 0
+		for _, attachment := range input.Attachments {
+			mimeType, base64Data, err := parseBase64DataURL(attachment.DataURL)
+			if err != nil {
+				continue
+			}
+			if strings.HasPrefix(mimeType, "audio/") {
+				audioCount++
+				continue
+			}
+			contentBlocks = append(contentBlocks, map[string]any{
+				"type": "image",
+				"source": map[string]any{
+					"type":       "base64",
+					"media_type": mimeType,
+					"data":       base64Data,
+				},
+			})
+		}
+		if audioCount > 0 {
+			contentBlocks = append(contentBlocks, map[string]any{
+				"type": "text",
+				"text": fmt.Sprintf(
+					"User attached %d audio file(s). This Claude integration currently sends image attachments only.",
+					audioCount,
+				),
+			})
+		}
 		payload := map[string]any{
 			"model":      cfg.Model,
 			"max_tokens": 2048,
-			"messages": []map[string]string{
+			"messages": []map[string]any{
 				{
 					"role":    "user",
-					"content": "You are a JSON API backend. Return strictly valid JSON and nothing else.\n" + prompt,
+					"content": contentBlocks,
 				},
 			},
 		}

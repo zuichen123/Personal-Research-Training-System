@@ -79,6 +79,15 @@ func (m *MockClient) GradeAnswer(ctx context.Context, req GradeRequest) (GradeRe
 	case <-time.After(m.latency):
 	}
 
+	if len(req.UserAnswer) == 0 && len(req.Attachments) > 0 {
+		return GradeResult{
+			Score:       0,
+			Correct:     false,
+			Feedback:    "mock provider cannot interpret media attachments yet",
+			WrongReason: "media understanding unavailable in mock provider",
+		}, nil
+	}
+
 	if len(req.Question.AnswerKey) == 0 {
 		return GradeResult{
 			Score:    0,

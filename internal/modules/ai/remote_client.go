@@ -14,7 +14,12 @@ import (
 	"self-study-tool/internal/shared/errs"
 )
 
-type promptInvoker func(ctx context.Context, prompt string) (string, error)
+type promptInvokeInput struct {
+	Prompt      string
+	Attachments []ImageAttachment
+}
+
+type promptInvoker func(ctx context.Context, input promptInvokeInput) (string, error)
 
 type remoteLLMClient struct {
 	provider string
@@ -96,7 +101,7 @@ difficulty=%d`,
 	var payload struct {
 		Items []question.CreateInput `json:"items"`
 	}
-	if err := c.invokeJSON(ctx, "generate_questions", prompt, &payload); err != nil {
+	if err := c.invokeJSON(ctx, "generate_questions", prompt, nil, &payload); err != nil {
 		return nil, err
 	}
 	if len(payload.Items) == 0 {
@@ -128,15 +133,17 @@ func (c *remoteLLMClient) GradeAnswer(ctx context.Context, req GradeRequest) (Gr
 		`question_title=%s
 question_stem=%s
 answer_key=%v
-user_answer=%v`,
+user_answer=%v
+attachment_files=%d`,
 		req.Question.Title,
 		req.Question.Stem,
 		req.Question.AnswerKey,
 		req.UserAnswer,
+		len(req.Attachments),
 	)
 	prompt := c.buildOperationPrompt(PromptKeyGradeAnswer, userInput)
 	var out GradeResult
-	if err := c.invokeJSON(ctx, "grade_answer", prompt, &out); err != nil {
+	if err := c.invokeJSON(ctx, "grade_answer", prompt, req.Attachments, &out); err != nil {
 		return GradeResult{}, err
 	}
 	if out.Score < 0 {
@@ -173,7 +180,7 @@ profile_summary=%s`,
 	)
 	prompt := c.buildOperationPrompt(PromptKeyBuildLearningPlan, userInput)
 	var out LearnResult
-	if err := c.invokeJSON(ctx, "build_learning_plan", prompt, &out); err != nil {
+	if err := c.invokeJSON(ctx, "build_learning_plan", prompt, nil, &out); err != nil {
 		return LearnResult{}, err
 	}
 	return out, nil
@@ -198,7 +205,7 @@ plan=%s`,
 	)
 	prompt := c.buildOperationPrompt(PromptKeyOptimizeLearning, userInput)
 	var out OptimizeLearnResult
-	if err := c.invokeJSON(ctx, "optimize_learning_plan", prompt, &out); err != nil {
+	if err := c.invokeJSON(ctx, "optimize_learning_plan", prompt, nil, &out); err != nil {
 		return OptimizeLearnResult{}, err
 	}
 	return out, nil
@@ -222,7 +229,7 @@ context=%s`,
 	)
 	prompt := c.buildOperationPrompt(PromptKeyEvaluateLearning, userInput)
 	var out EvaluateResult
-	if err := c.invokeJSON(ctx, "evaluate_learning", prompt, &out); err != nil {
+	if err := c.invokeJSON(ctx, "evaluate_learning", prompt, nil, &out); err != nil {
 		return EvaluateResult{}, err
 	}
 	if out.Score < 0 {
@@ -248,7 +255,7 @@ speed=%.1f`,
 	)
 	prompt := c.buildOperationPrompt(PromptKeyScoreLearning, userInput)
 	var out ScoreResult
-	if err := c.invokeJSON(ctx, "score_learning", prompt, &out); err != nil {
+	if err := c.invokeJSON(ctx, "score_learning", prompt, nil, &out); err != nil {
 		return ScoreResult{}, err
 	}
 	if out.Score < 0 {
@@ -261,9 +268,17 @@ speed=%.1f`,
 	return out, nil
 }
 
-func (c *remoteLLMClient) invokeJSON(ctx context.Context, operation, prompt string, out any) error {
+func (c *remoteLLMClient) invokeJSON(
+	ctx context.Context,
+	operation, prompt string,
+	attachments []ImageAttachment,
+	out any,
+) error {
 	start := time.Now()
-	raw, err := c.invoke(ctx, prompt)
+	raw, err := c.invoke(ctx, promptInvokeInput{
+		Prompt:      prompt,
+		Attachments: attachments,
+	})
 	latency := time.Since(start).Milliseconds()
 	logger := logx.LoggerFromContext(ctx)
 
@@ -297,6 +312,7 @@ func (c *remoteLLMClient) invokeJSON(ctx context.Context, operation, prompt stri
 		slog.String("ai_model", c.model),
 		slog.String("ai_op", operation),
 		slog.Int64("latency_ms", latency),
+		slog.Int("attachment_files", len(attachments)),
 		slog.Int("response_chars", len(raw)),
 	)
 	return nil

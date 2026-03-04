@@ -1345,3 +1345,25 @@ class _AIScreenState extends State<AIScreen> {
   }
 }
 
+class _AnswerImageAttachment {
+  const _AnswerImageAttachment({
+    required this.name,
+    required this.source,
+    required this.mimeType,
+    required this.dataUrl,
+  });
+
+  final String name;
+  final String source;
+  final String mimeType;
+  final String dataUrl;
+
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      'source': source,
+      'mime_type': mimeType,
+      'data_url': dataUrl,
+    };
+  }
+}

@@ -73,3 +73,73 @@ func TestDecodeGradeRequest_InvalidPayload(t *testing.T) {
 	}
 }
 
+func TestDecodeGradeRequest_AllowsAttachmentOnlyAnswer(t *testing.T) {
+	r := httptest.NewRequest("POST", "/ai/grade", strings.NewReader(`{
+		"question": {
+			"id": "q1",
+			"title": "t",
+			"stem": "s",
+			"type": "short_answer",
+			"subject": "math",
+			"source": "unit_test",
+			"answer_key": ["a1"],
+			"difficulty": 1,
+			"mastery_level": 0
+		},
+		"attachments": [
+			{
+				"name": "handwrite.png",
+				"mime_type": "image/png",
+				"data_url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA"
+			}
+		]
+	}`))
+
+	req, err := decodeGradeRequest(r)
+	if err != nil {
+		t.Fatalf("decode attachment-only schema failed: %v", err)
+	}
+	if len(req.Attachments) != 1 {
+		t.Fatalf("expected 1 attachment, got %d", len(req.Attachments))
+	}
+	if len(req.UserAnswer) != 0 {
+		t.Fatalf("expected empty user answer, got %#v", req.UserAnswer)
+	}
+}
+
+func TestDecodeGradeRequest_AllowsAudioAttachmentOnlyAnswer(t *testing.T) {
+	r := httptest.NewRequest("POST", "/ai/grade", strings.NewReader(`{
+		"question": {
+			"id": "q1",
+			"title": "t",
+			"stem": "s",
+			"type": "short_answer",
+			"subject": "english",
+			"source": "unit_test",
+			"answer_key": ["a1"],
+			"difficulty": 1,
+			"mastery_level": 0
+		},
+		"attachments": [
+			{
+				"name": "voice.wav",
+				"mime_type": "audio/wav",
+				"data_url": "data:audio/wav;base64,UklGRhQAAABXQVZF"
+			}
+		]
+	}`))
+
+	req, err := decodeGradeRequest(r)
+	if err != nil {
+		t.Fatalf("decode audio-attachment schema failed: %v", err)
+	}
+	if len(req.Attachments) != 1 {
+		t.Fatalf("expected 1 attachment, got %d", len(req.Attachments))
+	}
+	if req.Attachments[0].MimeType != "audio/wav" {
+		t.Fatalf("unexpected mime type: %s", req.Attachments[0].MimeType)
+	}
+	if len(req.UserAnswer) != 0 {
+		t.Fatalf("expected empty user answer, got %#v", req.UserAnswer)
+	}
+}

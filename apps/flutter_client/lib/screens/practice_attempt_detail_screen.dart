@@ -199,16 +199,36 @@ class PracticeAttemptDetailScreen extends StatelessWidget {
   }
 
   Widget _aiFeedbackCard(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final analysis = attempt.feedback.trim();
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('AI批阅', style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: 8),
-            Text(attempt.feedback.isEmpty ? '-' : attempt.feedback),
-          ],
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            initiallyExpanded: false,
+            tilePadding: EdgeInsets.zero,
+            title: Text(
+              '题目解析',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+                color: cs.primary,
+              ),
+            ),
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: SelectableText(analysis.isEmpty ? '暂无题目解析' : analysis),
+              ),
+            ],
+          ),
         ),
       ),
     );

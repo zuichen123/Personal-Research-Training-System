@@ -15,9 +15,17 @@ type GenerateRequest struct {
 	Difficulty int    `json:"difficulty"`
 }
 
+type ImageAttachment struct {
+	Name     string `json:"name,omitempty"`
+	Source   string `json:"source,omitempty"`
+	MimeType string `json:"mime_type,omitempty"`
+	DataURL  string `json:"data_url,omitempty"`
+}
+
 type GradeRequest struct {
-	Question   question.Question `json:"question"`
-	UserAnswer []string          `json:"user_answer"`
+	Question    question.Question `json:"question"`
+	UserAnswer  []string          `json:"user_answer"`
+	Attachments []ImageAttachment `json:"attachments,omitempty"`
 }
 
 type GradeResult struct {

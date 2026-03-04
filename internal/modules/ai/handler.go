@@ -124,33 +124,43 @@ func decodeGradeRequest(r *http.Request) (GradeRequest, error) {
 		}
 	}
 
-	userAnswerRaw, ok := raw["user_answer"]
-	if !ok {
-		return GradeRequest{}, errs.BadRequest("user_answer is required")
-	}
-	trimmedAnswer := bytes.TrimSpace(userAnswerRaw)
-	if len(trimmedAnswer) == 0 || bytes.Equal(trimmedAnswer, []byte("null")) {
-		return GradeRequest{}, errs.BadRequest("user_answer is required")
-	}
-	switch trimmedAnswer[0] {
-	case '[':
-		if err := json.Unmarshal(trimmedAnswer, &req.UserAnswer); err != nil {
-			return GradeRequest{}, errs.BadRequest("invalid user_answer payload")
+	if v, ok := raw["attachments"]; ok {
+		var attachments []ImageAttachment
+		if err := json.Unmarshal(v, &attachments); err != nil {
+			return GradeRequest{}, errs.BadRequest("invalid attachments payload")
 		}
-	case '"':
-		var answer string
-		if err := json.Unmarshal(trimmedAnswer, &answer); err != nil {
-			return GradeRequest{}, errs.BadRequest("invalid user_answer payload")
+		normalized, err := normalizeImageAttachments(attachments)
+		if err != nil {
+			return GradeRequest{}, err
 		}
-		answer = strings.TrimSpace(answer)
-		if answer != "" {
-			req.UserAnswer = []string{answer}
-		}
-	default:
-		return GradeRequest{}, errs.BadRequest("invalid user_answer payload")
+		req.Attachments = normalized
 	}
-	if len(req.UserAnswer) == 0 {
-		return GradeRequest{}, errs.BadRequest("user_answer is required")
+
+	userAnswerRaw, hasUserAnswer := raw["user_answer"]
+	if hasUserAnswer {
+		trimmedAnswer := bytes.TrimSpace(userAnswerRaw)
+		if len(trimmedAnswer) > 0 && !bytes.Equal(trimmedAnswer, []byte("null")) {
+			switch trimmedAnswer[0] {
+			case '[':
+				if err := json.Unmarshal(trimmedAnswer, &req.UserAnswer); err != nil {
+					return GradeRequest{}, errs.BadRequest("invalid user_answer payload")
+				}
+			case '"':
+				var answer string
+				if err := json.Unmarshal(trimmedAnswer, &answer); err != nil {
+					return GradeRequest{}, errs.BadRequest("invalid user_answer payload")
+				}
+				answer = strings.TrimSpace(answer)
+				if answer != "" {
+					req.UserAnswer = []string{answer}
+				}
+			default:
+				return GradeRequest{}, errs.BadRequest("invalid user_answer payload")
+			}
+		}
+	}
+	if len(req.UserAnswer) == 0 && len(req.Attachments) == 0 {
+		return GradeRequest{}, errs.BadRequest("user_answer or attachments is required")
 	}
 
 	return req, nil

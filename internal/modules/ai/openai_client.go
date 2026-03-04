@@ -35,17 +35,58 @@ func NewOpenAIClient(cfg OpenAIConfig) Client {
 	}
 	endpoint := baseURL + "/chat/completions"
 
-	invoker := func(ctx context.Context, prompt string) (string, error) {
+	invoker := func(ctx context.Context, input promptInvokeInput) (string, error) {
+		userContent := []map[string]any{
+			{
+				"type": "text",
+				"text": input.Prompt,
+			},
+		}
+		skippedAudio := 0
+		for _, attachment := range input.Attachments {
+			mimeType, base64Data, err := parseBase64DataURL(attachment.DataURL)
+			if err != nil {
+				continue
+			}
+			switch {
+			case strings.HasPrefix(mimeType, "image/"):
+				userContent = append(userContent, map[string]any{
+					"type": "image_url",
+					"image_url": map[string]any{
+						"url": attachment.DataURL,
+					},
+				})
+			case strings.HasPrefix(mimeType, "audio/"):
+				format := openAIAudioFormat(mimeType)
+				if format == "" {
+					skippedAudio++
+					continue
+				}
+				userContent = append(userContent, map[string]any{
+					"type": "input_audio",
+					"input_audio": map[string]any{
+						"format": format,
+						"data":   base64Data,
+					},
+				})
+			}
+		}
+		if skippedAudio > 0 {
+			userContent = append(userContent, map[string]any{
+				"type": "text",
+				"text": fmt.Sprintf("Skipped %d audio attachment(s) because the current OpenAI endpoint only supports wav/mp3 input_audio.", skippedAudio),
+			})
+		}
 		payload := map[string]any{
 			"model": cfg.Model,
-			"messages": []map[string]string{
+			"messages": []map[string]any{
 				{
 					"role":    "system",
 					"content": "You are a JSON API backend. Return strictly valid JSON and nothing else.",
 				},
 				{
 					"role":    "user",
-					"content": prompt,
+					"content": userContent,
 				},
 			},
 			"temperature": 0.2,
@@ -85,4 +126,15 @@ func NewOpenAIClient(cfg OpenAIConfig) Client {
 	}
 
 	return newRemoteLLMClient("openai", cfg.Model, true, invoker)
+}
+
+func openAIAudioFormat(mimeType string) string {
+	switch strings.ToLower(strings.TrimSpace(mimeType)) {
+	case "audio/wav", "audio/x-wav":
+		return "wav"
+	case "audio/mpeg", "audio/mp3":
+		return "mp3"
+	default:
+		return ""
+	}
 }
