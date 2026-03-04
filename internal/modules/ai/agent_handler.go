@@ -162,6 +162,24 @@ func (h *Handler) listSessionArtifacts(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, items)
 }
 
+func (h *Handler) compressSessionMessages(w http.ResponseWriter, r *http.Request) {
+	var req CompressSessionRequest
+	if err := httpx.DecodeJSON(r, &req); err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	result, err := h.service.CompressSessionMessages(
+		r.Context(),
+		strings.TrimSpace(chi.URLParam(r, "id")),
+		req,
+	)
+	if err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, result)
+}
+
 func (h *Handler) importQuestionsFromArtifact(w http.ResponseWriter, r *http.Request) {
 	var req ImportQuestionsRequest
 	if err := httpx.DecodeJSON(r, &req); err != nil {

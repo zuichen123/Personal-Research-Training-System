@@ -68,9 +68,11 @@ class AIAgentSummary {
               .map((e) => e.toString())
               .toList(growable: false),
       enabled: json['enabled'] == true,
-      createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
+      createdAt:
+          DateTime.tryParse(json['created_at']?.toString() ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
-      updatedAt: DateTime.tryParse(json['updated_at']?.toString() ?? '') ??
+      updatedAt:
+          DateTime.tryParse(json['updated_at']?.toString() ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
     );
   }
@@ -82,6 +84,8 @@ class AIAgentSession {
     required this.agentId,
     required this.title,
     required this.lastMessageAt,
+    required this.summaryUpdatedAt,
+    required this.summaryMessageCount,
     required this.createdAt,
     required this.updatedAt,
     required this.archivedAt,
@@ -91,6 +95,8 @@ class AIAgentSession {
   final String agentId;
   final String title;
   final DateTime? lastMessageAt;
+  final DateTime? summaryUpdatedAt;
+  final int summaryMessageCount;
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? archivedAt;
@@ -100,10 +106,19 @@ class AIAgentSession {
       id: json['id']?.toString() ?? '',
       agentId: json['agent_id']?.toString() ?? '',
       title: json['title']?.toString() ?? '',
-      lastMessageAt: DateTime.tryParse(json['last_message_at']?.toString() ?? ''),
-      createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
+      lastMessageAt: DateTime.tryParse(
+        json['last_message_at']?.toString() ?? '',
+      ),
+      summaryUpdatedAt: DateTime.tryParse(
+        json['summary_updated_at']?.toString() ?? '',
+      ),
+      summaryMessageCount:
+          (json['summary_message_count'] as num?)?.toInt() ?? 0,
+      createdAt:
+          DateTime.tryParse(json['created_at']?.toString() ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
-      updatedAt: DateTime.tryParse(json['updated_at']?.toString() ?? '') ??
+      updatedAt:
+          DateTime.tryParse(json['updated_at']?.toString() ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
       archivedAt: DateTime.tryParse(json['archived_at']?.toString() ?? ''),
     );
@@ -128,7 +143,8 @@ class AIAgentIntent {
       action: json['action']?.toString() ?? '',
       confidence: (json['confidence'] as num?)?.toDouble() ?? 0,
       reason: json['reason']?.toString() ?? '',
-      params: (json['params'] as Map?)?.cast<String, dynamic>() ??
+      params:
+          (json['params'] as Map?)?.cast<String, dynamic>() ??
           <String, dynamic>{},
     );
   }
@@ -151,7 +167,8 @@ class AIAgentPendingConfirmation {
     return AIAgentPendingConfirmation(
       action: json['action']?.toString() ?? '',
       prompt: json['prompt']?.toString() ?? '',
-      params: (json['params'] as Map?)?.cast<String, dynamic>() ??
+      params:
+          (json['params'] as Map?)?.cast<String, dynamic>() ??
           <String, dynamic>{},
       createdAt: DateTime.tryParse(json['created_at']?.toString() ?? ''),
     );
@@ -208,7 +225,8 @@ class AIAgentMessage {
       fallbackUsed: json['fallback_used'] == true,
       latencyMs: (json['latency_ms'] as num?)?.toInt() ?? 0,
       artifactId: json['artifact_id']?.toString() ?? '',
-      createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
+      createdAt:
+          DateTime.tryParse(json['created_at']?.toString() ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
     );
   }
@@ -243,9 +261,10 @@ class AIAgentArtifact {
       type: json['type']?.toString() ?? '',
       payload:
           (json['payload'] as Map?)?.cast<String, dynamic>() ??
-              const <String, dynamic>{},
+          const <String, dynamic>{},
       importStatus: json['import_status']?.toString() ?? 'pending',
-      createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
+      createdAt:
+          DateTime.tryParse(json['created_at']?.toString() ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
       importedAt: DateTime.tryParse(json['imported_at']?.toString() ?? ''),
     );

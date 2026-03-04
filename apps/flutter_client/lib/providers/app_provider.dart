@@ -587,34 +587,39 @@ class AppProvider with ChangeNotifier {
         throw StateError('learning plan has no plan_items');
       }
       for (final mapped in items) {
-        final planType = _firstNonEmptyKey(
-          mapped,
-          const ['plan_type', 'planType', 'type'],
-        );
-        final title = _firstNonEmptyKey(
-          mapped,
-          const ['title', 'name', 'final_goal'],
-        );
+        final planType = _firstNonEmptyKey(mapped, const [
+          'plan_type',
+          'planType',
+          'type',
+        ]);
+        final title = _firstNonEmptyKey(mapped, const [
+          'title',
+          'name',
+          'final_goal',
+        ]);
         if (planType.isEmpty || title.isEmpty) {
           continue;
         }
         final created = await _api.createPlan({
           'plan_type': planType,
           'title': title,
-          'content': _firstNonEmptyKey(
-            mapped,
-            const ['content', 'description', 'detail'],
-          ),
-          'target_date': _firstNonEmptyKey(
-            mapped,
-            const ['target_date', 'targetDate', 'end_date', 'endDate'],
-          ),
-          'status': _firstNonEmptyKey(
-            mapped,
-            const ['status', 'current_status'],
-            fallback: 'pending',
-          ),
+          'content': _firstNonEmptyKey(mapped, const [
+            'content',
+            'description',
+            'detail',
+          ]),
+          'target_date': _firstNonEmptyKey(mapped, const [
+            'target_date',
+            'targetDate',
+            'end_date',
+            'endDate',
+          ]),
+          'status': _firstNonEmptyKey(mapped, const [
+            'status',
+            'current_status',
+          ], fallback: 'pending'),
           'priority': _parsePlanPriority(mapped['priority']),
+          'source': 'ai_learning',
         });
         _plans.insert(0, created);
         imported++;
@@ -772,15 +777,14 @@ class AppProvider with ChangeNotifier {
         'plan_type': 'current_phase',
         'title': 'AI学习计划',
         'content': goal,
-        'target_date': _firstNonEmptyKey(
-          plan,
-          const ['plan_end_date', 'end_date'],
-        ),
-        'status': _firstNonEmptyKey(
-          plan,
-          const ['current_status', 'status'],
-          fallback: 'pending',
-        ),
+        'target_date': _firstNonEmptyKey(plan, const [
+          'plan_end_date',
+          'end_date',
+        ]),
+        'status': _firstNonEmptyKey(plan, const [
+          'current_status',
+          'status',
+        ], fallback: 'pending'),
         'priority': 1,
       },
     ];

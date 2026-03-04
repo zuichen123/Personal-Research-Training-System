@@ -14,7 +14,6 @@ class AgentChatHubScreen extends StatefulWidget {
 }
 
 class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
-  final TextEditingController _messageController = TextEditingController();
   final Map<String, Set<int>> _questionSelections = {};
 
   @override
@@ -27,7 +26,6 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
 
   @override
   void dispose() {
-    _messageController.dispose();
     super.dispose();
   }
 
@@ -131,6 +129,7 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
                         questionSelections: _questionSelections,
                         onImportQuestions: _importQuestions,
                         onImportPlan: _importPlan,
+                        onCompressSession: _compressCurrentSession,
                         onDeleteAgent: () => _deleteAgent(agent),
                       ),
                     )
@@ -147,7 +146,9 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
     AIAgentProvider provider,
     List<AIAgentSummary> agents,
   ) {
-    final idx = agents.indexWhere((item) => item.id == provider.selectedAgentId);
+    final idx = agents.indexWhere(
+      (item) => item.id == provider.selectedAgentId,
+    );
     if (idx >= 0) {
       return idx;
     }
@@ -155,7 +156,9 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
   }
 
   void _openLegacyAIScreen() {
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AIScreen()));
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const AIScreen()));
   }
 
   Future<void> _showCreateAgentDialog(BuildContext context) async {
@@ -257,11 +260,12 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
                   Navigator.of(ctx).pop();
                 } catch (_) {
                   if (!ctx.mounted) return;
-                  final msg = context.read<AIAgentProvider>().errorMessage ??
+                  final msg =
+                      context.read<AIAgentProvider>().errorMessage ??
                       'Create agent failed';
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(msg)),
-                  );
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text(msg)));
                 }
               },
               child: const Text('Create'),
@@ -273,6 +277,7 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
   }
 
   Future<void> _deleteAgent(AIAgentSummary agent) async {
+    final provider = context.read<AIAgentProvider>();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) {
@@ -293,7 +298,7 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
       },
     );
     if (confirmed != true) return;
-    await context.read<AIAgentProvider>().deleteAgent(agent.id);
+    await provider.deleteAgent(agent.id);
   }
 
   Future<void> _importQuestions(
@@ -322,8 +327,30 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
     await appProvider.fetchPlans(force: true);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Imported ${result['imported_count'] ?? 0} plans')),
+      SnackBar(
+        content: Text('Imported ${result['imported_count'] ?? 0} plans'),
+      ),
     );
+  }
+
+  Future<void> _compressCurrentSession() async {
+    final provider = context.read<AIAgentProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final result = await provider.compressCurrentSession(trigger: 'manual');
+      if (!mounted) return;
+      final status = (result['status'] ?? 'skipped').toString();
+      final summarized = (result['summarized_count'] ?? 0).toString();
+      final updatedAt = (result['summary_updated_at'] ?? '').toString();
+      final text = status == 'compressed'
+          ? 'Compressed $summarized messages${updatedAt.isEmpty ? '' : ' at $updatedAt'}'
+          : 'Compression skipped';
+      messenger.showSnackBar(SnackBar(content: Text(text)));
+    } catch (_) {
+      if (!mounted) return;
+      final msg = provider.errorMessage ?? 'Compress failed';
+      messenger.showSnackBar(SnackBar(content: Text(msg)));
+    }
   }
 
   Widget _dialogInput(
@@ -353,14 +380,19 @@ class _AgentTabPanel extends StatefulWidget {
     required this.questionSelections,
     required this.onImportQuestions,
     required this.onImportPlan,
+    required this.onCompressSession,
     required this.onDeleteAgent,
   });
 
   final AIAgentSummary agent;
   final Map<String, Set<int>> questionSelections;
-  final Future<void> Function(AIAgentArtifact artifact, List<int> selectedIndexes)
-      onImportQuestions;
+  final Future<void> Function(
+    AIAgentArtifact artifact,
+    List<int> selectedIndexes,
+  )
+  onImportQuestions;
   final Future<void> Function(AIAgentArtifact artifact) onImportPlan;
+  final Future<void> Function() onCompressSession;
   final VoidCallback onDeleteAgent;
 
   @override
@@ -400,7 +432,6 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
       provider,
       messages,
       artifactsByMessage,
-      selectedSessionId,
     );
 
     return Padding(
@@ -429,6 +460,13 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
     List<AIAgentSession> sessions,
     String selectedSessionId,
   ) {
+    AIAgentSession? selectedSession;
+    for (final session in sessions) {
+      if (session.id == selectedSessionId) {
+        selectedSession = session;
+        break;
+      }
+    }
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(10),
@@ -464,6 +502,41 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
               icon: const Icon(Icons.add_comment_outlined),
               label: const Text('New Session'),
             ),
+            const SizedBox(height: 8),
+            FilledButton.tonalIcon(
+              onPressed: provider.sending || selectedSession == null
+                  ? null
+                  : widget.onCompressSession,
+              icon: const Icon(Icons.compress_outlined),
+              label: const Text('Compress Session'),
+            ),
+            if (selectedSession != null) ...[
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  Chip(
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    label: Text(
+                      'summary ${selectedSession.summaryMessageCount}',
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                  ),
+                  Chip(
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    label: Text(
+                      selectedSession.summaryUpdatedAt == null
+                          ? 'summary never'
+                          : 'summary ${selectedSession.summaryUpdatedAt!.toLocal().toString()}',
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 8),
             if (sessions.isEmpty)
               const Padding(
@@ -505,8 +578,8 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
     AIAgentProvider provider,
     List<AIAgentMessage> messages,
     Map<String, AIAgentArtifact> artifactsByMessage,
-    String selectedSessionId,
   ) {
+    final messenger = ScaffoldMessenger.of(context);
     return Card(
       child: Column(
         children: [
@@ -540,7 +613,7 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
                 ),
                 const SizedBox(width: 8),
                 FilledButton.icon(
-                  onPressed: provider.sending || selectedSessionId.isEmpty
+                  onPressed: provider.sending
                       ? null
                       : () async {
                           final text = _inputController.text.trim();
@@ -551,7 +624,7 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
                           } catch (_) {
                             if (!mounted) return;
                             final msg = provider.errorMessage ?? 'Send failed';
-                            ScaffoldMessenger.of(context).showSnackBar(
+                            messenger.showSnackBar(
                               SnackBar(content: Text(msg)),
                             );
                           }
@@ -584,6 +657,7 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
     final bubbleColor = isUser
         ? Theme.of(context).colorScheme.primaryContainer
         : Theme.of(context).colorScheme.surfaceContainerHighest;
+    final messenger = ScaffoldMessenger.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Column(
@@ -601,7 +675,8 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
               children: [
                 Text(message.content),
                 if (!isUser &&
-                    (message.providerUsed.isNotEmpty || message.modelUsed.isNotEmpty))
+                    (message.providerUsed.isNotEmpty ||
+                        message.modelUsed.isNotEmpty))
                   Padding(
                     padding: const EdgeInsets.only(top: 6),
                     child: Text(
@@ -628,9 +703,7 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
                         } catch (_) {
                           if (!mounted) return;
                           final msg = provider.errorMessage ?? 'Confirm failed';
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(msg)),
-                          );
+                          messenger.showSnackBar(SnackBar(content: Text(msg)));
                         }
                       },
                 icon: const Icon(Icons.check_circle_outline),
@@ -650,7 +723,8 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
   Widget _artifactCard(BuildContext context, AIAgentArtifact artifact) {
     if (artifact.type == 'question_set') {
       final items = (artifact.payload['items'] as List?) ?? const <dynamic>[];
-      final selected = widget.questionSelections[artifact.id] ??
+      final selected =
+          widget.questionSelections[artifact.id] ??
           Set<int>.from(List<int>.generate(items.length, (i) => i));
       widget.questionSelections[artifact.id] = selected;
 
@@ -658,7 +732,9 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
         constraints: const BoxConstraints(maxWidth: 760),
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outlineVariant,
+          ),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Column(
@@ -671,7 +747,8 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
             const SizedBox(height: 6),
             ...List.generate(items.length, (index) {
               final map = (items[index] as Map?)?.cast<dynamic, dynamic>();
-              final title = (map?['title'] ?? map?['stem'] ?? 'Question').toString();
+              final title = (map?['title'] ?? map?['stem'] ?? 'Question')
+                  .toString();
               return CheckboxListTile(
                 dense: true,
                 contentPadding: EdgeInsets.zero,
@@ -711,7 +788,8 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
     }
 
     if (artifact.type == 'learning_plan') {
-      final plan = (artifact.payload['plan'] as Map?)?.cast<dynamic, dynamic>() ??
+      final plan =
+          (artifact.payload['plan'] as Map?)?.cast<dynamic, dynamic>() ??
           artifact.payload;
       final finalGoal = (plan['final_goal'] ?? '-').toString();
       final startDate = (plan['plan_start_date'] ?? '-').toString();
@@ -720,7 +798,9 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
         constraints: const BoxConstraints(maxWidth: 760),
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outlineVariant,
+          ),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Column(

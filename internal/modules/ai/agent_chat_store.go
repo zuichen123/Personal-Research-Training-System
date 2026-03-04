@@ -40,13 +40,19 @@ type Agent struct {
 }
 
 type AgentSession struct {
-	ID            string `json:"id"`
-	AgentID       string `json:"agent_id"`
-	Title         string `json:"title"`
-	LastMessageAt string `json:"last_message_at,omitempty"`
-	CreatedAt     string `json:"created_at"`
-	UpdatedAt     string `json:"updated_at"`
-	ArchivedAt    string `json:"archived_at,omitempty"`
+	ID                         string         `json:"id"`
+	AgentID                    string         `json:"agent_id"`
+	Title                      string         `json:"title"`
+	LastMessageAt              string         `json:"last_message_at,omitempty"`
+	SummaryUpdatedAt           string         `json:"summary_updated_at,omitempty"`
+	SummaryMessageCount        int            `json:"summary_message_count"`
+	ContextSummaryText         string         `json:"context_summary_text,omitempty"`
+	ContextSummaryMeta         map[string]any `json:"context_summary_meta,omitempty"`
+	ContextSummaryUpdatedAt    string         `json:"context_summary_updated_at,omitempty"`
+	ContextSummaryMessageCount int            `json:"context_summary_message_count"`
+	CreatedAt                  string         `json:"created_at"`
+	UpdatedAt                  string         `json:"updated_at"`
+	ArchivedAt                 string         `json:"archived_at,omitempty"`
 }
 
 type AgentMessage struct {
@@ -77,8 +83,18 @@ type AgentChatStore interface {
 	DeleteSession(ctx context.Context, sessionID string) error
 
 	ListMessages(ctx context.Context, sessionID string, limit int, beforeID string) ([]AgentMessage, error)
+	ListMessagesByOffset(ctx context.Context, sessionID string, offset int, limit int) ([]AgentMessage, error)
+	CountMessages(ctx context.Context, sessionID string) (int, error)
 	GetMessageByID(ctx context.Context, messageID string) (AgentMessage, error)
 	CreateMessage(ctx context.Context, item AgentMessage) (AgentMessage, error)
+	UpdateSessionSummary(
+		ctx context.Context,
+		sessionID string,
+		summaryText string,
+		summaryMeta map[string]any,
+		summaryUpdatedAt string,
+		summaryMessageCount int,
+	) error
 
 	ListArtifacts(ctx context.Context, sessionID, status string) ([]AgentArtifact, error)
 	GetArtifactByID(ctx context.Context, artifactID string) (AgentArtifact, error)
@@ -215,6 +231,8 @@ func (r *SQLiteAgentRepository) ListSessions(
 			s.agent_id,
 			s.title,
 			COALESCE(MAX(m.created_at), '') AS last_message_at,
+			COALESCE(s.context_summary_updated_at, '') AS summary_updated_at,
+			COALESCE(s.context_summary_message_count, 0) AS summary_message_count,
 			s.created_at,
 			s.updated_at,
 			COALESCE(s.archived_at, '')
@@ -232,7 +250,7 @@ func (r *SQLiteAgentRepository) ListSessions(
 		args = append(args, strings.TrimSpace(cursor))
 	}
 	baseSQL += `
-		GROUP BY s.id, s.agent_id, s.title, s.created_at, s.updated_at, s.archived_at
+		GROUP BY s.id, s.agent_id, s.title, s.context_summary_updated_at, s.context_summary_message_count, s.created_at, s.updated_at, s.archived_at
 		ORDER BY s.updated_at DESC
 		LIMIT ?
 	`
@@ -252,12 +270,16 @@ func (r *SQLiteAgentRepository) ListSessions(
 			&item.AgentID,
 			&item.Title,
 			&item.LastMessageAt,
+			&item.SummaryUpdatedAt,
+			&item.SummaryMessageCount,
 			&item.CreatedAt,
 			&item.UpdatedAt,
 			&item.ArchivedAt,
 		); err != nil {
 			return nil, errs.Internal(fmt.Sprintf("failed to scan ai session: %v", err))
 		}
+		item.ContextSummaryUpdatedAt = item.SummaryUpdatedAt
+		item.ContextSummaryMessageCount = item.SummaryMessageCount
 		items = append(items, item)
 	}
 	if err := rows.Err(); err != nil {
@@ -268,9 +290,21 @@ func (r *SQLiteAgentRepository) ListSessions(
 
 func (r *SQLiteAgentRepository) CreateSession(ctx context.Context, item AgentSession) (AgentSession, error) {
 	_, err := r.db.ExecContext(ctx, `
-		INSERT INTO ai_agent_sessions (id, agent_id, title, created_at, updated_at, archived_at)
-		VALUES (?, ?, ?, ?, ?, NULL)
-	`, item.ID, item.AgentID, item.Title, item.CreatedAt, item.UpdatedAt)
+		INSERT INTO ai_agent_sessions (
+			id, agent_id, title, context_summary_text, context_summary_meta_json, context_summary_updated_at, context_summary_message_count, created_at, updated_at, archived_at
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+	`,
+		item.ID,
+		item.AgentID,
+		item.Title,
+		strings.TrimSpace(item.ContextSummaryText),
+		mustJSON(item.ContextSummaryMeta, "{}"),
+		nullableStringValue(strings.TrimSpace(item.ContextSummaryUpdatedAt)),
+		item.ContextSummaryMessageCount,
+		item.CreatedAt,
+		item.UpdatedAt,
+	)
 	if err != nil {
 		return AgentSession{}, errs.Internal(fmt.Sprintf("failed to create ai session: %v", err))
 	}
@@ -284,21 +318,30 @@ func (r *SQLiteAgentRepository) GetSessionByID(ctx context.Context, sessionID st
 			s.agent_id,
 			s.title,
 			COALESCE(MAX(m.created_at), '') AS last_message_at,
+			COALESCE(s.context_summary_text, '') AS context_summary_text,
+			COALESCE(s.context_summary_meta_json, '{}') AS context_summary_meta_json,
+			COALESCE(s.context_summary_updated_at, '') AS context_summary_updated_at,
+			COALESCE(s.context_summary_message_count, 0) AS context_summary_message_count,
 			s.created_at,
 			s.updated_at,
 			COALESCE(s.archived_at, '')
 		FROM ai_agent_sessions s
 		LEFT JOIN ai_agent_messages m ON m.session_id = s.id
 		WHERE s.id = ?
-		GROUP BY s.id, s.agent_id, s.title, s.created_at, s.updated_at, s.archived_at
+		GROUP BY s.id, s.agent_id, s.title, s.context_summary_text, s.context_summary_meta_json, s.context_summary_updated_at, s.context_summary_message_count, s.created_at, s.updated_at, s.archived_at
 	`, sessionID)
 
 	var item AgentSession
+	var summaryMetaJSON string
 	if err := row.Scan(
 		&item.ID,
 		&item.AgentID,
 		&item.Title,
 		&item.LastMessageAt,
+		&item.ContextSummaryText,
+		&summaryMetaJSON,
+		&item.ContextSummaryUpdatedAt,
+		&item.ContextSummaryMessageCount,
 		&item.CreatedAt,
 		&item.UpdatedAt,
 		&item.ArchivedAt,
@@ -308,6 +351,10 @@ func (r *SQLiteAgentRepository) GetSessionByID(ctx context.Context, sessionID st
 		}
 		return AgentSession{}, errs.Internal(fmt.Sprintf("failed to get ai session: %v", err))
 	}
+	item.SummaryUpdatedAt = item.ContextSummaryUpdatedAt
+	item.SummaryMessageCount = item.ContextSummaryMessageCount
+	item.ContextSummaryMeta = map[string]any{}
+	_ = json.Unmarshal([]byte(strings.TrimSpace(summaryMetaJSON)), &item.ContextSummaryMeta)
 	return item, nil
 }
 
@@ -386,6 +433,75 @@ func (r *SQLiteAgentRepository) ListMessages(
 	return items, nil
 }
 
+func (r *SQLiteAgentRepository) ListMessagesByOffset(
+	ctx context.Context,
+	sessionID string,
+	offset int,
+	limit int,
+) ([]AgentMessage, error) {
+	if offset < 0 {
+		offset = 0
+	}
+	if limit <= 0 {
+		return []AgentMessage{}, nil
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
+
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT
+			m.id,
+			m.session_id,
+			m.role,
+			m.content,
+			m.intent_json,
+			m.pending_confirmation_json,
+			m.provider_used,
+			m.model_used,
+			m.fallback_used,
+			m.latency_ms,
+			m.created_at,
+			COALESCE(a.id, '')
+		FROM ai_agent_messages m
+		LEFT JOIN ai_agent_artifacts a ON a.message_id = m.id
+		WHERE m.session_id = ?
+		ORDER BY m.created_at ASC
+		LIMIT ? OFFSET ?
+	`, sessionID, limit, offset)
+	if err != nil {
+		return nil, errs.Internal(fmt.Sprintf("failed to list ai messages by offset: %v", err))
+	}
+	defer rows.Close()
+
+	items := make([]AgentMessage, 0, limit)
+	for rows.Next() {
+		item, scanErr := scanAgentMessage(rows)
+		if scanErr != nil {
+			return nil, errs.Internal(fmt.Sprintf("failed to scan ai message: %v", scanErr))
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, errs.Internal(fmt.Sprintf("failed to iterate ai messages: %v", err))
+	}
+	return items, nil
+}
+
+func (r *SQLiteAgentRepository) CountMessages(ctx context.Context, sessionID string) (int, error) {
+	row := r.db.QueryRowContext(ctx, `
+		SELECT COUNT(1)
+		FROM ai_agent_messages
+		WHERE session_id = ?
+	`, sessionID)
+
+	var count int
+	if err := row.Scan(&count); err != nil {
+		return 0, errs.Internal(fmt.Sprintf("failed to count ai messages: %v", err))
+	}
+	return count, nil
+}
+
 func (r *SQLiteAgentRepository) GetMessageByID(ctx context.Context, messageID string) (AgentMessage, error) {
 	row := r.db.QueryRowContext(ctx, `
 		SELECT
@@ -457,6 +573,39 @@ func (r *SQLiteAgentRepository) CreateMessage(ctx context.Context, item AgentMes
 		return AgentMessage{}, errs.Internal(fmt.Sprintf("failed to commit ai message tx: %v", err))
 	}
 	return item, nil
+}
+
+func (r *SQLiteAgentRepository) UpdateSessionSummary(
+	ctx context.Context,
+	sessionID string,
+	summaryText string,
+	summaryMeta map[string]any,
+	summaryUpdatedAt string,
+	summaryMessageCount int,
+) error {
+	res, err := r.db.ExecContext(ctx, `
+		UPDATE ai_agent_sessions
+		SET
+			context_summary_text = ?,
+			context_summary_meta_json = ?,
+			context_summary_updated_at = ?,
+			context_summary_message_count = ?
+		WHERE id = ?
+	`,
+		strings.TrimSpace(summaryText),
+		mustJSON(summaryMeta, "{}"),
+		nullableStringValue(strings.TrimSpace(summaryUpdatedAt)),
+		summaryMessageCount,
+		sessionID,
+	)
+	if err != nil {
+		return errs.Internal(fmt.Sprintf("failed to update ai session summary: %v", err))
+	}
+	affected, _ := res.RowsAffected()
+	if affected == 0 {
+		return errs.NotFound("ai session not found")
+	}
+	return nil
 }
 
 func (r *SQLiteAgentRepository) ListArtifacts(
@@ -594,10 +743,10 @@ func scanAgent(s agentScanner) (Agent, error) {
 
 func scanAgentMessage(s agentScanner) (AgentMessage, error) {
 	var (
-		item             AgentMessage
-		intentJSON       string
-		pendingJSON      string
-		fallbackUsedInt  int
+		item            AgentMessage
+		intentJSON      string
+		pendingJSON     string
+		fallbackUsedInt int
 	)
 	if err := s.Scan(
 		&item.ID,
@@ -662,6 +811,9 @@ func scanAgentArtifact(s agentScanner) (AgentArtifact, error) {
 }
 
 func mustJSON(v any, fallback string) string {
+	if v == nil {
+		return fallback
+	}
 	data, err := json.Marshal(v)
 	if err != nil {
 		return fallback

@@ -20,6 +20,11 @@ import (
 const (
 	agentIntentAutoThreshold    = 0.75
 	agentIntentConfirmThreshold = 0.45
+	agentContextKeepRecent      = 20
+
+	agentAutoCompressMinNewMessages = 30
+	agentAutoCompressCooldown       = 30 * time.Minute
+	agentAutoCompressStaleAfter     = 7 * 24 * time.Hour
 )
 
 type UpsertAgentRequest struct {
@@ -54,6 +59,21 @@ type ImportQuestionsRequest struct {
 
 type ImportPlanRequest struct {
 	Append bool `json:"append"`
+}
+
+type CompressSessionRequest struct {
+	Force   bool   `json:"force"`
+	Trigger string `json:"trigger"`
+}
+
+type CompressSessionResult struct {
+	Status           string `json:"status"`
+	SessionID        string `json:"session_id"`
+	Trigger          string `json:"trigger"`
+	SummarizedCount  int    `json:"summarized_count"`
+	KeptRecentCount  int    `json:"kept_recent_count"`
+	SummaryUpdatedAt string `json:"summary_updated_at,omitempty"`
+	SummaryPreview   string `json:"summary_preview,omitempty"`
 }
 
 type ImportQuestionsResult struct {
@@ -259,6 +279,128 @@ func (s *Service) ListSessionArtifacts(
 	return s.agentStore.ListArtifacts(ctx, sessionID, status)
 }
 
+func (s *Service) CompressSessionMessages(
+	ctx context.Context,
+	sessionID string,
+	req CompressSessionRequest,
+) (CompressSessionResult, error) {
+	if s.agentStore == nil {
+		return CompressSessionResult{}, errs.BadRequest("ai agent store is not ready")
+	}
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return CompressSessionResult{}, errs.BadRequest("session id is required")
+	}
+	trigger := normalizeCompressTrigger(req.Trigger)
+	session, err := s.agentStore.GetSessionByID(ctx, sessionID)
+	if err != nil {
+		return CompressSessionResult{}, err
+	}
+	totalMessages, err := s.agentStore.CountMessages(ctx, sessionID)
+	if err != nil {
+		return CompressSessionResult{}, err
+	}
+
+	result := CompressSessionResult{
+		Status:           "skipped",
+		SessionID:        sessionID,
+		Trigger:          trigger,
+		KeptRecentCount:  agentContextKeepRecent,
+		SummaryUpdatedAt: session.ContextSummaryUpdatedAt,
+		SummaryPreview:   truncateText(strings.TrimSpace(session.ContextSummaryText), 180),
+	}
+	if totalMessages <= agentContextKeepRecent {
+		return result, nil
+	}
+
+	targetSummaryCount := totalMessages - agentContextKeepRecent
+	currentSummaryCount := clampInt(session.ContextSummaryMessageCount, 0, targetSummaryCount)
+	if req.Force {
+		currentSummaryCount = 0
+	}
+	pendingCount := targetSummaryCount - currentSummaryCount
+	if pendingCount <= 0 {
+		return result, nil
+	}
+	if trigger == "auto" && !req.Force {
+		ok, reason := shouldRunAutoCompression(session, totalMessages, currentSummaryCount, targetSummaryCount)
+		if !ok {
+			logx.LoggerFromContext(ctx).Info("ai session auto compress skipped",
+				slog.String("event", "ai.agent.compress"),
+				slog.String("agent_id", session.AgentID),
+				slog.String("session_id", sessionID),
+				slog.String("trigger", trigger),
+				slog.String("reason", reason),
+				slog.Int("total_messages", totalMessages),
+			)
+			return result, nil
+		}
+	}
+
+	pendingMessages, err := s.agentStore.ListMessagesByOffset(ctx, sessionID, currentSummaryCount, pendingCount)
+	if err != nil {
+		return CompressSessionResult{}, err
+	}
+	if len(pendingMessages) == 0 {
+		return result, nil
+	}
+
+	agent, err := s.agentStore.GetAgentByID(ctx, session.AgentID)
+	if err != nil {
+		return CompressSessionResult{}, err
+	}
+	existingSummary := ""
+	if !req.Force {
+		existingSummary = strings.TrimSpace(session.ContextSummaryText)
+	}
+	summaryText, fallbackUsed, reason, callMeta := s.buildSessionSummary(ctx, agent, existingSummary, pendingMessages)
+
+	summaryUpdatedAt := nowRFC3339()
+	meta := cloneAnyMap(session.ContextSummaryMeta)
+	meta["last_trigger"] = trigger
+	meta["last_reason"] = reason
+	meta["last_fallback_used"] = fallbackUsed
+	meta["last_updated_at"] = summaryUpdatedAt
+	meta["last_summarized_count"] = len(pendingMessages)
+	meta["summary_message_count"] = targetSummaryCount
+	if trigger == "auto" {
+		meta["last_auto_compress_at"] = summaryUpdatedAt
+	}
+	if err := s.agentStore.UpdateSessionSummary(
+		ctx,
+		sessionID,
+		summaryText,
+		meta,
+		summaryUpdatedAt,
+		targetSummaryCount,
+	); err != nil {
+		return CompressSessionResult{}, err
+	}
+
+	logx.LoggerFromContext(ctx).Info("ai session compressed",
+		slog.String("event", "ai.agent.compress"),
+		slog.String("agent_id", session.AgentID),
+		slog.String("session_id", sessionID),
+		slog.String("trigger", trigger),
+		slog.Int("summarized_count", len(pendingMessages)),
+		slog.Int("kept_recent_count", agentContextKeepRecent),
+		slog.Bool("fallback_used", fallbackUsed),
+		slog.String("reason", reason),
+		slog.String("provider_used", callMeta.ProviderUsed),
+		slog.String("model_used", callMeta.ModelUsed),
+	)
+
+	return CompressSessionResult{
+		Status:           "compressed",
+		SessionID:        sessionID,
+		Trigger:          trigger,
+		SummarizedCount:  len(pendingMessages),
+		KeptRecentCount:  agentContextKeepRecent,
+		SummaryUpdatedAt: summaryUpdatedAt,
+		SummaryPreview:   truncateText(summaryText, 180),
+	}, nil
+}
+
 func (s *Service) SendSessionMessage(
 	ctx context.Context,
 	sessionID string,
@@ -298,12 +440,12 @@ func (s *Service) SendSessionMessage(
 		return SessionMessageResponse{}, err
 	}
 
-	history, err := s.agentStore.ListMessages(ctx, sessionID, 20, "")
+	history, err := s.agentStore.ListMessages(ctx, sessionID, agentContextKeepRecent, "")
 	if err != nil {
 		return SessionMessageResponse{}, err
 	}
 	reverseAgentMessages(history)
-	messages := toChatMessages(history)
+	messages := buildSessionChatMessages(session, history)
 
 	intentResp, intentMeta, err := s.chatWithFallback(ctx, agent, ChatRequest{
 		SystemPrompt: agent.SystemPrompt,
@@ -331,6 +473,7 @@ func (s *Service) SendSessionMessage(
 		if err != nil {
 			return SessionMessageResponse{}, err
 		}
+		s.runAutoCompressionBestEffort(ctx, sessionID)
 		return SessionMessageResponse{
 			AssistantMessage: assistant,
 			Intent:           intent,
@@ -362,6 +505,7 @@ func (s *Service) SendSessionMessage(
 		if err != nil {
 			return SessionMessageResponse{}, err
 		}
+		s.runAutoCompressionBestEffort(ctx, sessionID)
 		return SessionMessageResponse{
 			AssistantMessage:    created,
 			Intent:              intent,
@@ -393,6 +537,7 @@ func (s *Service) SendSessionMessage(
 	if err != nil {
 		return SessionMessageResponse{}, err
 	}
+	s.runAutoCompressionBestEffort(ctx, sessionID)
 	return SessionMessageResponse{
 		AssistantMessage: created,
 		Intent:           intent,
@@ -460,6 +605,7 @@ func (s *Service) ConfirmSessionAction(
 	if err != nil {
 		return SessionMessageResponse{}, err
 	}
+	s.runAutoCompressionBestEffort(ctx, sessionID)
 	return SessionMessageResponse{
 		AssistantMessage: assistant,
 		Intent:           intent,
@@ -949,9 +1095,29 @@ func mergeAgentRequest(existing Agent, req UpsertAgentRequest) UpsertAgentReques
 	}
 	if out.Primary == (AgentProviderConfig{}) {
 		out.Primary = existing.Primary
+	} else {
+		if strings.TrimSpace(out.Primary.BaseURL) == "" {
+			out.Primary.BaseURL = existing.Primary.BaseURL
+		}
+		if strings.TrimSpace(out.Primary.APIKey) == "" {
+			out.Primary.APIKey = existing.Primary.APIKey
+		}
+		if strings.TrimSpace(out.Primary.Model) == "" {
+			out.Primary.Model = existing.Primary.Model
+		}
 	}
 	if out.Fallback == (AgentProviderConfig{}) {
 		out.Fallback = existing.Fallback
+	} else {
+		if strings.TrimSpace(out.Fallback.BaseURL) == "" {
+			out.Fallback.BaseURL = existing.Fallback.BaseURL
+		}
+		if strings.TrimSpace(out.Fallback.APIKey) == "" {
+			out.Fallback.APIKey = existing.Fallback.APIKey
+		}
+		if strings.TrimSpace(out.Fallback.Model) == "" {
+			out.Fallback.Model = existing.Fallback.Model
+		}
 	}
 	if strings.TrimSpace(out.SystemPrompt) == "" {
 		out.SystemPrompt = existing.SystemPrompt
@@ -998,6 +1164,18 @@ func reverseAgentMessages(items []AgentMessage) {
 	}
 }
 
+func buildSessionChatMessages(session AgentSession, items []AgentMessage) []ChatMessage {
+	out := make([]ChatMessage, 0, len(items)+1)
+	if summary := strings.TrimSpace(session.ContextSummaryText); summary != "" {
+		out = append(out, ChatMessage{
+			Role:    "system",
+			Content: "Session summary (compressed history):\n" + summary,
+		})
+	}
+	out = append(out, toChatMessages(items)...)
+	return out
+}
+
 func toChatMessages(items []AgentMessage) []ChatMessage {
 	out := make([]ChatMessage, 0, len(items))
 	for _, item := range items {
@@ -1007,6 +1185,219 @@ func toChatMessages(items []AgentMessage) []ChatMessage {
 		})
 	}
 	return out
+}
+
+func (s *Service) runAutoCompressionBestEffort(ctx context.Context, sessionID string) {
+	compressCtx, cancel := context.WithTimeout(ctx, 12*time.Second)
+	defer cancel()
+
+	_, err := s.CompressSessionMessages(compressCtx, sessionID, CompressSessionRequest{
+		Trigger: "auto",
+	})
+	if err != nil {
+		logx.LoggerFromContext(ctx).Warn("ai session auto compress failed",
+			slog.String("event", "ai.agent.compress"),
+			slog.String("session_id", sessionID),
+			slog.String("trigger", "auto"),
+			slog.String("reason", classifyFallbackReason(err)),
+			slog.String("error", err.Error()),
+		)
+	}
+}
+
+func normalizeCompressTrigger(v string) string {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "auto":
+		return "auto"
+	default:
+		return "manual"
+	}
+}
+
+func shouldRunAutoCompression(
+	session AgentSession,
+	totalMessages int,
+	currentSummaryCount int,
+	targetSummaryCount int,
+) (bool, string) {
+	newSummaryMessages := targetSummaryCount - currentSummaryCount
+	meetNewMessageThreshold := newSummaryMessages >= agentAutoCompressMinNewMessages
+
+	meetStaleSummaryThreshold := false
+	if totalMessages > agentContextKeepRecent {
+		if ts, ok := parseRFC3339Time(firstNonEmpty(
+			session.ContextSummaryUpdatedAt,
+			session.SummaryUpdatedAt,
+		)); ok {
+			meetStaleSummaryThreshold = time.Since(ts) > agentAutoCompressStaleAfter
+		}
+	}
+	if !meetNewMessageThreshold && !meetStaleSummaryThreshold {
+		return false, "threshold_not_met"
+	}
+
+	lastAutoAt, hasLastAuto := parseRFC3339Time(metaString(session.ContextSummaryMeta, "last_auto_compress_at"))
+	if hasLastAuto && time.Since(lastAutoAt) < agentAutoCompressCooldown {
+		return false, "cooldown"
+	}
+	if meetNewMessageThreshold {
+		return true, "new_messages_threshold"
+	}
+	return true, "stale_summary"
+}
+
+func (s *Service) buildSessionSummary(
+	ctx context.Context,
+	agent Agent,
+	existingSummary string,
+	pendingMessages []AgentMessage,
+) (string, bool, string, agentCallMeta) {
+	summary, meta, err := s.buildSessionSummaryWithModel(ctx, agent, existingSummary, pendingMessages)
+	if err == nil {
+		return summary, false, "model", meta
+	}
+
+	reason := classifyFallbackReason(err)
+	logx.LoggerFromContext(ctx).Warn("ai session summary fallback",
+		slog.String("event", "ai.agent.compress"),
+		slog.String("agent_id", agent.ID),
+		slog.String("reason", reason),
+		slog.String("error", err.Error()),
+	)
+	return buildLocalSessionSummary(existingSummary, pendingMessages), true, reason, meta
+}
+
+func (s *Service) buildSessionSummaryWithModel(
+	ctx context.Context,
+	agent Agent,
+	existingSummary string,
+	pendingMessages []AgentMessage,
+) (string, agentCallMeta, error) {
+	lines := make([]string, 0, len(pendingMessages)+4)
+	if text := strings.TrimSpace(existingSummary); text != "" {
+		lines = append(lines, "Existing summary:")
+		lines = append(lines, text)
+	}
+	lines = append(lines, "New messages to summarize:")
+	for idx, msg := range pendingMessages {
+		role := strings.TrimSpace(msg.Role)
+		if role == "" {
+			role = "unknown"
+		}
+		content := compactSpaces(msg.Content)
+		if content == "" {
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("%d. [%s] %s", idx+1, role, truncateText(content, 260)))
+	}
+	input := strings.Join(lines, "\n")
+	if strings.TrimSpace(input) == "" {
+		return "", agentCallMeta{}, errs.BadRequest("summary input is empty")
+	}
+
+	resp, meta, err := s.chatWithFallback(ctx, agent, ChatRequest{
+		SystemPrompt: agent.SystemPrompt,
+		Messages: []ChatMessage{
+			{Role: "user", Content: input},
+		},
+		Mode: "compress_session",
+	})
+	if err != nil {
+		return "", meta, err
+	}
+	summary := strings.TrimSpace(resp.Content)
+	if summary == "" {
+		return "", meta, errs.Internal("empty session summary")
+	}
+	return summary, meta, nil
+}
+
+func buildLocalSessionSummary(existingSummary string, pendingMessages []AgentMessage) string {
+	parts := make([]string, 0, 12)
+	if text := strings.TrimSpace(existingSummary); text != "" {
+		parts = append(parts, "Previous summary:")
+		parts = append(parts, truncateText(compactSpaces(text), 480))
+	}
+	parts = append(parts, fmt.Sprintf("Compressed %d new messages.", len(pendingMessages)))
+
+	if len(pendingMessages) == 0 {
+		return strings.Join(parts, "\n")
+	}
+	preview := pendingMessages
+	if len(preview) > 8 {
+		preview = append(preview[:4], preview[len(preview)-4:]...)
+		parts = append(parts, fmt.Sprintf("... omitted %d middle messages ...", len(pendingMessages)-8))
+	}
+	for _, msg := range preview {
+		role := strings.TrimSpace(msg.Role)
+		if role == "" {
+			role = "unknown"
+		}
+		content := compactSpaces(msg.Content)
+		if content == "" {
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("[%s] %s", role, truncateText(content, 180)))
+	}
+	return truncateText(strings.Join(parts, "\n"), 2000)
+}
+
+func cloneAnyMap(in map[string]any) map[string]any {
+	out := make(map[string]any, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}
+
+func metaString(meta map[string]any, key string) string {
+	if len(meta) == 0 {
+		return ""
+	}
+	raw, ok := meta[key]
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(fmt.Sprintf("%v", raw))
+}
+
+func parseRFC3339Time(raw string) (time.Time, bool) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return time.Time{}, false
+	}
+	if t, err := time.Parse(time.RFC3339Nano, trimmed); err == nil {
+		return t, true
+	}
+	if t, err := time.Parse(time.RFC3339, trimmed); err == nil {
+		return t, true
+	}
+	return time.Time{}, false
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func compactSpaces(text string) string {
+	return strings.Join(strings.Fields(strings.TrimSpace(text)), " ")
+}
+
+func truncateText(text string, max int) string {
+	trimmed := strings.TrimSpace(text)
+	if max <= 0 || len(trimmed) <= max {
+		return trimmed
+	}
+	if max <= 3 {
+		return trimmed[:max]
+	}
+	return trimmed[:max-3] + "..."
 }
 
 func normalizeIntent(intent IntentResult) IntentResult {

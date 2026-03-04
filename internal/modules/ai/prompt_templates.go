@@ -14,6 +14,7 @@ const (
 	PromptKeyScoreLearning     = "score_learning"
 	PromptKeyDetectIntent      = "detect_intent"
 	PromptKeyAgentChat         = "agent_chat"
+	PromptKeyCompressSession   = "compress_session"
 )
 
 type promptTemplatePreset struct {
@@ -226,18 +227,30 @@ Return confidence in [0,1] and include key params when possible.`,
   }
 }`,
 	},
-		{
-			Key:  PromptKeyAgentChat,
-			Name: "Agent Chat",
-			PresetPrompt: `You are a tutoring agent in a self-study system.
+	{
+		Key:  PromptKeyAgentChat,
+		Name: "Agent Chat",
+		PresetPrompt: `You are a tutoring agent in a self-study system.
 Respond clearly and concisely based on the conversation.`,
-			PresetOutputFormatPrompt: `Return ONLY JSON:
+		PresetOutputFormatPrompt: `Return ONLY JSON:
 {
   "content":"string",
   "intent":{"action":"none","confidence":0,"reason":"","params":{}}
 }`,
-		},
-	}
+	},
+	{
+		Key:  PromptKeyCompressSession,
+		Name: "Compress Session",
+		PresetPrompt: `Summarize historical conversation for future context.
+Keep factual details, user goals, constraints, pending tasks, and explicit preferences.
+Avoid repetition and keep the summary concise and structured.`,
+		PresetOutputFormatPrompt: `Return ONLY JSON:
+{
+  "content":"string",
+  "intent":{"action":"none","confidence":0,"reason":"","params":{}}
+}`,
+	},
+}
 
 var promptTemplatePresetByKey = func() map[string]promptTemplatePreset {
 	out := make(map[string]promptTemplatePreset, len(promptTemplatePresetList))
@@ -416,4 +429,3 @@ func buildPromptConfig(preset promptTemplatePreset, override promptTemplateOverr
 		UpdatedAt:                   strings.TrimSpace(override.UpdatedAt),
 	}
 }
-

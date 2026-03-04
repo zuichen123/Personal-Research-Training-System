@@ -597,6 +597,23 @@ class ApiService {
     return AISendMessageResult.fromJson(_extractDataMap(response));
   }
 
+  Future<Map<String, dynamic>> compressAISessionMessages(
+    String sessionId, {
+    bool force = false,
+    String trigger = 'manual',
+  }) async {
+    final normalizedTrigger = trigger.trim().toLowerCase() == 'auto'
+        ? 'auto'
+        : 'manual';
+    final response = await _request(
+      method: 'POST',
+      path: '/ai/sessions/$sessionId/compress',
+      jsonBody: {'force': force, 'trigger': normalizedTrigger},
+      timeout: _aiRequestTimeout,
+    );
+    return _extractDataMap(response);
+  }
+
   Future<List<AIAgentArtifact>> getAISessionArtifacts(
     String sessionId, {
     String status = '',

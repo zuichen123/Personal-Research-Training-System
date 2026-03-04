@@ -6,7 +6,7 @@ import '../models/ai_tutor_team.dart';
 
 class AITutorTeamController extends ChangeNotifier {
   AITutorTeamController({DateTime Function()? clock})
-      : _clock = clock ?? DateTime.now {
+    : _clock = clock ?? DateTime.now {
     for (final agent in _agents) {
       _contexts[agent.id] = AITutorAgentContext(
         notes: [agent.mission],
@@ -69,7 +69,8 @@ class AITutorTeamController extends ChangeNotifier {
     AITutorToolType.pomodoro: 'focus_agent',
   };
 
-  final Map<String, AITutorAgentContext> _contexts = <String, AITutorAgentContext>{};
+  final Map<String, AITutorAgentContext> _contexts =
+      <String, AITutorAgentContext>{};
   final List<AITutorScheduleDecision> _scheduleDecisions =
       <AITutorScheduleDecision>[];
   final Map<AITutorToolType, AITutorScheduleDecision> _scheduleHints =
@@ -80,9 +81,8 @@ class AITutorTeamController extends ChangeNotifier {
   AITutorAgent get controllerAgent =>
       _agents.firstWhere((item) => item.id == controllerAgentId);
 
-  List<AITutorAgent> get subjectAgents => _agents
-      .where((item) => !item.isController)
-      .toList(growable: false);
+  List<AITutorAgent> get subjectAgents =>
+      _agents.where((item) => !item.isController).toList(growable: false);
 
   AITutorAgentContext contextOf(String agentId) {
     final context = _contexts[agentId];
@@ -115,7 +115,9 @@ class AITutorTeamController extends ChangeNotifier {
   UnmodifiableListView<AITutorScheduleDecision> latestScheduleDecisions({
     int limit = 8,
   }) {
-    final end = _scheduleDecisions.length < limit ? _scheduleDecisions.length : limit;
+    final end = _scheduleDecisions.length < limit
+        ? _scheduleDecisions.length
+        : limit;
     return UnmodifiableListView(_scheduleDecisions.sublist(0, end));
   }
 
@@ -134,7 +136,9 @@ class AITutorTeamController extends ChangeNotifier {
     );
   }
 
-  UnmodifiableListView<AIToolCallRecord> latestControllerRecords({int limit = 8}) {
+  UnmodifiableListView<AIToolCallRecord> latestControllerRecords({
+    int limit = 8,
+  }) {
     final controllerContext = _contexts[controllerAgentId];
     if (controllerContext == null || controllerContext.toolCalls.isEmpty) {
       return UnmodifiableListView(const <AIToolCallRecord>[]);
@@ -294,18 +298,13 @@ class AITutorTeamController extends ChangeNotifier {
     required String defaultAgentId,
     required bool allowAutoSwitch,
   }) {
-    _runCompressionSweep();
-
     final now = _clock();
     final ownerAgentID = _toolOwners[tool] ?? defaultAgentId;
     final ownerAgent = _agentByID(ownerAgentID);
     final fallbackAgent = _agentByID(defaultAgentId);
     final preferred = ownerAgent ?? fallbackAgent ?? subjectAgents.first;
 
-    final ranked = _rankAgents(
-      preferredAgentID: preferred.id,
-      now: now,
-    );
+    final ranked = _rankAgents(preferredAgentID: preferred.id, now: now);
     final best = ranked.first;
     final preferredScore = ranked.firstWhere(
       (item) => item.agent.id == preferred.id,
@@ -388,11 +387,7 @@ class AITutorTeamController extends ChangeNotifier {
       }
 
       ranked.add(
-        _ScoredAgent(
-          agent: agent,
-          score: score,
-          reason: reasons.join('+'),
-        ),
+        _ScoredAgent(agent: agent, score: score, reason: reasons.join('+')),
       );
     }
 
@@ -415,21 +410,18 @@ class AITutorTeamController extends ChangeNotifier {
     return '$prefix: ${preferred.name} -> ${best.agent.name} (score+$delta, ${best.reason})';
   }
 
-  void _runCompressionSweep() {
-    final now = _clock();
-    for (final context in _contexts.values) {
-      _compressContextIfNeeded(context, now);
-    }
-  }
-
   void _compressContextIfNeeded(AITutorAgentContext context, DateTime now) {
     final referenceTime = context.lastCompressedAt ?? context.updatedAt;
-    final overToken = context.tokenEstimate > aiTutorContextCompressTokenThreshold;
-    final overAge = now.difference(referenceTime) > aiTutorContextCompressAgeThreshold;
+    final overToken =
+        context.tokenEstimate > aiTutorContextCompressTokenThreshold;
+    final overAge =
+        now.difference(referenceTime) > aiTutorContextCompressAgeThreshold;
     if (!overToken && !overAge) {
       return;
     }
-    if (context.notes.isEmpty && context.toolCalls.isEmpty && context.tokenEstimate <= 0) {
+    if (context.notes.isEmpty &&
+        context.toolCalls.isEmpty &&
+        context.tokenEstimate <= 0) {
       context.lastCompressedAt = now;
       return;
     }
@@ -498,7 +490,10 @@ class AITutorTeamController extends ChangeNotifier {
     required String scheduleReason,
   }) {
     final estimate =
-        220 + tool.label.length * 10 + routeLabel.length * 8 + scheduleReason.length * 6;
+        220 +
+        tool.label.length * 10 +
+        routeLabel.length * 8 +
+        scheduleReason.length * 6;
     return estimate.clamp(120, 2500).toInt();
   }
 

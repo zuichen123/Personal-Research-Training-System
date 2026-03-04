@@ -116,6 +116,10 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 			id TEXT PRIMARY KEY,
 			agent_id TEXT NOT NULL,
 			title TEXT NOT NULL,
+			context_summary_text TEXT NOT NULL DEFAULT '',
+			context_summary_meta_json TEXT NOT NULL DEFAULT '{}',
+			context_summary_updated_at TEXT,
+			context_summary_message_count INTEGER NOT NULL DEFAULT 0,
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL,
 			archived_at TEXT,
@@ -194,6 +198,10 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 		`ALTER TABLE mistakes ADD COLUMN difficulty INTEGER NOT NULL DEFAULT 1;`,
 		`ALTER TABLE mistakes ADD COLUMN mastery_level INTEGER NOT NULL DEFAULT 0;`,
 		`ALTER TABLE plans ADD COLUMN source TEXT NOT NULL DEFAULT 'manual';`,
+		`ALTER TABLE ai_agent_sessions ADD COLUMN context_summary_text TEXT NOT NULL DEFAULT '';`,
+		`ALTER TABLE ai_agent_sessions ADD COLUMN context_summary_meta_json TEXT NOT NULL DEFAULT '{}';`,
+		`ALTER TABLE ai_agent_sessions ADD COLUMN context_summary_updated_at TEXT;`,
+		`ALTER TABLE ai_agent_sessions ADD COLUMN context_summary_message_count INTEGER NOT NULL DEFAULT 0;`,
 	}
 
 	for _, stmt := range optionalStmts {

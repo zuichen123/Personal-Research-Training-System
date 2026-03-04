@@ -381,6 +381,19 @@ func (m *MockClient) Chat(ctx context.Context, req ChatRequest) (ChatResponse, e
 		}
 	}
 	mode := strings.ToLower(strings.TrimSpace(req.Mode))
+	if mode == "compress_session" {
+		summary := "Mock summary: conversation compressed for long-term context."
+		if lastUser != "" {
+			summary = "Mock summary: " + truncateMockText(lastUser, 220)
+		}
+		return ChatResponse{
+			Content: summary,
+			Intent: IntentResult{
+				Action: "none",
+				Params: map[string]any{},
+			},
+		}, nil
+	}
 	if mode == "detect_intent" {
 		intent := IntentResult{
 			Action:     "none",
@@ -662,6 +675,17 @@ func maxInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func truncateMockText(s string, max int) string {
+	trimmed := strings.TrimSpace(s)
+	if max <= 0 || len(trimmed) <= max {
+		return trimmed
+	}
+	if max <= 3 {
+		return trimmed[:max]
+	}
+	return trimmed[:max-3] + "..."
 }
 
 func round1(v float64) float64 {

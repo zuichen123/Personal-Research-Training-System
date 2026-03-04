@@ -6,6 +6,7 @@ class PlanItem {
   final String targetDate;
   final String status;
   final int priority;
+  final String source;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -17,6 +18,7 @@ class PlanItem {
     required this.targetDate,
     required this.status,
     required this.priority,
+    required this.source,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -30,6 +32,7 @@ class PlanItem {
       targetDate: json['target_date']?.toString() ?? '',
       status: json['status']?.toString() ?? 'pending',
       priority: (json['priority'] as num?)?.toInt() ?? 1,
+      source: json['source']?.toString() ?? 'manual',
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now()
           : DateTime.now(),

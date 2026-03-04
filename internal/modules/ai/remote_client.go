@@ -298,6 +298,9 @@ func (c *remoteLLMClient) Chat(ctx context.Context, req ChatRequest) (ChatRespon
 	if mode == "detect_intent" {
 		key = PromptKeyDetectIntent
 		operation = "detect_intent"
+	} else if mode == "compress_session" {
+		key = PromptKeyCompressSession
+		operation = "compress_session"
 	}
 	prompt := c.buildOperationPrompt(key, userInput)
 	var out ChatResponse

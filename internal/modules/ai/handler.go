@@ -38,6 +38,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 		r.Get("/sessions/{id}/messages", h.listSessionMessages)
 		r.Post("/sessions/{id}/messages", h.sendSessionMessage)
 		r.Post("/sessions/{id}/confirm", h.confirmSessionAction)
+		r.Post("/sessions/{id}/compress", h.compressSessionMessages)
 		r.Get("/sessions/{id}/artifacts", h.listSessionArtifacts)
 		r.Delete("/sessions/{id}", h.deleteAgentSession)
 		r.Post("/artifacts/{id}/import/questions", h.importQuestionsFromArtifact)

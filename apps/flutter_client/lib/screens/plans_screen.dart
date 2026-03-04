@@ -13,6 +13,7 @@ class PlansScreen extends StatefulWidget {
 
 class _PlansScreenState extends State<PlansScreen> {
   String _typeFilter = '';
+  String _sourceFilter = '';
 
   @override
   Widget build(BuildContext context) {
@@ -20,8 +21,13 @@ class _PlansScreenState extends State<PlansScreen> {
     final loading = provider.isSectionLoading(DataSection.plans);
     final plans = provider.plans
         .where((item) {
-          if (_typeFilter.isEmpty) return true;
-          return item.planType == _typeFilter;
+          if (_typeFilter.isNotEmpty && item.planType != _typeFilter) {
+            return false;
+          }
+          if (_sourceFilter.isNotEmpty && item.source != _sourceFilter) {
+            return false;
+          }
+          return true;
         })
         .toList(growable: false);
 
@@ -37,45 +43,7 @@ class _PlansScreenState extends State<PlansScreen> {
       ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    value: _typeFilter.isEmpty ? null : _typeFilter,
-                    decoration: const InputDecoration(
-                      labelText: '类型筛选',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'year_plan', child: Text('年计划')),
-                      DropdownMenuItem(value: 'month_goal', child: Text('月目标')),
-                      DropdownMenuItem(value: 'month_plan', child: Text('月计划')),
-                      DropdownMenuItem(value: 'week_plan', child: Text('周计划')),
-                      DropdownMenuItem(value: 'day_goal', child: Text('日目标')),
-                      DropdownMenuItem(value: 'day_plan', child: Text('日计划')),
-                      DropdownMenuItem(
-                        value: 'current_phase',
-                        child: Text('当前阶段'),
-                      ),
-                    ],
-                    onChanged: (value) =>
-                        setState(() => _typeFilter = value ?? ''),
-                  ),
-                ),
-                if (_typeFilter.isNotEmpty) ...[
-                  const SizedBox(width: 4),
-                  IconButton(
-                    icon: const Icon(Icons.clear),
-                    tooltip: '清除筛选',
-                    onPressed: () => setState(() => _typeFilter = ''),
-                  ),
-                ],
-              ],
-            ),
-          ),
+          _filterBar(),
           Expanded(
             child: RefreshIndicator(
               onRefresh: () => provider.fetchPlans(force: true),
@@ -88,6 +56,75 @@ class _PlansScreenState extends State<PlansScreen> {
         onPressed: () => _showCreateDialog(context),
         icon: const Icon(Icons.add_task),
         label: const Text('新建计划'),
+      ),
+    );
+  }
+
+  Widget _filterBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      child: Column(
+        children: [
+          DropdownButtonFormField<String>(
+            value: _typeFilter.isEmpty ? null : _typeFilter,
+            decoration: const InputDecoration(
+              labelText: '类型筛选',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+            items: const [
+              DropdownMenuItem(value: 'year_plan', child: Text('年计划')),
+              DropdownMenuItem(value: 'month_goal', child: Text('月目标')),
+              DropdownMenuItem(value: 'month_plan', child: Text('月计划')),
+              DropdownMenuItem(value: 'week_plan', child: Text('周计划')),
+              DropdownMenuItem(value: 'day_goal', child: Text('日目标')),
+              DropdownMenuItem(value: 'day_plan', child: Text('日计划')),
+              DropdownMenuItem(value: 'current_phase', child: Text('当前阶段')),
+            ],
+            onChanged: (value) => setState(() => _typeFilter = value ?? ''),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  value: _sourceFilter.isEmpty ? null : _sourceFilter,
+                  decoration: const InputDecoration(
+                    labelText: '来源筛选',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'manual', child: Text('manual')),
+                    DropdownMenuItem(
+                      value: 'ai_learning',
+                      child: Text('ai_learning'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'ai_agent',
+                      child: Text('ai_agent'),
+                    ),
+                  ],
+                  onChanged: (value) =>
+                      setState(() => _sourceFilter = value ?? ''),
+                ),
+              ),
+              if (_typeFilter.isNotEmpty || _sourceFilter.isNotEmpty) ...[
+                const SizedBox(width: 4),
+                IconButton(
+                  icon: const Icon(Icons.clear),
+                  tooltip: '清除筛选',
+                  onPressed: () {
+                    setState(() {
+                      _typeFilter = '';
+                      _sourceFilter = '';
+                    });
+                  },
+                ),
+              ],
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -108,25 +145,16 @@ class _PlansScreenState extends State<PlansScreen> {
 
     if (plans.isEmpty) {
       return ListView(
-        children: [
-          const SizedBox(height: 64),
+        children: const [
+          SizedBox(height: 64),
           Center(
             child: Column(
               children: [
-                Icon(
-                  Icons.event_note_outlined,
-                  size: 64,
-                  color: Colors.indigo.withValues(alpha: 0.4),
-                ),
-                const SizedBox(height: 16),
-                const Text(
+                Icon(Icons.event_note_outlined, size: 64, color: Colors.grey),
+                SizedBox(height: 16),
+                Text(
                   '暂无计划',
                   style: TextStyle(fontSize: 16, color: Colors.grey),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  '点击右下角按钮制定你的第一个计划',
-                  style: TextStyle(fontSize: 13, color: Colors.grey),
                 ),
               ],
             ),
@@ -157,36 +185,13 @@ class _PlansScreenState extends State<PlansScreen> {
               spacing: 6,
               runSpacing: 4,
               children: [
-                Chip(
-                  label: Text(
-                    _planTypeZh(item.planType),
-                    style: const TextStyle(fontSize: 11),
-                  ),
-                  visualDensity: VisualDensity.compact,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                Chip(
-                  label: Text(
-                    _statusZh(item.status),
-                    style: const TextStyle(fontSize: 11),
-                  ),
-                  backgroundColor: _statusColor(
-                    item.status,
-                  ).withValues(alpha: 0.15),
-                  visualDensity: VisualDensity.compact,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                Chip(
-                  label: Text(
-                    'P${item.priority}',
-                    style: const TextStyle(fontSize: 11),
-                  ),
-                  visualDensity: VisualDensity.compact,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
+                _chip(_planTypeZh(item.planType)),
+                _chip(_statusZh(item.status)),
+                _chip('P${item.priority}'),
+                _chip('来源 ${item.source}'),
                 if (item.targetDate.isNotEmpty)
                   Text(
-                    '📅 ${item.targetDate}',
+                    '日期 ${item.targetDate}',
                     style: const TextStyle(fontSize: 12),
                   ),
               ],
@@ -208,6 +213,14 @@ class _PlansScreenState extends State<PlansScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _chip(String text) {
+    return Chip(
+      label: Text(text, style: const TextStyle(fontSize: 11)),
+      visualDensity: VisualDensity.compact,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );
   }
 
@@ -246,7 +259,7 @@ class _PlansScreenState extends State<PlansScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('删除计划'),
-        content: Text('确认删除计划"$title"？'),
+        content: Text('确认删除计划 "$title" 吗？'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
@@ -259,15 +272,21 @@ class _PlansScreenState extends State<PlansScreen> {
         ],
       ),
     );
-    if (confirmed != true || !context.mounted) return;
+    if (confirmed != true || !context.mounted) {
+      return;
+    }
     try {
       await context.read<AppProvider>().deletePlan(id);
-      if (!context.mounted) return;
+      if (!context.mounted) {
+        return;
+      }
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('已删除计划')));
     } catch (_) {
-      if (!context.mounted) return;
+      if (!context.mounted) {
+        return;
+      }
       final message = context.read<AppProvider>().errorMessage ?? '删除失败';
       ScaffoldMessenger.of(
         context,
@@ -365,6 +384,7 @@ class _PlansScreenState extends State<PlansScreen> {
                       'status': statusController.text.trim(),
                       'priority':
                           int.tryParse(priorityController.text.trim()) ?? 3,
+                      'source': isEdit ? plan.source : 'manual',
                     };
                     try {
                       if (isEdit) {
@@ -372,7 +392,9 @@ class _PlansScreenState extends State<PlansScreen> {
                       } else {
                         await provider.createPlan(input);
                       }
-                      if (ctx.mounted) Navigator.of(ctx).pop();
+                      if (ctx.mounted) {
+                        Navigator.of(ctx).pop();
+                      }
                     } catch (e) {
                       if (ctx.mounted) {
                         ScaffoldMessenger.of(

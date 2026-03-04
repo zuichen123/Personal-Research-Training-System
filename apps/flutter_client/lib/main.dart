@@ -4,8 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'core/logging/app_logger.dart';
+import 'providers/ai_agent_provider.dart';
 import 'providers/app_provider.dart';
-import 'screens/ai_tutor_team_screen.dart';
+import 'screens/agent_chat_hub_screen.dart';
 import 'screens/mistakes_screen.dart';
 import 'screens/plans_screen.dart';
 import 'screens/pomodoro_screen.dart';
@@ -83,7 +84,10 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
-      providers: [ChangeNotifierProvider(create: (_) => AppProvider())],
+      providers: [
+        ChangeNotifierProvider(create: (_) => AppProvider()),
+        ChangeNotifierProvider(create: (_) => AIAgentProvider()),
+      ],
       child: MaterialApp(
         title: '自学工具',
         debugShowCheckedModeBanner: false,
@@ -129,7 +133,7 @@ class _MainScreenState extends State<MainScreen> {
     MistakesScreen(),
     PracticeScreen(),
     PomodoroScreen(),
-    AITutorTeamScreen(),
+    AgentChatHubScreen(),
   ];
 
   static const _destinations = [

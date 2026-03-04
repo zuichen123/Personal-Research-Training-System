@@ -44,7 +44,11 @@ class AIAgentProvider with ChangeNotifier {
       _artifactsBySession[sessionId] ?? const <AIAgentArtifact>[];
 
   Future<void> initialize() async {
-    await refreshAgents();
+    try {
+      await refreshAgents();
+    } catch (_) {
+      // Keep provider error state without crashing initial screen rendering.
+    }
   }
 
   Future<void> refreshAgents() async {
@@ -81,6 +85,46 @@ class AIAgentProvider with ChangeNotifier {
   }) async {
     await _runLoading(() async {
       await _api.createAIAgent({
+        'name': name,
+        'protocol': protocol,
+        'primary': {
+          'base_url': primaryBaseUrl,
+          'api_key': primaryApiKey,
+          'model': primaryModel,
+        },
+        'fallback': {
+          'base_url': fallbackBaseUrl,
+          'api_key': fallbackApiKey,
+          'model': fallbackModel,
+        },
+        'system_prompt': systemPrompt,
+        'intent_capabilities': intentCapabilities,
+        'enabled': enabled,
+      });
+      await refreshAgents();
+    });
+  }
+
+  Future<void> updateAgent({
+    required String id,
+    required String name,
+    required String protocol,
+    required String primaryBaseUrl,
+    required String primaryApiKey,
+    required String primaryModel,
+    String fallbackBaseUrl = '',
+    String fallbackApiKey = '',
+    String fallbackModel = '',
+    String systemPrompt = '',
+    bool enabled = true,
+    List<String> intentCapabilities = const [
+      'chat',
+      'generate_questions',
+      'build_plan',
+    ],
+  }) async {
+    await _runLoading(() async {
+      await _api.updateAIAgent(id, {
         'name': name,
         'protocol': protocol,
         'primary': {
@@ -155,10 +199,7 @@ class AIAgentProvider with ChangeNotifier {
 
   Future<void> loadSessionData(String sessionId) async {
     await _runLoading(() async {
-      await Future.wait([
-        _loadMessages(sessionId),
-        _loadArtifacts(sessionId),
-      ]);
+      await Future.wait([_loadMessages(sessionId), _loadArtifacts(sessionId)]);
     });
   }
 
@@ -247,7 +288,9 @@ class AIAgentProvider with ChangeNotifier {
       final currentMessages = List<AIAgentMessage>.from(
         _messagesBySession[sessionId] ?? const <AIAgentMessage>[],
       );
-      currentMessages.removeWhere((item) => item.id == result.assistantMessage.id);
+      currentMessages.removeWhere(
+        (item) => item.id == result.assistantMessage.id,
+      );
       currentMessages.add(result.assistantMessage);
       _messagesBySession[sessionId] = currentMessages;
       if (result.artifact != null) {
@@ -298,6 +341,46 @@ class AIAgentProvider with ChangeNotifier {
     final result = await _api.importAIArtifactPlan(artifactId);
     await _refreshCurrentArtifacts();
     return result;
+  }
+
+  Future<Map<String, dynamic>> compressCurrentSession({
+    bool force = false,
+    String trigger = 'manual',
+  }) async {
+    if (_selectedAgentId.isEmpty) {
+      return const <String, dynamic>{'status': 'skipped', 'trigger': 'manual'};
+    }
+    final sessionId = selectedSessionIdOf(_selectedAgentId);
+    if (sessionId.isEmpty) {
+      return const <String, dynamic>{'status': 'skipped', 'trigger': 'manual'};
+    }
+    _sending = true;
+    notifyListeners();
+    try {
+      final result = await _api.compressAISessionMessages(
+        sessionId,
+        force: force,
+        trigger: trigger,
+      );
+      await _loadSessions(_selectedAgentId);
+      await _loadMessages(sessionId);
+      _errorMessage = null;
+      notifyListeners();
+      return result;
+    } catch (e) {
+      _errorMessage = mapErrorToZh(e);
+      _logger.error(
+        module: 'ai_agent_provider',
+        event: 'compress.error',
+        message: 'compress session failed',
+        error: e.toString(),
+      );
+      notifyListeners();
+      rethrow;
+    } finally {
+      _sending = false;
+      notifyListeners();
+    }
   }
 
   Future<void> _refreshCurrentArtifacts() async {

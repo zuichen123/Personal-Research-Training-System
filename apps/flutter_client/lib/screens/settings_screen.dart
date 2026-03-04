@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/ai_agent_chat.dart';
 import '../models/user_profile.dart';
+import '../providers/ai_agent_provider.dart';
 import '../providers/app_provider.dart';
 import 'debug_log_screen.dart';
 
@@ -84,6 +86,9 @@ class _SettingsScreenState extends State<SettingsScreen>
     _bindPromptDirtyListener(_outputPromptController);
 
     _checkBackendHealth();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AIAgentProvider>().refreshAgents();
+    });
   }
 
   @override
@@ -153,8 +158,10 @@ class _SettingsScreenState extends State<SettingsScreen>
             tooltip: '刷新',
             onPressed: () async {
               final app = context.read<AppProvider>();
+              final agentProvider = context.read<AIAgentProvider>();
               await app.fetchUserProfile(force: true);
               await app.fetchAIProviderStatus(force: true);
+              await agentProvider.refreshAgents();
               if (!mounted) return;
               _syncPromptTemplate(app.aiPromptTemplates);
               setState(() {});
@@ -305,6 +312,7 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   Widget _aiSettingsBody(BuildContext context) {
     final provider = context.watch<AppProvider>();
+    final agentProvider = context.watch<AIAgentProvider>();
     final status = provider.aiProviderStatus;
     final templates = provider.aiPromptTemplates;
 
@@ -437,6 +445,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             ],
           ),
         ),
+        _agentConfigSection(context, agentProvider),
         _section(
           title: '高级功能：Prompt 模板配置',
           icon: Icons.auto_awesome,
@@ -554,6 +563,319 @@ class _SettingsScreenState extends State<SettingsScreen>
           ),
       ],
     );
+  }
+
+  Widget _agentConfigSection(
+    BuildContext context,
+    AIAgentProvider agentProvider,
+  ) {
+    final agents = agentProvider.agents;
+    return _section(
+      title: 'Agent 配置',
+      icon: Icons.smart_toy_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              FilledButton.tonalIcon(
+                onPressed: () => agentProvider.refreshAgents(),
+                icon: const Icon(Icons.refresh),
+                label: const Text('刷新 Agent'),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                onPressed: () => _showAgentDialog(context, agentProvider),
+                icon: const Icon(Icons.add),
+                label: const Text('新增 Agent'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (agentProvider.loading)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 8),
+              child: LinearProgressIndicator(),
+            ),
+          if (agents.isEmpty)
+            const Text(
+              '暂无 Agent，请先新增一个 OpenAI 兼容 Agent。',
+              style: TextStyle(color: Colors.grey),
+            )
+          else
+            ...agents.map(
+              (agent) => ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('${agent.name} (${agent.protocol})'),
+                subtitle: Text(
+                  'primary=${agent.primary.model} fallback=${agent.fallback.model} enabled=${agent.enabled}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: Wrap(
+                  spacing: 4,
+                  children: [
+                    IconButton(
+                      tooltip: '编辑 Agent',
+                      onPressed: () => _showAgentDialog(
+                        context,
+                        agentProvider,
+                        agent: agent,
+                      ),
+                      icon: const Icon(Icons.edit_outlined),
+                    ),
+                    IconButton(
+                      tooltip: '删除 Agent',
+                      onPressed: () =>
+                          _confirmDeleteAgent(context, agentProvider, agent),
+                      icon: const Icon(Icons.delete_outline),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          if (agentProvider.errorMessage != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'Agent 错误：${agentProvider.errorMessage}',
+                style: const TextStyle(color: Colors.red),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showAgentDialog(
+    BuildContext context,
+    AIAgentProvider provider, {
+    AIAgentSummary? agent,
+  }) async {
+    final isEdit = agent != null;
+    final nameController = TextEditingController(text: agent?.name ?? '');
+    final protocolController = ValueNotifier<String>(
+      agent?.protocol ?? 'openai_compatible',
+    );
+    final primaryBaseUrlController = TextEditingController(
+      text: agent?.primary.baseUrl ?? 'https://api.openai.com/v1',
+    );
+    final primaryApiKeyController = TextEditingController();
+    final primaryModelController = TextEditingController(
+      text: agent?.primary.model.isNotEmpty == true
+          ? agent!.primary.model
+          : 'gpt-4o-mini',
+    );
+    final fallbackBaseUrlController = TextEditingController(
+      text: agent?.fallback.baseUrl ?? '',
+    );
+    final fallbackApiKeyController = TextEditingController();
+    final fallbackModelController = TextEditingController(
+      text: agent?.fallback.model ?? '',
+    );
+    final systemPromptController = TextEditingController(
+      text: agent?.systemPrompt ?? '',
+    );
+    var enabled = agent?.enabled ?? true;
+    final messenger = ScaffoldMessenger.of(context);
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setState) {
+            return AlertDialog(
+              title: Text(isEdit ? '编辑 Agent' : '新增 Agent'),
+              content: SizedBox(
+                width: 580,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _input(nameController, 'Agent 名称'),
+                      ValueListenableBuilder<String>(
+                        valueListenable: protocolController,
+                        builder: (context, protocol, _) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: DropdownButtonFormField<String>(
+                              value: protocol,
+                              decoration: const InputDecoration(
+                                labelText: '协议',
+                                border: OutlineInputBorder(),
+                                isDense: true,
+                              ),
+                              items: const [
+                                DropdownMenuItem(
+                                  value: 'openai_compatible',
+                                  child: Text('openai_compatible'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'gemini_native',
+                                  child: Text('gemini_native'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'claude_native',
+                                  child: Text('claude_native'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'mock',
+                                  child: Text('mock'),
+                                ),
+                              ],
+                              onChanged: (value) {
+                                if (value == null) return;
+                                protocolController.value = value;
+                              },
+                            ),
+                          );
+                        },
+                      ),
+                      _input(primaryModelController, '主模型'),
+                      _input(primaryBaseUrlController, '主 Base URL'),
+                      _input(
+                        primaryApiKeyController,
+                        isEdit ? '主 API Key（留空=保持不变）' : '主 API Key',
+                      ),
+                      _input(fallbackModelController, '备模型（可选）'),
+                      _input(fallbackBaseUrlController, '备 Base URL（可选）'),
+                      _input(
+                        fallbackApiKeyController,
+                        isEdit ? '备 API Key（留空=保持不变）' : '备 API Key（可选）',
+                      ),
+                      _input(
+                        systemPromptController,
+                        'System Prompt',
+                        maxLines: 4,
+                      ),
+                      SwitchListTile(
+                        value: enabled,
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('启用'),
+                        onChanged: (v) {
+                          setState(() => enabled = v);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('取消'),
+                ),
+                FilledButton(
+                  onPressed: () async {
+                    final name = nameController.text.trim();
+                    final protocol = protocolController.value.trim();
+                    final primaryModel = primaryModelController.text.trim();
+                    final primaryBaseUrl = primaryBaseUrlController.text.trim();
+                    final primaryApiKey = primaryApiKeyController.text.trim();
+                    if (name.isEmpty || primaryModel.isEmpty) {
+                      messenger.showSnackBar(
+                        const SnackBar(content: Text('名称和主模型不能为空')),
+                      );
+                      return;
+                    }
+                    if (!isEdit &&
+                        protocol != 'mock' &&
+                        primaryApiKey.isEmpty) {
+                      messenger.showSnackBar(
+                        const SnackBar(content: Text('主 API Key 不能为空')),
+                      );
+                      return;
+                    }
+                    try {
+                      if (isEdit) {
+                        await provider.updateAgent(
+                          id: agent.id,
+                          name: name,
+                          protocol: protocol,
+                          primaryBaseUrl: primaryBaseUrl,
+                          primaryApiKey: primaryApiKey,
+                          primaryModel: primaryModel,
+                          fallbackBaseUrl: fallbackBaseUrlController.text
+                              .trim(),
+                          fallbackApiKey: fallbackApiKeyController.text.trim(),
+                          fallbackModel: fallbackModelController.text.trim(),
+                          systemPrompt: systemPromptController.text.trim(),
+                          enabled: enabled,
+                        );
+                      } else {
+                        await provider.createAgent(
+                          name: name,
+                          protocol: protocol,
+                          primaryBaseUrl: primaryBaseUrl,
+                          primaryApiKey: primaryApiKey,
+                          primaryModel: primaryModel,
+                          fallbackBaseUrl: fallbackBaseUrlController.text
+                              .trim(),
+                          fallbackApiKey: fallbackApiKeyController.text.trim(),
+                          fallbackModel: fallbackModelController.text.trim(),
+                          systemPrompt: systemPromptController.text.trim(),
+                          enabled: enabled,
+                        );
+                      }
+                      if (!ctx.mounted) return;
+                      Navigator.of(ctx).pop();
+                    } catch (_) {
+                      if (!ctx.mounted) return;
+                      final msg = provider.errorMessage ?? '保存 Agent 失败';
+                      messenger.showSnackBar(SnackBar(content: Text(msg)));
+                    }
+                  },
+                  child: Text(isEdit ? '保存' : '创建'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    nameController.dispose();
+    protocolController.dispose();
+    primaryBaseUrlController.dispose();
+    primaryApiKeyController.dispose();
+    primaryModelController.dispose();
+    fallbackBaseUrlController.dispose();
+    fallbackApiKeyController.dispose();
+    fallbackModelController.dispose();
+    systemPromptController.dispose();
+  }
+
+  Future<void> _confirmDeleteAgent(
+    BuildContext context,
+    AIAgentProvider provider,
+    AIAgentSummary agent,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('删除 Agent'),
+        content: Text('确认删除 Agent "${agent.name}" 吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (!context.mounted || confirmed != true) {
+      return;
+    }
+    try {
+      await provider.deleteAgent(agent.id);
+    } catch (_) {
+      final msg = provider.errorMessage ?? '删除 Agent 失败';
+      messenger.showSnackBar(SnackBar(content: Text(msg)));
+    }
   }
 
   Widget _readonlyMultiline({required String label, required String value}) {
@@ -912,8 +1234,9 @@ class _SettingsScreenState extends State<SettingsScreen>
     await provider.fetchAIProviderStatus(force: true);
     if (!mounted) return;
 
-    if (provider.errorMessage != null) {
-      messenger.showSnackBar(SnackBar(content: Text(provider.errorMessage!)));
+    final errorMessage = provider.errorMessage;
+    if (errorMessage != null) {
+      messenger.showSnackBar(SnackBar(content: Text(errorMessage)));
       return;
     }
 
