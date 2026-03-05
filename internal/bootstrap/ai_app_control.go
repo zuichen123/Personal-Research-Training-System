@@ -668,7 +668,7 @@ func (c *aiAppControl) executeAgent(ctx context.Context, operation string, param
 		}
 		return ai.AppControlResult{Summary: fmt.Sprintf("已获取 %d 个智能体。", len(items)), Data: map[string]any{"items": items}}, nil
 	case "create":
-		req := buildUpsertAgentRequest(params)
+		req := applyCreateAgentDefaults(buildUpsertAgentRequest(params), params)
 		item, err := c.aiService.CreateAgent(ctx, req)
 		if err != nil {
 			return ai.AppControlResult{}, err
@@ -691,6 +691,28 @@ func (c *aiAppControl) executeAgent(ctx context.Context, operation string, param
 	default:
 		return ai.AppControlResult{}, errs.BadRequest("unsupported agent operation")
 	}
+}
+
+func applyCreateAgentDefaults(req ai.UpsertAgentRequest, params map[string]any) ai.UpsertAgentRequest {
+	req.Name = firstNonEmpty(req.Name, asString(params["agent_name"]), asString(params["title"]), asString(params["keyword"]))
+	if req.Name == "" {
+		req.Name = "new-agent"
+	}
+
+	protocol := strings.ToLower(strings.TrimSpace(string(req.Protocol)))
+	if protocol == "" {
+		req.Protocol = ai.AgentProtocolMock
+		return req
+	}
+	if protocol == string(ai.AgentProtocolMock) {
+		return req
+	}
+	if strings.TrimSpace(req.Primary.APIKey) == "" || strings.TrimSpace(req.Primary.Model) == "" {
+		req.Protocol = ai.AgentProtocolMock
+		req.Primary = ai.AgentProviderConfig{}
+		req.Fallback = ai.AgentProviderConfig{}
+	}
+	return req
 }
 
 func (c *aiAppControl) executeSession(ctx context.Context, operation string, params map[string]any) (ai.AppControlResult, error) {

@@ -220,6 +220,7 @@ Use manage_app for software management requests such as creating/updating/deleti
 - questions, mistakes, practice attempts, plans, pomodoro sessions, profile, resources
 When action is manage_app, extract "module" and "operation" with required fields in params.
 If id is unknown for get/update/delete, include searchable fields such as title/name/keyword/target_date/status/source so the backend can resolve the target.
+For creating agents, always provide params.name. If user did not specify one, set params.name="new-agent".
 For bulk-delete requests like "delete all plans / clear all plans", set module=plan, operation=delete_all, and params.all=true.
 If conversation already contains recent [tool_result] messages, decide whether another manage_app tool step is still required.
 If no further tool call is needed, return action=none.
@@ -236,6 +237,7 @@ Return confidence in [0,1] and include key params when possible.`,
       "operation":"create|update|delete|delete_all|get|list|submit|start|end|reload|upsert|clear|purge",
       "all":true,
       "id":"string",
+      "name":"string",
       "title":"string",
       "keyword":"string",
       "target_date":"YYYY-MM-DD",

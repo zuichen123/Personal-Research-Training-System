@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"self-study-tool/internal/modules/ai"
 	"self-study-tool/internal/modules/plan"
 	"self-study-tool/internal/shared/errs"
 )
@@ -280,5 +281,37 @@ func TestExecutePlanDelete_WithAllFlagAndFilter(t *testing.T) {
 	}
 	if _, exists := repo.items["p-3"]; exists {
 		t.Fatal("expected matching plan p-3 deleted")
+	}
+}
+
+func TestApplyCreateAgentDefaults_UsesDefaultNameAndMockProtocol(t *testing.T) {
+	req := buildUpsertAgentRequest(map[string]any{})
+	got := applyCreateAgentDefaults(req, map[string]any{})
+
+	if got.Name != "new-agent" {
+		t.Fatalf("expected default name new-agent, got %q", got.Name)
+	}
+	if got.Protocol != ai.AgentProtocolMock {
+		t.Fatalf("expected protocol=%s, got %s", ai.AgentProtocolMock, got.Protocol)
+	}
+}
+
+func TestApplyCreateAgentDefaults_KeepConfiguredProvider(t *testing.T) {
+	params := map[string]any{
+		"name":     "math-agent",
+		"protocol": "openai_compatible",
+		"primary": map[string]any{
+			"api_key": "sk-test",
+			"model":   "gpt-4o-mini",
+		},
+	}
+	req := buildUpsertAgentRequest(params)
+	got := applyCreateAgentDefaults(req, params)
+
+	if got.Name != "math-agent" {
+		t.Fatalf("expected name=math-agent, got %q", got.Name)
+	}
+	if got.Protocol != ai.AgentProtocolOpenAICompatible {
+		t.Fatalf("expected protocol=%s, got %s", ai.AgentProtocolOpenAICompatible, got.Protocol)
 	}
 }
