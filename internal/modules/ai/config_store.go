@@ -14,10 +14,11 @@ type ProviderConfigRecord struct {
 }
 
 type PromptTemplateRecord struct {
-	PromptKey          string
-	CustomPrompt       string
-	OutputFormatPrompt string
-	UpdatedAt          string
+	PromptKey            string
+	CustomPrompt         string
+	OutputFormatPrompt   string
+	SegmentOverridesJSON string
+	UpdatedAt            string
 }
 
 type ProviderConfigStore interface {

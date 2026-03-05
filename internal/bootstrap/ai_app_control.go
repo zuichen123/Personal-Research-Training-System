@@ -983,6 +983,29 @@ func (c *aiAppControl) executePrompt(ctx context.Context, operation string, para
 			value := asString(outputPrompt)
 			req.OutputFormatPrompt = &value
 		}
+		req.SegmentUpdates = asStringMap(params["segment_updates"])
+		req.SegmentDeletes = asStringSlice(params["segment_deletes"])
+		req.ReplaceSegments = asBool(params["replace_segments"], false)
+		segment := asString(params["segment"])
+		if segment != "" {
+			mode := strings.ToLower(firstNonEmpty(asString(params["mode"]), asString(params["segment_mode"]), "modify"))
+			segmentValue := firstNonEmpty(asString(params["segment_value"]), asString(params["value"]), asString(params["text"]))
+			switch mode {
+			case "delete", "remove", "clear":
+				req.SegmentDeletes = append(req.SegmentDeletes, segment)
+			case "overwrite":
+				req.ReplaceSegments = true
+				if req.SegmentUpdates == nil {
+					req.SegmentUpdates = map[string]string{}
+				}
+				req.SegmentUpdates[segment] = segmentValue
+			default:
+				if req.SegmentUpdates == nil {
+					req.SegmentUpdates = map[string]string{}
+				}
+				req.SegmentUpdates[segment] = segmentValue
+			}
+		}
 		item, err := c.aiService.UpdatePromptTemplate(ctx, key, req)
 		if err != nil {
 			return ai.AppControlResult{}, err
@@ -1024,6 +1047,22 @@ func asMap(v any) map[string]any {
 		return m
 	}
 	return map[string]any{}
+}
+
+func asStringMap(v any) map[string]string {
+	raw := asMap(v)
+	if len(raw) == 0 {
+		return map[string]string{}
+	}
+	out := make(map[string]string, len(raw))
+	for k, value := range raw {
+		key := strings.TrimSpace(k)
+		if key == "" {
+			continue
+		}
+		out[key] = asString(value)
+	}
+	return out
 }
 
 func asString(v any) string {

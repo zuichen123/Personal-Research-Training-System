@@ -1,6 +1,8 @@
 package ai
 
 import (
+	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
 )
@@ -15,7 +17,71 @@ const (
 	PromptKeyDetectIntent      = "detect_intent"
 	PromptKeyAgentChat         = "agent_chat"
 	PromptKeyCompressSession   = "compress_session"
+
+	promptSegmentPersona          = "persona"
+	promptSegmentIdentity         = "identity"
+	promptSegmentUserBackground   = "user_background"
+	promptSegmentAIMemo           = "ai_memo"
+	promptSegmentUserProfile      = "user_profile"
+	promptSegmentScoringCriteria  = "scoring_criteria"
+	promptSegmentToolInstructions = "tool_instructions"
+	promptSegmentCurrentSchedule  = "current_schedule"
+	promptSegmentLearningProgress = "learning_progress"
+	promptSegmentRules            = "rules"
+	promptSegmentReservedSlot1    = "reserved_slot_1"
+	promptSegmentReservedSlot2    = "reserved_slot_2"
+	promptSegmentReservedSlot3    = "reserved_slot_3"
+	promptSegmentReservedSlot4    = "reserved_slot_4"
+	promptSegmentReservedSlot5    = "reserved_slot_5"
+	promptSegmentTaskPrompt       = "task_prompt"
+	promptSegmentUserInput        = "user_input"
+	promptSegmentOutputFormat     = "output_format"
 )
+
+var promptSegmentOrder = []string{
+	promptSegmentPersona,
+	promptSegmentIdentity,
+	promptSegmentUserBackground,
+	promptSegmentAIMemo,
+	promptSegmentUserProfile,
+	promptSegmentScoringCriteria,
+	promptSegmentToolInstructions,
+	promptSegmentCurrentSchedule,
+	promptSegmentLearningProgress,
+	promptSegmentRules,
+	promptSegmentReservedSlot1,
+	promptSegmentReservedSlot2,
+	promptSegmentReservedSlot3,
+	promptSegmentReservedSlot4,
+	promptSegmentReservedSlot5,
+	promptSegmentTaskPrompt,
+}
+
+var promptSegmentTitleByKey = map[string]string{
+	promptSegmentPersona:          "人格设定",
+	promptSegmentIdentity:         "身份设定",
+	promptSegmentUserBackground:   "用户背景",
+	promptSegmentAIMemo:           "AI备忘",
+	promptSegmentUserProfile:      "用户画像",
+	promptSegmentScoringCriteria:  "评分标准",
+	promptSegmentToolInstructions: "工具说明",
+	promptSegmentCurrentSchedule:  "当前日程",
+	promptSegmentLearningProgress: "学习进度",
+	promptSegmentRules:            "遵守规则",
+	promptSegmentReservedSlot1:    "预留拼接位1",
+	promptSegmentReservedSlot2:    "预留拼接位2",
+	promptSegmentReservedSlot3:    "预留拼接位3",
+	promptSegmentReservedSlot4:    "预留拼接位4",
+	promptSegmentReservedSlot5:    "预留拼接位5",
+	promptSegmentTaskPrompt:       "任务指令",
+	promptSegmentUserInput:        "用户输入",
+	promptSegmentOutputFormat:     "输出格式",
+}
+
+var promptOptionalEmptySegmentKeys = map[string]struct{}{
+	promptSegmentAIMemo:      {},
+	promptSegmentUserProfile: {},
+}
 
 type promptTemplatePreset struct {
 	Key                      string
@@ -223,6 +289,12 @@ If id is unknown for get/update/delete, include searchable fields such as title/
 For creating agents, always provide params.name. If user did not specify one, set params.name="new-agent".
 For creating agents without explicit provider credentials, do not invent fake api_key/model and do not force mock;
 the backend will try configured provider defaults. If provider availability must be confirmed, call module=provider operation=status.
+For prompt management (module=prompt, operation=update), support self-edit actions:
+- modify/overwrite sections via params.segment_updates (object)
+- delete sections via params.segment_deletes (array)
+- overwrite all sections via params.replace_segments=true with segment_updates
+Allowed prompt sections include: persona, identity, user_background, ai_memo, user_profile, scoring_criteria,
+tool_instructions, current_schedule, learning_progress, rules, reserved_slot_1..reserved_slot_5, task_prompt, output_format.
 For bulk-delete requests like "delete all plans / clear all plans", set module=plan, operation=delete_all, and params.all=true.
 If conversation already contains recent [tool_result] messages, decide whether another manage_app tool step is still required.
 If no further tool call is needed, return action=none.
@@ -248,7 +320,10 @@ Return confidence in [0,1] and include key params when possible.`,
       "topic":"string",
       "subject":"string",
       "count":3,
-      "difficulty":3
+      "difficulty":3,
+      "segment_updates":{"task_prompt":"string","rules":"string"},
+      "segment_deletes":["ai_memo"],
+      "replace_segments":false
     }
   }
 }`,
@@ -290,6 +365,7 @@ var promptTemplatePresetByKey = func() map[string]promptTemplatePreset {
 type promptTemplateOverride struct {
 	CustomPrompt       string
 	OutputFormatPrompt string
+	SegmentOverrides   map[string]string
 	UpdatedAt          string
 }
 
@@ -334,24 +410,139 @@ func (r *PromptTemplateRuntime) Compose(key, userInput string) string {
 	if !ok {
 		return strings.TrimSpace(userInput)
 	}
-	parts := []string{
-		strings.TrimSpace(cfg.EffectivePrompt),
-		strings.TrimSpace(cfg.EffectiveOutputFormatPrompt),
-		strings.TrimSpace(userInput),
-	}
-	return joinPromptParts(parts...)
+	return composePromptDocument(cfg.EffectiveSegments, userInput, cfg.EffectiveOutputFormatPrompt)
 }
 
-func joinPromptParts(parts ...string) string {
-	out := make([]string, 0, len(parts))
-	for _, part := range parts {
-		trimmed := strings.TrimSpace(part)
-		if trimmed == "" {
+func composePromptDocument(segments map[string]string, userInput, outputFormat string) string {
+	blocks := make([]string, 0, len(promptSegmentOrder)+2)
+	normalized := normalizePromptSegmentMap(segments)
+	for _, key := range promptSegmentOrder {
+		value := strings.TrimSpace(normalized[key])
+		if value == "" && isOptionalPromptSegment(key) {
 			continue
 		}
-		out = append(out, trimmed)
+		if value == "" {
+			continue
+		}
+		blocks = append(blocks, formatPromptBlock(promptSegmentTitleForKey(key), value))
 	}
-	return strings.Join(out, "\n\n")
+	inputText := strings.TrimSpace(userInput)
+	if inputText != "" {
+		blocks = append(blocks, formatPromptBlock(promptSegmentTitleForKey(promptSegmentUserInput), inputText))
+	}
+	outputText := strings.TrimSpace(outputFormat)
+	if outputText != "" {
+		blocks = append(blocks, formatPromptBlock(promptSegmentTitleForKey(promptSegmentOutputFormat), outputText))
+	}
+	return strings.Join(blocks, "\n\n")
+}
+
+func formatPromptBlock(title, content string) string {
+	return fmt.Sprintf("## %s\n%s", strings.TrimSpace(title), strings.TrimSpace(content))
+}
+
+func normalizePromptSegmentKey(key string) string {
+	return strings.ToLower(strings.TrimSpace(key))
+}
+
+func promptSegmentTitleForKey(key string) string {
+	normalized := normalizePromptSegmentKey(key)
+	if title, ok := promptSegmentTitleByKey[normalized]; ok {
+		return title
+	}
+	return normalized
+}
+
+func isSupportedPromptSegment(key string) bool {
+	normalized := normalizePromptSegmentKey(key)
+	if normalized == promptSegmentUserInput {
+		return false
+	}
+	if normalized == promptSegmentOutputFormat {
+		return true
+	}
+	_, ok := promptSegmentTitleByKey[normalized]
+	return ok
+}
+
+func isOptionalPromptSegment(key string) bool {
+	_, ok := promptOptionalEmptySegmentKeys[normalizePromptSegmentKey(key)]
+	return ok
+}
+
+func clonePromptSegmentMap(in map[string]string) map[string]string {
+	if len(in) == 0 {
+		return map[string]string{}
+	}
+	out := make(map[string]string, len(in))
+	for k, v := range in {
+		out[k] = strings.TrimSpace(v)
+	}
+	return out
+}
+
+func normalizePromptSegmentMap(in map[string]string) map[string]string {
+	if len(in) == 0 {
+		return map[string]string{}
+	}
+	out := make(map[string]string, len(in))
+	for k, v := range in {
+		normalized := normalizePromptSegmentKey(k)
+		if normalized == "" {
+			continue
+		}
+		if normalized == promptSegmentUserInput {
+			continue
+		}
+		out[normalized] = strings.TrimSpace(v)
+	}
+	return out
+}
+
+func defaultPromptSegmentsForPreset(preset promptTemplatePreset) map[string]string {
+	out := map[string]string{
+		promptSegmentPersona:          "You are a pragmatic and reliable study assistant. Keep responses concise, factual, and actionable.",
+		promptSegmentIdentity:         fmt.Sprintf("Current role profile: %s (%s).", strings.TrimSpace(preset.Name), strings.TrimSpace(preset.Key)),
+		promptSegmentUserBackground:   "Use available user background from profile/session context. If missing, make conservative assumptions.",
+		promptSegmentAIMemo:           "",
+		promptSegmentUserProfile:      "",
+		promptSegmentScoringCriteria:  "Prioritize correctness, consistency, completeness, and execution feasibility.",
+		promptSegmentToolInstructions: "Use tools only when necessary. For mutating operations, verify targets before execution.",
+		promptSegmentCurrentSchedule:  "No explicit schedule is provided in this prompt.",
+		promptSegmentLearningProgress: "No explicit progress snapshot is provided in this prompt.",
+		promptSegmentRules:            "Follow system and developer constraints strictly. Avoid fabrication. Keep structured outputs valid.",
+		promptSegmentReservedSlot1:    "[reserved slot 1]",
+		promptSegmentReservedSlot2:    "[reserved slot 2]",
+		promptSegmentReservedSlot3:    "[reserved slot 3]",
+		promptSegmentReservedSlot4:    "[reserved slot 4]",
+		promptSegmentReservedSlot5:    "[reserved slot 5]",
+		promptSegmentTaskPrompt:       strings.TrimSpace(preset.PresetPrompt),
+	}
+	return out
+}
+
+func parsePromptSegmentOverridesJSON(raw string) map[string]string {
+	text := strings.TrimSpace(raw)
+	if text == "" {
+		return map[string]string{}
+	}
+	var payload map[string]string
+	if err := json.Unmarshal([]byte(text), &payload); err != nil {
+		return map[string]string{}
+	}
+	return normalizePromptSegmentMap(payload)
+}
+
+func mustPromptSegmentOverridesJSON(in map[string]string) string {
+	normalized := normalizePromptSegmentMap(in)
+	if len(normalized) == 0 {
+		return "{}"
+	}
+	raw, err := json.Marshal(normalized)
+	if err != nil {
+		return "{}"
+	}
+	return string(raw)
 }
 
 func (r *PromptTemplateRuntime) List() []PromptTemplateConfig {
@@ -417,6 +608,7 @@ func (r *PromptTemplateRuntime) ReplaceAll(records []PromptTemplateRecord) {
 		next[key] = normalizePromptTemplateOverride(promptTemplateOverride{
 			CustomPrompt:       record.CustomPrompt,
 			OutputFormatPrompt: record.OutputFormatPrompt,
+			SegmentOverrides:   parsePromptSegmentOverridesJSON(record.SegmentOverridesJSON),
 			UpdatedAt:          record.UpdatedAt,
 		})
 	}
@@ -426,9 +618,17 @@ func (r *PromptTemplateRuntime) ReplaceAll(records []PromptTemplateRecord) {
 }
 
 func normalizePromptTemplateOverride(in promptTemplateOverride) promptTemplateOverride {
+	customPrompt := strings.TrimSpace(in.CustomPrompt)
+	segmentOverrides := normalizePromptSegmentMap(in.SegmentOverrides)
+	if customPrompt != "" {
+		segmentOverrides[promptSegmentTaskPrompt] = customPrompt
+	} else if taskOverride := strings.TrimSpace(segmentOverrides[promptSegmentTaskPrompt]); taskOverride != "" {
+		customPrompt = taskOverride
+	}
 	return promptTemplateOverride{
-		CustomPrompt:       strings.TrimSpace(in.CustomPrompt),
+		CustomPrompt:       customPrompt,
 		OutputFormatPrompt: strings.TrimSpace(in.OutputFormatPrompt),
+		SegmentOverrides:   segmentOverrides,
 		UpdatedAt:          strings.TrimSpace(in.UpdatedAt),
 	}
 }
@@ -436,21 +636,40 @@ func normalizePromptTemplateOverride(in promptTemplateOverride) promptTemplateOv
 func buildPromptConfig(preset promptTemplatePreset, override promptTemplateOverride) PromptTemplateConfig {
 	customPrompt := strings.TrimSpace(override.CustomPrompt)
 	outputPrompt := strings.TrimSpace(override.OutputFormatPrompt)
-	effectivePrompt := preset.PresetPrompt
+	presetSegments := defaultPromptSegmentsForPreset(preset)
+	segmentOverrides := normalizePromptSegmentMap(override.SegmentOverrides)
+	effectiveSegments := clonePromptSegmentMap(presetSegments)
+	for key, value := range segmentOverrides {
+		if key == promptSegmentOutputFormat || key == promptSegmentUserInput {
+			continue
+		}
+		if value == "" {
+			if isOptionalPromptSegment(key) {
+				effectiveSegments[key] = ""
+			}
+			continue
+		}
+		effectiveSegments[key] = value
+	}
 	if customPrompt != "" {
-		effectivePrompt = customPrompt
+		effectiveSegments[promptSegmentTaskPrompt] = customPrompt
+		segmentOverrides[promptSegmentTaskPrompt] = customPrompt
 	}
 	effectiveOutputPrompt := preset.PresetOutputFormatPrompt
 	if outputPrompt != "" {
 		effectiveOutputPrompt = outputPrompt
 	}
+	effectivePrompt := composePromptDocument(effectiveSegments, "", "")
 	return PromptTemplateConfig{
 		Key:                         preset.Key,
 		Name:                        preset.Name,
 		PresetPrompt:                preset.PresetPrompt,
 		PresetOutputFormatPrompt:    preset.PresetOutputFormatPrompt,
+		PresetSegments:              clonePromptSegmentMap(presetSegments),
 		CustomPrompt:                customPrompt,
 		OutputFormatPrompt:          outputPrompt,
+		SegmentOverrides:            clonePromptSegmentMap(segmentOverrides),
+		EffectiveSegments:           clonePromptSegmentMap(effectiveSegments),
 		EffectivePrompt:             effectivePrompt,
 		EffectiveOutputFormatPrompt: effectiveOutputPrompt,
 		UpdatedAt:                   strings.TrimSpace(override.UpdatedAt),

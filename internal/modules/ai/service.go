@@ -230,17 +230,67 @@ func (s *Service) UpdatePromptTemplate(
 	if !isSupportedPromptKey(normalizedKey) {
 		return PromptTemplateConfig{}, errs.BadRequest("prompt key must be one of: " + supportedPromptKeysText())
 	}
-	if req.CustomPrompt == nil && req.OutputFormatPrompt == nil {
-		return PromptTemplateConfig{}, errs.BadRequest("custom_prompt or output_format_prompt is required")
+	hasSegmentOps := req.ReplaceSegments || len(req.SegmentUpdates) > 0 || len(req.SegmentDeletes) > 0
+	if req.CustomPrompt == nil && req.OutputFormatPrompt == nil && !hasSegmentOps {
+		return PromptTemplateConfig{}, errs.BadRequest(
+			"custom_prompt/output_format_prompt/segment_updates/segment_deletes/replace_segments are required",
+		)
 	}
 
 	prevOverride, hadPrevOverride := s.promptRuntime.getOverride(normalizedKey)
 	nextOverride := prevOverride
+	if req.ReplaceSegments {
+		nextOverride.SegmentOverrides = map[string]string{}
+	}
+	if nextOverride.SegmentOverrides == nil {
+		nextOverride.SegmentOverrides = map[string]string{}
+	}
 	if req.CustomPrompt != nil {
 		nextOverride.CustomPrompt = strings.TrimSpace(*req.CustomPrompt)
+		if nextOverride.CustomPrompt == "" {
+			delete(nextOverride.SegmentOverrides, promptSegmentTaskPrompt)
+		} else {
+			nextOverride.SegmentOverrides[promptSegmentTaskPrompt] = nextOverride.CustomPrompt
+		}
 	}
 	if req.OutputFormatPrompt != nil {
 		nextOverride.OutputFormatPrompt = strings.TrimSpace(*req.OutputFormatPrompt)
+	}
+	for _, rawKey := range req.SegmentDeletes {
+		segmentKey := normalizePromptSegmentKey(rawKey)
+		if !isSupportedPromptSegment(segmentKey) {
+			return PromptTemplateConfig{}, errs.BadRequest("unsupported prompt segment: " + segmentKey)
+		}
+		if segmentKey == promptSegmentOutputFormat {
+			nextOverride.OutputFormatPrompt = ""
+			continue
+		}
+		delete(nextOverride.SegmentOverrides, segmentKey)
+		if segmentKey == promptSegmentTaskPrompt {
+			nextOverride.CustomPrompt = ""
+		}
+	}
+	for rawKey, rawValue := range req.SegmentUpdates {
+		segmentKey := normalizePromptSegmentKey(rawKey)
+		if !isSupportedPromptSegment(segmentKey) {
+			return PromptTemplateConfig{}, errs.BadRequest("unsupported prompt segment: " + segmentKey)
+		}
+		value := strings.TrimSpace(rawValue)
+		if segmentKey == promptSegmentOutputFormat {
+			nextOverride.OutputFormatPrompt = value
+			continue
+		}
+		if value == "" {
+			delete(nextOverride.SegmentOverrides, segmentKey)
+			if segmentKey == promptSegmentTaskPrompt {
+				nextOverride.CustomPrompt = ""
+			}
+			continue
+		}
+		nextOverride.SegmentOverrides[segmentKey] = value
+		if segmentKey == promptSegmentTaskPrompt {
+			nextOverride.CustomPrompt = value
+		}
 	}
 	nextOverride.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 
@@ -251,10 +301,11 @@ func (s *Service) UpdatePromptTemplate(
 
 	if s.promptStore != nil {
 		if err := s.promptStore.SavePromptTemplate(ctx, PromptTemplateRecord{
-			PromptKey:          normalizedKey,
-			CustomPrompt:       cfg.CustomPrompt,
-			OutputFormatPrompt: cfg.OutputFormatPrompt,
-			UpdatedAt:          cfg.UpdatedAt,
+			PromptKey:            normalizedKey,
+			CustomPrompt:         cfg.CustomPrompt,
+			OutputFormatPrompt:   cfg.OutputFormatPrompt,
+			SegmentOverridesJSON: mustPromptSegmentOverridesJSON(cfg.SegmentOverrides),
+			UpdatedAt:            cfg.UpdatedAt,
 		}); err != nil {
 			if hadPrevOverride {
 				s.promptRuntime.setOverride(normalizedKey, prevOverride)

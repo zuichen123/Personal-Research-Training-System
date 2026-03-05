@@ -98,6 +98,7 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 			prompt_key TEXT PRIMARY KEY,
 			custom_prompt TEXT NOT NULL DEFAULT '',
 			output_format_prompt TEXT NOT NULL DEFAULT '',
+			segment_overrides_json TEXT NOT NULL DEFAULT '{}',
 			updated_at TEXT NOT NULL
 		);`,
 		`CREATE TABLE IF NOT EXISTS ai_agents (
@@ -201,6 +202,7 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 		`ALTER TABLE ai_agent_sessions ADD COLUMN context_summary_meta_json TEXT NOT NULL DEFAULT '{}';`,
 		`ALTER TABLE ai_agent_sessions ADD COLUMN context_summary_updated_at TEXT;`,
 		`ALTER TABLE ai_agent_sessions ADD COLUMN context_summary_message_count INTEGER NOT NULL DEFAULT 0;`,
+		`ALTER TABLE ai_prompt_templates ADD COLUMN segment_overrides_json TEXT NOT NULL DEFAULT '{}';`,
 	}
 
 	for _, stmt := range optionalStmts {

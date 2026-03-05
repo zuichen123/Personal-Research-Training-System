@@ -449,7 +449,7 @@ func TestService_LoadPromptTemplates_AppliesOverrides(t *testing.T) {
 	if found.CustomPrompt != "custom generate" {
 		t.Fatalf("unexpected custom prompt: %s", found.CustomPrompt)
 	}
-	if found.EffectivePrompt != "custom generate" {
+	if !strings.Contains(found.EffectivePrompt, "custom generate") {
 		t.Fatalf("unexpected effective prompt: %s", found.EffectivePrompt)
 	}
 	if found.EffectiveOutputFormatPrompt != "custom output" {
@@ -476,7 +476,7 @@ func TestService_UpdatePromptTemplate_PersistsAndHotUpdates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("update prompt template error: %v", err)
 	}
-	if updated.EffectivePrompt != custom {
+	if !strings.Contains(updated.EffectivePrompt, custom) {
 		t.Fatalf("unexpected effective prompt: %s", updated.EffectivePrompt)
 	}
 	if updated.EffectiveOutputFormatPrompt != output {
@@ -516,6 +516,65 @@ func TestService_UpdatePromptTemplate_RollsBackOnPersistError(t *testing.T) {
 	}
 	if cfg.CustomPrompt != "" {
 		t.Fatalf("expected rollback to no custom prompt, got: %s", cfg.CustomPrompt)
+	}
+}
+
+func TestService_UpdatePromptTemplate_SegmentModifyDeleteOverwrite(t *testing.T) {
+	store := &testConfigStore{}
+	svc := NewServiceWithStore(
+		NewMockClient(0),
+		newQuestionServiceForTest(),
+		false,
+		RuntimeConfig{Provider: "mock"},
+		store,
+	)
+
+	updated, err := svc.UpdatePromptTemplate(context.Background(), PromptKeyAgentChat, UpdatePromptTemplateRequest{
+		SegmentUpdates: map[string]string{
+			"rules":   "Always show key assumptions first.",
+			"ai_memo": "User prefers concise responses.",
+		},
+	})
+	if err != nil {
+		t.Fatalf("segment update error: %v", err)
+	}
+	if updated.EffectiveSegments["rules"] != "Always show key assumptions first." {
+		t.Fatalf("unexpected rules segment: %s", updated.EffectiveSegments["rules"])
+	}
+	if updated.EffectiveSegments["ai_memo"] != "User prefers concise responses." {
+		t.Fatalf("unexpected ai_memo segment: %s", updated.EffectiveSegments["ai_memo"])
+	}
+
+	updated, err = svc.UpdatePromptTemplate(context.Background(), PromptKeyAgentChat, UpdatePromptTemplateRequest{
+		SegmentDeletes: []string{"ai_memo"},
+	})
+	if err != nil {
+		t.Fatalf("segment delete error: %v", err)
+	}
+	if updated.EffectiveSegments["ai_memo"] != "" {
+		t.Fatalf("expected ai_memo to be empty after delete, got: %s", updated.EffectiveSegments["ai_memo"])
+	}
+
+	updated, err = svc.UpdatePromptTemplate(context.Background(), PromptKeyAgentChat, UpdatePromptTemplateRequest{
+		ReplaceSegments: true,
+		SegmentUpdates: map[string]string{
+			"persona": "You are a formal tutor.",
+		},
+	})
+	if err != nil {
+		t.Fatalf("segment overwrite error: %v", err)
+	}
+	if updated.EffectiveSegments["persona"] != "You are a formal tutor." {
+		t.Fatalf("unexpected persona after overwrite: %s", updated.EffectiveSegments["persona"])
+	}
+	if updated.EffectiveSegments["rules"] == "Always show key assumptions first." {
+		t.Fatalf("expected rules segment to be reset by overwrite, got: %s", updated.EffectiveSegments["rules"])
+	}
+	if len(store.promptRecords) == 0 {
+		t.Fatal("expected prompt record to be persisted")
+	}
+	if strings.TrimSpace(store.promptRecords[len(store.promptRecords)-1].SegmentOverridesJSON) == "" {
+		t.Fatal("expected segment_overrides_json to be persisted")
 	}
 }
 

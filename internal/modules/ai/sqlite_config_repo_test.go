@@ -20,10 +20,11 @@ func TestSQLiteProviderConfigRepository_PromptTemplates(t *testing.T) {
 
 	repo := NewSQLiteProviderConfigRepository(db)
 	err = repo.SavePromptTemplate(context.Background(), PromptTemplateRecord{
-		PromptKey:          PromptKeyGenerateQuestions,
-		CustomPrompt:       "custom",
-		OutputFormatPrompt: "output",
-		UpdatedAt:          "2026-03-04T00:00:00Z",
+		PromptKey:            PromptKeyGenerateQuestions,
+		CustomPrompt:         "custom",
+		OutputFormatPrompt:   "output",
+		SegmentOverridesJSON: `{"rules":"strict-json-only","ai_memo":"remember-user-style"}`,
+		UpdatedAt:            "2026-03-04T00:00:00Z",
 	})
 	if err != nil {
 		t.Fatalf("save prompt template: %v", err)
@@ -44,5 +45,8 @@ func TestSQLiteProviderConfigRepository_PromptTemplates(t *testing.T) {
 	}
 	if items[0].OutputFormatPrompt != "output" {
 		t.Fatalf("unexpected output prompt: %s", items[0].OutputFormatPrompt)
+	}
+	if items[0].SegmentOverridesJSON == "" {
+		t.Fatal("expected segment_overrides_json to be loaded")
 	}
 }

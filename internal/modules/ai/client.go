@@ -187,20 +187,26 @@ type UpdateProviderConfigRequest struct {
 }
 
 type PromptTemplateConfig struct {
-	Key                         string `json:"key"`
-	Name                        string `json:"name"`
-	PresetPrompt                string `json:"preset_prompt"`
-	PresetOutputFormatPrompt    string `json:"preset_output_format_prompt"`
-	CustomPrompt                string `json:"custom_prompt"`
-	OutputFormatPrompt          string `json:"output_format_prompt"`
-	EffectivePrompt             string `json:"effective_prompt"`
-	EffectiveOutputFormatPrompt string `json:"effective_output_format_prompt"`
-	UpdatedAt                   string `json:"updated_at,omitempty"`
+	Key                         string            `json:"key"`
+	Name                        string            `json:"name"`
+	PresetPrompt                string            `json:"preset_prompt"`
+	PresetOutputFormatPrompt    string            `json:"preset_output_format_prompt"`
+	PresetSegments              map[string]string `json:"preset_segments,omitempty"`
+	CustomPrompt                string            `json:"custom_prompt"`
+	OutputFormatPrompt          string            `json:"output_format_prompt"`
+	SegmentOverrides            map[string]string `json:"segment_overrides,omitempty"`
+	EffectiveSegments           map[string]string `json:"effective_segments,omitempty"`
+	EffectivePrompt             string            `json:"effective_prompt"`
+	EffectiveOutputFormatPrompt string            `json:"effective_output_format_prompt"`
+	UpdatedAt                   string            `json:"updated_at,omitempty"`
 }
 
 type UpdatePromptTemplateRequest struct {
-	CustomPrompt       *string `json:"custom_prompt"`
-	OutputFormatPrompt *string `json:"output_format_prompt"`
+	CustomPrompt       *string           `json:"custom_prompt"`
+	OutputFormatPrompt *string           `json:"output_format_prompt"`
+	SegmentUpdates     map[string]string `json:"segment_updates,omitempty"`
+	SegmentDeletes     []string          `json:"segment_deletes,omitempty"`
+	ReplaceSegments    bool              `json:"replace_segments,omitempty"`
 }
 
 type ChatMessage struct {
