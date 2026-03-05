@@ -30,6 +30,8 @@ class AIAgentProvider with ChangeNotifier {
   final Map<String, String> _selectedSessionByAgent = {};
   final Map<String, List<AIAgentMessage>> _messagesBySession = {};
   final Map<String, List<AIAgentArtifact>> _artifactsBySession = {};
+  final Map<String, Map<String, dynamic>> _scheduleBindingBySession = {};
+  final Map<String, List<Map<String, dynamic>>> _matchedPlansBySession = {};
   final Map<String, dynamic> _createAgentDraft = <String, dynamic>{
     'protocol': 'openai_compatible',
     'primary_base_url': 'https://api.openai.com/v1',
@@ -53,6 +55,12 @@ class AIAgentProvider with ChangeNotifier {
 
   List<AIAgentArtifact> artifactsOf(String sessionId) =>
       _artifactsBySession[sessionId] ?? const <AIAgentArtifact>[];
+
+  Map<String, dynamic> scheduleBindingOf(String sessionId) =>
+      _scheduleBindingBySession[sessionId] ?? const <String, dynamic>{};
+
+  List<Map<String, dynamic>> matchedPlansOf(String sessionId) =>
+      _matchedPlansBySession[sessionId] ?? const <Map<String, dynamic>>[];
 
   Map<String, dynamic> get createAgentDraft =>
       Map<String, dynamic>.from(_createAgentDraft);
@@ -222,6 +230,10 @@ class AIAgentProvider with ChangeNotifier {
     }
     await _runLoading(() async {
       await _api.deleteAIAgentSession(sessionId.trim());
+      _messagesBySession.remove(sessionId.trim());
+      _artifactsBySession.remove(sessionId.trim());
+      _scheduleBindingBySession.remove(sessionId.trim());
+      _matchedPlansBySession.remove(sessionId.trim());
       await _loadSessions(_selectedAgentId);
     });
   }
@@ -237,7 +249,40 @@ class AIAgentProvider with ChangeNotifier {
 
   Future<void> loadSessionData(String sessionId) async {
     await _runLoading(() async {
-      await Future.wait([_loadMessages(sessionId), _loadArtifacts(sessionId)]);
+      await Future.wait([
+        _loadMessages(sessionId),
+        _loadArtifacts(sessionId),
+        _loadScheduleBinding(sessionId),
+      ]);
+    });
+  }
+
+  Future<void> updateSessionScheduleBinding({
+    required String sessionId,
+    required String mode,
+    String theme = '',
+    List<String> manualPlanIds = const [],
+    bool? autoEnabled,
+  }) async {
+    if (sessionId.trim().isEmpty) {
+      return;
+    }
+    await _runLoading(() async {
+      final payload = <String, dynamic>{
+        'mode': mode.trim(),
+        'theme': theme.trim(),
+        'manual_plan_ids': manualPlanIds
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .toList(growable: false),
+        if (autoEnabled != null) 'auto_enabled': autoEnabled,
+      };
+      final result = await _api.updateAISessionScheduleBinding(
+        sessionId.trim(),
+        payload,
+      );
+      _applyScheduleBindingPayload(sessionId.trim(), result);
+      notifyListeners();
     });
   }
 
@@ -522,6 +567,25 @@ class AIAgentProvider with ChangeNotifier {
     final items = await _api.getAISessionArtifacts(sessionId);
     _artifactsBySession[sessionId] = items;
     notifyListeners();
+  }
+
+  Future<void> _loadScheduleBinding(String sessionId) async {
+    final payload = await _api.getAISessionScheduleBinding(sessionId);
+    _applyScheduleBindingPayload(sessionId, payload);
+    notifyListeners();
+  }
+
+  void _applyScheduleBindingPayload(String sessionId, Map<String, dynamic> data) {
+    final binding =
+        (data['binding'] as Map?)?.cast<String, dynamic>() ??
+        <String, dynamic>{};
+    final matchedRaw = (data['matched_plans'] as List?) ?? const <dynamic>[];
+    final matched = matchedRaw
+        .whereType<Map>()
+        .map((e) => e.cast<String, dynamic>())
+        .toList(growable: false);
+    _scheduleBindingBySession[sessionId] = binding;
+    _matchedPlansBySession[sessionId] = matched;
   }
 
   Future<void> _runLoading(Future<void> Function() action) async {

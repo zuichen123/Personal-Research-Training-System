@@ -584,6 +584,16 @@ func (s *Service) Learn(ctx context.Context, req LearnRequest) (LearnResult, err
 	if req.EndDate == "" {
 		req.EndDate = now.AddDate(0, 3, 0).Format("2006-01-02")
 	}
+	if req.ScheduleBinding != nil {
+		scheduleInput := strings.TrimSpace(strings.Join([]string{
+			req.Subject,
+			req.Unit,
+			strings.Join(req.Themes, " "),
+			req.Supplement,
+		}, " "))
+		schedulePatch := s.buildLearningSchedulePromptPatch(ctx, req.ScheduleBinding, scheduleInput)
+		req.PromptPatch = mergePromptRuntimePatch(req.PromptPatch, schedulePatch)
+	}
 
 	return s.currentClient().BuildLearningPlan(ctx, req)
 }
@@ -602,6 +612,17 @@ func (s *Service) OptimizeLearningPlan(ctx context.Context, req OptimizeLearnReq
 	req.Supplement = strings.TrimSpace(req.Supplement)
 	if req.Action != "complete_early" && req.Days <= 0 {
 		return OptimizeLearnResult{}, errs.BadRequest("days must be > 0 for postpone/advance")
+	}
+	if req.ScheduleBinding != nil {
+		scheduleInput := strings.TrimSpace(strings.Join([]string{
+			req.Action,
+			req.Reason,
+			req.Supplement,
+			req.Plan.Subject,
+			req.Plan.Unit,
+		}, " "))
+		schedulePatch := s.buildLearningSchedulePromptPatch(ctx, req.ScheduleBinding, scheduleInput)
+		req.PromptPatch = mergePromptRuntimePatch(req.PromptPatch, schedulePatch)
 	}
 	return s.currentClient().OptimizeLearningPlan(ctx, req)
 }

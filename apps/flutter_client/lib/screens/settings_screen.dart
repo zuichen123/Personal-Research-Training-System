@@ -598,7 +598,8 @@ class _SettingsScreenState extends State<SettingsScreen>
                     OutlinedButton.icon(
                       onPressed: () {
                         setState(() {
-                          for (final controller in _segmentPromptControllers.values) {
+                          for (final controller
+                              in _segmentPromptControllers.values) {
                             controller.clear();
                           }
                           _outputPromptController.clear();
@@ -721,62 +722,53 @@ class _SettingsScreenState extends State<SettingsScreen>
   }) async {
     final isEdit = agent != null;
     final appProvider = context.read<AppProvider>();
-    if (appProvider.aiProviderStatus.isEmpty) {
-      await appProvider.fetchAIProviderStatus(force: true);
-    }
     if (!context.mounted) {
       return;
     }
-    final status = appProvider.aiProviderStatus;
+    var defaultAgentProvider = <String, dynamic>{};
+    try {
+      defaultAgentProvider = await appProvider.apiService
+          .getAIDefaultAgentProvider();
+    } catch (_) {
+      defaultAgentProvider = <String, dynamic>{};
+    }
     final draft = provider.createAgentDraft;
     final template = _preferredAgentTemplate(provider);
-
-    final statusProvider =
-        (status['configured_provider'] ??
-                status['provider'] ??
-                _selectedProvider)
-            .toString()
-            .trim()
-            .toLowerCase();
-    final statusProtocol = _providerToAgentProtocol(statusProvider);
-    final statusModel = (status['configured_model'] ?? status['model'] ?? '')
+    final defaultPrimary =
+        (defaultAgentProvider['primary'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final defaultProtocol = (defaultAgentProvider['protocol'] ?? '')
         .toString()
         .trim();
-    final statusBaseUrl = (status['openai_base_url'] ?? '').toString().trim();
-    final statusApiKey = appProvider.aiProviderApiKeyFor(statusProvider);
-
-    final currentConfigModel = _modelController.text.trim();
-    final currentConfigBaseUrl = _openAIBaseURLController.text.trim();
-    final currentConfigApiKey = _apiKeyController.text.trim();
+    final defaultModel = (defaultPrimary['model'] ?? '').toString().trim();
+    final defaultBaseUrl = (defaultPrimary['base_url'] ?? '').toString().trim();
+    final defaultApiKey = (defaultPrimary['api_key'] ?? '').toString().trim();
 
     final initialProtocol = isEdit
         ? agent.protocol
         : _firstNonEmpty([
-            statusProtocol,
+            defaultProtocol,
             (draft['protocol'] ?? '').toString(),
             template?.protocol ?? '',
           ], fallback: 'openai_compatible');
     final initialPrimaryModel = isEdit
         ? (agent.primary.model.isNotEmpty ? agent.primary.model : 'gpt-4o-mini')
         : _firstNonEmpty([
-            currentConfigModel,
-            statusModel,
+            defaultModel,
             (draft['primary_model'] ?? '').toString(),
             template?.primary.model ?? '',
           ], fallback: 'gpt-4o-mini');
     final initialPrimaryBaseUrl = isEdit
         ? agent.primary.baseUrl
         : _firstNonEmpty([
-            currentConfigBaseUrl,
-            statusProvider == 'openai' ? statusBaseUrl : '',
+            defaultBaseUrl,
             (draft['primary_base_url'] ?? '').toString(),
             template?.primary.baseUrl ?? '',
           ], fallback: 'https://api.openai.com/v1');
     final initialPrimaryApiKey = isEdit
         ? ''
         : _firstNonEmpty([
-            currentConfigApiKey,
-            statusApiKey,
+            defaultApiKey,
             (draft['primary_api_key'] ?? '').toString(),
             template?.primary.apiKey ?? '',
           ]);
@@ -929,14 +921,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                       );
                       return;
                     }
-                    if (!isEdit &&
-                        protocol != 'mock' &&
-                        primaryApiKey.isEmpty) {
-                      messenger.showSnackBar(
-                        const SnackBar(content: Text('主 API Key 不能为空')),
-                      );
-                      return;
-                    }
+
                     try {
                       if (isEdit) {
                         await provider.updateAgent(
@@ -1008,21 +993,6 @@ class _SettingsScreenState extends State<SettingsScreen>
       }
     }
     return provider.agents.first;
-  }
-
-  String _providerToAgentProtocol(String provider) {
-    switch (provider) {
-      case 'openai':
-        return 'openai_compatible';
-      case 'gemini':
-        return 'gemini_native';
-      case 'claude':
-        return 'claude_native';
-      case 'mock':
-        return 'mock';
-      default:
-        return '';
-    }
   }
 
   String _firstNonEmpty(List<String> values, {String fallback = ''}) {
@@ -1299,7 +1269,8 @@ class _SettingsScreenState extends State<SettingsScreen>
     _syncingPromptForm = true;
     final overrides = _asStringMap(config?['segment_overrides']);
     final customPrompt = (config?['custom_prompt'] ?? '').toString().trim();
-    if ((overrides['task_prompt'] ?? '').trim().isEmpty && customPrompt.isNotEmpty) {
+    if ((overrides['task_prompt'] ?? '').trim().isEmpty &&
+        customPrompt.isNotEmpty) {
       overrides['task_prompt'] = customPrompt;
     }
     for (final key in _editablePromptSegmentKeys) {

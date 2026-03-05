@@ -59,7 +59,9 @@ AppBarTheme _appBarTheme(ColorScheme cs) => AppBarTheme(
 
 NavigationBarThemeData _navBarTheme(ColorScheme cs) => NavigationBarThemeData(
   indicatorColor: cs.primaryContainer.withValues(alpha: 0.8),
-  indicatorShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+  indicatorShape: RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(20),
+  ),
   labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
   height: 72,
 );

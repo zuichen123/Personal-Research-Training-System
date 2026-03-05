@@ -576,6 +576,7 @@ class AppProvider with ChangeNotifier {
     int days = 0,
     String reason = '',
     String supplement = '',
+    Map<String, dynamic>? scheduleBinding,
   }) async {
     await _runAction('优化学习计划', () async {
       if (_aiLearningPlan == null) {
@@ -587,6 +588,7 @@ class AppProvider with ChangeNotifier {
         'reason': reason,
         'supplement': supplement,
         'plan': _aiLearningPlan,
+        if (scheduleBinding != null) 'schedule_binding': scheduleBinding,
       };
       final optimized = await _api.optimizeLearningPlan(payload);
       final updatedPlan = optimized['updated_plan'];

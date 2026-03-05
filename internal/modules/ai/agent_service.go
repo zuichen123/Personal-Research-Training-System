@@ -150,9 +150,6 @@ func (s *Service) applyCreateAgentProviderDefaults(req UpsertAgentRequest) Upser
 		if hasDefault {
 			req.Protocol = defaultProtocol
 			protocol = defaultProtocol
-		} else {
-			req.Protocol = AgentProtocolMock
-			return req
 		}
 	}
 	if protocol == AgentProtocolMock {
@@ -173,12 +170,6 @@ func (s *Service) applyCreateAgentProviderDefaults(req UpsertAgentRequest) Upser
 		}
 	}
 
-	primary = normalizeProviderConfig(req.Primary)
-	if primary.APIKey == "" || primary.Model == "" {
-		req.Protocol = AgentProtocolMock
-		req.Primary = AgentProviderConfig{}
-		req.Fallback = AgentProviderConfig{}
-	}
 	return req
 }
 
@@ -395,7 +386,7 @@ func (s *Service) CompressSessionMessages(
 	if !req.Force {
 		existingSummary = strings.TrimSpace(session.ContextSummaryText)
 	}
-	summaryText, fallbackUsed, reason, callMeta := s.buildSessionSummary(ctx, agent, existingSummary, pendingMessages)
+	summaryText, fallbackUsed, reason, callMeta := s.buildSessionSummary(ctx, session, agent, existingSummary, pendingMessages)
 
 	summaryUpdatedAt := nowRFC3339()
 	meta := cloneAnyMap(session.ContextSummaryMeta)
@@ -481,6 +472,7 @@ func (s *Service) SendSessionMessage(
 	if _, err := s.agentStore.CreateMessage(ctx, userMessage); err != nil {
 		return SessionMessageResponse{}, err
 	}
+	schedulePatch := s.buildSessionSchedulePromptPatch(ctx, session, content, true)
 
 	history, err := s.agentStore.ListMessages(ctx, sessionID, agentContextKeepRecent, "")
 	if err != nil {
@@ -493,6 +485,7 @@ func (s *Service) SendSessionMessage(
 		SystemPrompt: agent.SystemPrompt,
 		Messages:     messages,
 		Mode:         "detect_intent",
+		PromptPatch:  schedulePatch,
 	})
 	if err != nil {
 		return SessionMessageResponse{}, err
@@ -571,6 +564,7 @@ func (s *Service) SendSessionMessage(
 		SystemPrompt: agent.SystemPrompt,
 		Messages:     messages,
 		Mode:         "chat",
+		PromptPatch:  schedulePatch,
 	})
 	if err != nil {
 		return SessionMessageResponse{}, err
@@ -1663,11 +1657,12 @@ func shouldRunAutoCompression(
 
 func (s *Service) buildSessionSummary(
 	ctx context.Context,
+	session AgentSession,
 	agent Agent,
 	existingSummary string,
 	pendingMessages []AgentMessage,
 ) (string, bool, string, agentCallMeta) {
-	summary, meta, err := s.buildSessionSummaryWithModel(ctx, agent, existingSummary, pendingMessages)
+	summary, meta, err := s.buildSessionSummaryWithModel(ctx, session, agent, existingSummary, pendingMessages)
 	if err == nil {
 		return summary, false, "model", meta
 	}
@@ -1684,6 +1679,7 @@ func (s *Service) buildSessionSummary(
 
 func (s *Service) buildSessionSummaryWithModel(
 	ctx context.Context,
+	session AgentSession,
 	agent Agent,
 	existingSummary string,
 	pendingMessages []AgentMessage,
@@ -1715,7 +1711,8 @@ func (s *Service) buildSessionSummaryWithModel(
 		Messages: []ChatMessage{
 			{Role: "user", Content: input},
 		},
-		Mode: "compress_session",
+		Mode:        "compress_session",
+		PromptPatch: s.buildSessionSchedulePromptPatch(ctx, session, latestUserMessageContent(pendingMessages), false),
 	})
 	if err != nil {
 		return "", meta, err
@@ -1755,6 +1752,20 @@ func buildLocalSessionSummary(existingSummary string, pendingMessages []AgentMes
 		parts = append(parts, fmt.Sprintf("[%s] %s", role, truncateText(content, 180)))
 	}
 	return truncateText(strings.Join(parts, "\n"), 2000)
+}
+
+func latestUserMessageContent(items []AgentMessage) string {
+	for i := len(items) - 1; i >= 0; i-- {
+		if !strings.EqualFold(strings.TrimSpace(items[i].Role), "user") {
+			continue
+		}
+		text := strings.TrimSpace(items[i].Content)
+		if text == "" {
+			continue
+		}
+		return text
+	}
+	return ""
 }
 
 func cloneAnyMap(in map[string]any) map[string]any {

@@ -86,6 +86,7 @@ class AIAgentSession {
     required this.lastMessageAt,
     required this.summaryUpdatedAt,
     required this.summaryMessageCount,
+    required this.contextSummaryMeta,
     required this.createdAt,
     required this.updatedAt,
     required this.archivedAt,
@@ -97,6 +98,7 @@ class AIAgentSession {
   final DateTime? lastMessageAt;
   final DateTime? summaryUpdatedAt;
   final int summaryMessageCount;
+  final Map<String, dynamic> contextSummaryMeta;
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? archivedAt;
@@ -114,6 +116,9 @@ class AIAgentSession {
       ),
       summaryMessageCount:
           (json['summary_message_count'] as num?)?.toInt() ?? 0,
+      contextSummaryMeta:
+          (json['context_summary_meta'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{},
       createdAt:
           DateTime.tryParse(json['created_at']?.toString() ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),

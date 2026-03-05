@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -284,15 +285,15 @@ func TestExecutePlanDelete_WithAllFlagAndFilter(t *testing.T) {
 	}
 }
 
-func TestApplyCreateAgentDefaults_UsesDefaultNameAndMockProtocol(t *testing.T) {
+func TestApplyCreateAgentDefaults_UsesDefaultNameWithoutForcingMock(t *testing.T) {
 	req := buildUpsertAgentRequest(map[string]any{})
 	got := applyCreateAgentDefaults(req, map[string]any{}, createAgentProviderDefaults{})
 
 	if got.Name != "new-agent" {
 		t.Fatalf("expected default name new-agent, got %q", got.Name)
 	}
-	if got.Protocol != ai.AgentProtocolMock {
-		t.Fatalf("expected protocol=%s, got %s", ai.AgentProtocolMock, got.Protocol)
+	if strings.TrimSpace(string(got.Protocol)) != "" {
+		t.Fatalf("expected protocol to remain empty, got %s", got.Protocol)
 	}
 }
 
@@ -380,6 +381,19 @@ func TestResolveAgentID_DirectAlias(t *testing.T) {
 	}
 	if id != "agent-001" {
 		t.Fatalf("expected agent-001, got %s", id)
+	}
+}
+
+func TestResolveAgentID_DirectAliasCamelCase(t *testing.T) {
+	control := &aiAppControl{}
+	id, err := control.resolveAgentID(context.Background(), "delete", map[string]any{
+		"agentId": "agent-002",
+	})
+	if err != nil {
+		t.Fatalf("resolveAgentID() error = %v", err)
+	}
+	if id != "agent-002" {
+		t.Fatalf("expected agent-002, got %s", id)
 	}
 }
 

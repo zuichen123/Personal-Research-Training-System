@@ -130,6 +130,36 @@ func (h *Handler) sendSessionMessage(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, result)
 }
 
+func (h *Handler) getSessionScheduleBinding(w http.ResponseWriter, r *http.Request) {
+	item, err := h.service.GetSessionScheduleBinding(
+		r.Context(),
+		strings.TrimSpace(chi.URLParam(r, "id")),
+	)
+	if err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, item)
+}
+
+func (h *Handler) updateSessionScheduleBinding(w http.ResponseWriter, r *http.Request) {
+	var req UpdateSessionScheduleBindingRequest
+	if err := httpx.DecodeJSON(r, &req); err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	item, err := h.service.UpdateSessionScheduleBinding(
+		r.Context(),
+		strings.TrimSpace(chi.URLParam(r, "id")),
+		req,
+	)
+	if err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, item)
+}
+
 func (h *Handler) confirmSessionAction(w http.ResponseWriter, r *http.Request) {
 	var req ConfirmActionRequest
 	if err := httpx.DecodeJSON(r, &req); err != nil {

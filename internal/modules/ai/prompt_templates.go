@@ -289,6 +289,7 @@ If id is unknown for get/update/delete, include searchable fields such as title/
 For creating agents, always provide params.name. If user did not specify one, set params.name="new-agent".
 For creating agents without explicit provider credentials, do not invent fake api_key/model and do not force mock;
 the backend will try configured provider defaults. If provider availability must be confirmed, call module=provider operation=status.
+For id fields, aliases id/agent_id/agentId/session_id/sessionId/item_id/target_id may appear; preserve them in params.
 For prompt management (module=prompt, operation=update), support self-edit actions:
 - modify/overwrite sections via params.segment_updates (object)
 - delete sections via params.segment_deletes (array)
@@ -311,6 +312,9 @@ Return confidence in [0,1] and include key params when possible.`,
       "operation":"create|update|delete|delete_all|get|list|submit|start|end|reload|upsert|clear|purge",
       "all":true,
       "id":"string",
+      "agentId":"string",
+      "session_id":"string",
+      "sessionId":"string",
       "name":"string",
       "title":"string",
       "keyword":"string",
@@ -406,11 +410,48 @@ func promptTemplateNameForKey(key string) string {
 }
 
 func (r *PromptTemplateRuntime) Compose(key, userInput string) string {
+	return r.ComposeWithPatch(key, userInput, PromptRuntimePatch{})
+}
+
+func (r *PromptTemplateRuntime) ComposeWithPatch(key, userInput string, patch PromptRuntimePatch) string {
 	cfg, ok := r.Get(normalizePromptKey(key))
 	if !ok {
 		return strings.TrimSpace(userInput)
 	}
-	return composePromptDocument(cfg.EffectiveSegments, userInput, cfg.EffectiveOutputFormatPrompt)
+	segments := clonePromptSegmentMap(cfg.EffectiveSegments)
+	output := strings.TrimSpace(cfg.EffectiveOutputFormatPrompt)
+	normalizedPatch := normalizePromptRuntimePatch(patch)
+	if normalizedPatch.ReplaceSegments {
+		segments = map[string]string{}
+	}
+	for _, rawKey := range normalizedPatch.SegmentDeletes {
+		segmentKey := normalizePromptSegmentKey(rawKey)
+		if segmentKey == "" {
+			continue
+		}
+		if segmentKey == promptSegmentOutputFormat {
+			output = ""
+			continue
+		}
+		delete(segments, segmentKey)
+	}
+	for rawKey, rawValue := range normalizedPatch.SegmentUpdates {
+		segmentKey := normalizePromptSegmentKey(rawKey)
+		if segmentKey == "" || segmentKey == promptSegmentUserInput {
+			continue
+		}
+		value := strings.TrimSpace(rawValue)
+		if segmentKey == promptSegmentOutputFormat {
+			output = value
+			continue
+		}
+		if value == "" {
+			delete(segments, segmentKey)
+			continue
+		}
+		segments[segmentKey] = value
+	}
+	return composePromptDocument(segments, userInput, output)
 }
 
 func composePromptDocument(segments map[string]string, userInput, outputFormat string) string {
@@ -477,6 +518,29 @@ func clonePromptSegmentMap(in map[string]string) map[string]string {
 	out := make(map[string]string, len(in))
 	for k, v := range in {
 		out[k] = strings.TrimSpace(v)
+	}
+	return out
+}
+
+func normalizePromptRuntimePatch(in PromptRuntimePatch) PromptRuntimePatch {
+	out := PromptRuntimePatch{
+		SegmentUpdates:  map[string]string{},
+		SegmentDeletes:  []string{},
+		ReplaceSegments: in.ReplaceSegments,
+	}
+	for rawKey, rawValue := range in.SegmentUpdates {
+		key := normalizePromptSegmentKey(rawKey)
+		if key == "" {
+			continue
+		}
+		out.SegmentUpdates[key] = strings.TrimSpace(rawValue)
+	}
+	for _, rawKey := range in.SegmentDeletes {
+		key := normalizePromptSegmentKey(rawKey)
+		if key == "" {
+			continue
+		}
+		out.SegmentDeletes = append(out.SegmentDeletes, key)
 	}
 	return out
 }

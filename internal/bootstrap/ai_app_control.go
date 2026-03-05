@@ -707,6 +707,7 @@ func (c *aiAppControl) resolveAgentID(ctx context.Context, operation string, par
 	directID := firstNonEmpty(
 		asString(params["id"]),
 		asString(params["agent_id"]),
+		asString(params["agentId"]),
 		asString(params["item_id"]),
 		asString(params["target_id"]),
 	)
@@ -867,9 +868,6 @@ func applyCreateAgentDefaults(
 		if defaults.Ready {
 			req.Protocol = defaults.Protocol
 			protocol = strings.ToLower(strings.TrimSpace(string(req.Protocol)))
-		} else {
-			req.Protocol = ai.AgentProtocolMock
-			return req
 		}
 	}
 	if protocol == string(ai.AgentProtocolMock) {
@@ -888,18 +886,13 @@ func applyCreateAgentDefaults(
 			req.Primary.Model = firstNonEmpty(req.Primary.Model, defaults.Primary.Model)
 		}
 	}
-	if strings.TrimSpace(req.Primary.APIKey) == "" || strings.TrimSpace(req.Primary.Model) == "" {
-		req.Protocol = ai.AgentProtocolMock
-		req.Primary = ai.AgentProviderConfig{}
-		req.Fallback = ai.AgentProviderConfig{}
-	}
 	return req
 }
 
 func (c *aiAppControl) executeSession(ctx context.Context, operation string, params map[string]any) (ai.AppControlResult, error) {
 	switch operation {
 	case "list":
-		agentID := asString(params["agent_id"])
+		agentID := firstNonEmpty(asString(params["agent_id"]), asString(params["agentId"]))
 		limit := asInt(params["limit"], 20)
 		cursor := asString(params["cursor"])
 		items, err := c.aiService.ListAgentSessions(ctx, agentID, limit, cursor)
@@ -908,7 +901,7 @@ func (c *aiAppControl) executeSession(ctx context.Context, operation string, par
 		}
 		return ai.AppControlResult{Summary: fmt.Sprintf("已获取 %d 个会话。", len(items)), Data: map[string]any{"items": items}}, nil
 	case "create":
-		agentID := asString(params["agent_id"])
+		agentID := firstNonEmpty(asString(params["agent_id"]), asString(params["agentId"]))
 		req := ai.CreateSessionRequest{Title: asString(params["title"])}
 		item, err := c.aiService.CreateAgentSession(ctx, agentID, req)
 		if err != nil {
@@ -916,13 +909,13 @@ func (c *aiAppControl) executeSession(ctx context.Context, operation string, par
 		}
 		return ai.AppControlResult{Summary: fmt.Sprintf("已创建会话 %s。", item.ID), Data: map[string]any{"item": item}}, nil
 	case "delete":
-		id := asString(params["id"])
+		id := firstNonEmpty(asString(params["id"]), asString(params["session_id"]), asString(params["sessionId"]))
 		if err := c.aiService.DeleteAgentSession(ctx, id); err != nil {
 			return ai.AppControlResult{}, err
 		}
 		return ai.AppControlResult{Summary: fmt.Sprintf("已删除会话 %s。", id)}, nil
 	case "compress":
-		id := asString(params["id"])
+		id := firstNonEmpty(asString(params["id"]), asString(params["session_id"]), asString(params["sessionId"]))
 		req := ai.CompressSessionRequest{
 			Force:   asBool(params["force"], false),
 			Trigger: firstNonEmpty(asString(params["trigger"]), "manual"),
@@ -932,6 +925,41 @@ func (c *aiAppControl) executeSession(ctx context.Context, operation string, par
 			return ai.AppControlResult{}, err
 		}
 		return ai.AppControlResult{Summary: fmt.Sprintf("会话压缩状态：%s。", result.Status), Data: map[string]any{"result": result}}, nil
+	case "get_schedule_binding", "schedule_binding_get":
+		id := firstNonEmpty(asString(params["id"]), asString(params["session_id"]), asString(params["sessionId"]))
+		result, err := c.aiService.GetSessionScheduleBinding(ctx, id)
+		if err != nil {
+			return ai.AppControlResult{}, err
+		}
+		return ai.AppControlResult{
+			Summary: "已获取会话日程绑定。",
+			Data: map[string]any{
+				"binding":       result.Binding,
+				"matched_plans": result.MatchedPlans,
+			},
+		}, nil
+	case "update_schedule_binding", "schedule_binding_update":
+		id := firstNonEmpty(asString(params["id"]), asString(params["session_id"]), asString(params["sessionId"]))
+		req := ai.UpdateSessionScheduleBindingRequest{
+			Mode:          asString(params["mode"]),
+			Theme:         asString(params["theme"]),
+			ManualPlanIDs: asStringSlice(params["manual_plan_ids"]),
+		}
+		if hasValue(params, "auto_enabled") {
+			v := asBool(params["auto_enabled"], false)
+			req.AutoEnabled = &v
+		}
+		result, err := c.aiService.UpdateSessionScheduleBinding(ctx, id, req)
+		if err != nil {
+			return ai.AppControlResult{}, err
+		}
+		return ai.AppControlResult{
+			Summary: "已更新会话日程绑定。",
+			Data: map[string]any{
+				"binding":       result.Binding,
+				"matched_plans": result.MatchedPlans,
+			},
+		}, nil
 	default:
 		return ai.AppControlResult{}, errs.BadRequest("unsupported session operation")
 	}
@@ -1022,7 +1050,7 @@ func buildUpsertAgentRequest(params map[string]any) ai.UpsertAgentRequest {
 
 	return ai.UpsertAgentRequest{
 		Name:     asString(params["name"]),
-		Protocol: ai.AgentProtocol(firstNonEmpty(asString(params["protocol"]), "openai_compatible")),
+		Protocol: ai.AgentProtocol(firstNonEmpty(asString(params["protocol"]), "")),
 		Primary: ai.AgentProviderConfig{
 			BaseURL: firstNonEmpty(asString(primary["base_url"]), asString(params["primary_base_url"])),
 			APIKey:  firstNonEmpty(asString(primary["api_key"]), asString(params["primary_api_key"])),

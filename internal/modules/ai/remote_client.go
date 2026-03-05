@@ -60,11 +60,11 @@ func (c *remoteLLMClient) SetPromptTemplateRuntime(runtime *PromptTemplateRuntim
 	c.promptRuntime = runtime
 }
 
-func (c *remoteLLMClient) buildOperationPrompt(operation, userInput string) string {
+func (c *remoteLLMClient) buildOperationPrompt(operation, userInput string, patch PromptRuntimePatch) string {
 	if c.promptRuntime == nil {
 		return strings.TrimSpace(userInput)
 	}
-	return c.promptRuntime.Compose(operation, userInput)
+	return c.promptRuntime.ComposeWithPatch(operation, userInput, patch)
 }
 
 func (c *remoteLLMClient) GenerateQuestions(ctx context.Context, req GenerateRequest) ([]question.CreateInput, error) {
@@ -96,7 +96,7 @@ difficulty=%d`,
 		req.Scope,
 		req.Difficulty,
 	)
-	prompt := c.buildOperationPrompt(PromptKeyGenerateQuestions, userInput)
+	prompt := c.buildOperationPrompt(PromptKeyGenerateQuestions, userInput, PromptRuntimePatch{})
 
 	var payload struct {
 		Items []question.CreateInput `json:"items"`
@@ -141,7 +141,7 @@ attachment_files=%d`,
 		req.UserAnswer,
 		len(req.Attachments),
 	)
-	prompt := c.buildOperationPrompt(PromptKeyGradeAnswer, userInput)
+	prompt := c.buildOperationPrompt(PromptKeyGradeAnswer, userInput, PromptRuntimePatch{})
 	var out GradeResult
 	if err := c.invokeJSON(ctx, "grade_answer", prompt, req.Attachments, &out); err != nil {
 		return GradeResult{}, err
@@ -178,7 +178,7 @@ profile_summary=%s`,
 		req.FinalGoal, req.TotalHours, req.StartDate, req.EndDate, req.CurrentStatus,
 		req.Themes, req.Supplement, req.ProfileSummary,
 	)
-	prompt := c.buildOperationPrompt(PromptKeyBuildLearningPlan, userInput)
+	prompt := c.buildOperationPrompt(PromptKeyBuildLearningPlan, userInput, req.PromptPatch)
 	var out LearnResult
 	if err := c.invokeJSON(ctx, "build_learning_plan", prompt, nil, &out); err != nil {
 		return LearnResult{}, err
@@ -203,7 +203,7 @@ plan=%s`,
 		req.Supplement,
 		string(planJSON),
 	)
-	prompt := c.buildOperationPrompt(PromptKeyOptimizeLearning, userInput)
+	prompt := c.buildOperationPrompt(PromptKeyOptimizeLearning, userInput, req.PromptPatch)
 	var out OptimizeLearnResult
 	if err := c.invokeJSON(ctx, "optimize_learning_plan", prompt, nil, &out); err != nil {
 		return OptimizeLearnResult{}, err
@@ -227,7 +227,7 @@ context=%s`,
 		req.UserAnswer,
 		req.Context,
 	)
-	prompt := c.buildOperationPrompt(PromptKeyEvaluateLearning, userInput)
+	prompt := c.buildOperationPrompt(PromptKeyEvaluateLearning, userInput, PromptRuntimePatch{})
 	var out EvaluateResult
 	if err := c.invokeJSON(ctx, "evaluate_learning", prompt, nil, &out); err != nil {
 		return EvaluateResult{}, err
@@ -253,7 +253,7 @@ stability=%.1f
 speed=%.1f`,
 		req.Topic, req.Accuracy, req.Stability, req.Speed,
 	)
-	prompt := c.buildOperationPrompt(PromptKeyScoreLearning, userInput)
+	prompt := c.buildOperationPrompt(PromptKeyScoreLearning, userInput, PromptRuntimePatch{})
 	var out ScoreResult
 	if err := c.invokeJSON(ctx, "score_learning", prompt, nil, &out); err != nil {
 		return ScoreResult{}, err
@@ -302,7 +302,7 @@ func (c *remoteLLMClient) Chat(ctx context.Context, req ChatRequest) (ChatRespon
 		key = PromptKeyCompressSession
 		operation = "compress_session"
 	}
-	prompt := c.buildOperationPrompt(key, userInput)
+	prompt := c.buildOperationPrompt(key, userInput, req.PromptPatch)
 	var out ChatResponse
 	if err := c.invokeJSON(ctx, operation, prompt, nil, &out); err != nil {
 		return ChatResponse{}, err

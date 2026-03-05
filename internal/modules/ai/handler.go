@@ -25,6 +25,7 @@ func NewHandler(service *Service) *Handler {
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Route("/ai", func(r chi.Router) {
 		r.Get("/provider", h.providerStatus)
+		r.Get("/provider/default-agent", h.defaultAgentProvider)
 		r.Put("/provider/config", h.updateProviderConfig)
 		r.Get("/prompts", h.listPromptTemplates)
 		r.Put("/prompts/{key}", h.updatePromptTemplate)
@@ -37,6 +38,8 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 		r.Post("/agents/{id}/sessions", h.createAgentSession)
 		r.Get("/sessions/{id}/messages", h.listSessionMessages)
 		r.Post("/sessions/{id}/messages", h.sendSessionMessage)
+		r.Get("/sessions/{id}/schedule-binding", h.getSessionScheduleBinding)
+		r.Put("/sessions/{id}/schedule-binding", h.updateSessionScheduleBinding)
 		r.Post("/sessions/{id}/confirm", h.confirmSessionAction)
 		r.Post("/sessions/{id}/compress", h.compressSessionMessages)
 		r.Get("/sessions/{id}/artifacts", h.listSessionArtifacts)
@@ -258,6 +261,10 @@ func (h *Handler) score(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) providerStatus(w http.ResponseWriter, _ *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, h.service.ProviderStatus())
+}
+
+func (h *Handler) defaultAgentProvider(w http.ResponseWriter, _ *http.Request) {
+	httpx.WriteJSON(w, http.StatusOK, h.service.DefaultAgentProvider())
 }
 
 func (h *Handler) updateProviderConfig(w http.ResponseWriter, r *http.Request) {

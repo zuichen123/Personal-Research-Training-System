@@ -36,6 +36,10 @@ class _AIScreenState extends State<AIScreen> {
   final _learnStatusController = TextEditingController(text: 'pending');
   final _learnThemesController = TextEditingController(text: '数学,英语');
   final _learnSupplementController = TextEditingController();
+  final _learnScheduleThemeController = TextEditingController();
+  final _learnScheduleManualPlanIdsController = TextEditingController();
+  String _learnScheduleMode = 'auto';
+  bool _learnScheduleAutoEnabled = true;
 
   final _optimizeDaysController = TextEditingController(text: '3');
   final _optimizeReasonController = TextEditingController();
@@ -110,6 +114,8 @@ class _AIScreenState extends State<AIScreen> {
     _learnStatusController.dispose();
     _learnThemesController.dispose();
     _learnSupplementController.dispose();
+    _learnScheduleThemeController.dispose();
+    _learnScheduleManualPlanIdsController.dispose();
     _optimizeDaysController.dispose();
     _optimizeReasonController.dispose();
     _genTopicController.dispose();
@@ -204,6 +210,35 @@ class _AIScreenState extends State<AIScreen> {
           _input(_learnModeController, '模式（long_term_learning/unit_review）'),
           _input(_learnGoalsController, '阶段目标（逗号分隔）'),
           _input(_learnSupplementController, '补充信息（可选）'),
+          DropdownButtonFormField<String>(
+            value: _learnScheduleMode,
+            decoration: const InputDecoration(
+              labelText: '日程绑定模式',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+            items: const [
+              DropdownMenuItem(value: 'auto', child: Text('自动')),
+              DropdownMenuItem(value: 'manual', child: Text('手动')),
+            ],
+            onChanged: (value) {
+              if (value == null) {
+                return;
+              }
+              setState(() => _learnScheduleMode = value);
+            },
+          ),
+          const SizedBox(height: 8),
+          _input(_learnScheduleThemeController, '日程绑定主题（可选）'),
+          _input(_learnScheduleManualPlanIdsController, '手动计划ID（逗号分隔，可选）'),
+          SwitchListTile(
+            value: _learnScheduleAutoEnabled,
+            title: const Text('学习计划请求启用自动匹配'),
+            contentPadding: EdgeInsets.zero,
+            onChanged: (value) {
+              setState(() => _learnScheduleAutoEnabled = value);
+            },
+          ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -218,6 +253,8 @@ class _AIScreenState extends State<AIScreen> {
                               _learningGenerating = loading,
                           action: () {
                             return _runProviderAction(() {
+                              final scheduleBinding =
+                                  _buildLearningScheduleBinding();
                               return provider.buildLearningPlan({
                                 'final_goal': _learnFinalGoalController.text
                                     .trim(),
@@ -246,6 +283,8 @@ class _AIScreenState extends State<AIScreen> {
                                     .toList(),
                                 'supplement': _learnSupplementController.text
                                     .trim(),
+                                if (scheduleBinding != null)
+                                  'schedule_binding': scheduleBinding,
                               });
                             });
                           },
@@ -274,6 +313,8 @@ class _AIScreenState extends State<AIScreen> {
                                 reason: _optimizeReasonController.text.trim(),
                                 supplement: _learnSupplementController.text
                                     .trim(),
+                                scheduleBinding:
+                                    _buildLearningScheduleBinding(),
                               );
                             });
                           },
@@ -1380,6 +1421,29 @@ class _AIScreenState extends State<AIScreen> {
     final m = d.month.toString().padLeft(2, '0');
     final day = d.day.toString().padLeft(2, '0');
     return '$y-$m-$day';
+  }
+
+  Map<String, dynamic>? _buildLearningScheduleBinding() {
+    final theme = _learnScheduleThemeController.text.trim();
+    final manualPlanIds = _learnScheduleManualPlanIdsController.text
+        .split(',')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList(growable: false);
+    final isDefault =
+        _learnScheduleMode == 'auto' &&
+        theme.isEmpty &&
+        manualPlanIds.isEmpty &&
+        _learnScheduleAutoEnabled;
+    if (isDefault) {
+      return null;
+    }
+    return <String, dynamic>{
+      'mode': _learnScheduleMode,
+      'theme': theme,
+      'manual_plan_ids': manualPlanIds,
+      'auto_enabled': _learnScheduleAutoEnabled,
+    };
   }
 
   List<String> _asStringList(dynamic raw) {

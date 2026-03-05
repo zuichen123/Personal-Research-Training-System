@@ -166,21 +166,6 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
     return provider.agents.first;
   }
 
-  String _providerToProtocol(String provider) {
-    switch (provider) {
-      case 'openai':
-        return 'openai_compatible';
-      case 'gemini':
-        return 'gemini_native';
-      case 'claude':
-        return 'claude_native';
-      case 'mock':
-        return 'mock';
-      default:
-        return '';
-    }
-  }
-
   String _firstNonEmpty(List<String> values, {String fallback = ''}) {
     for (final item in values) {
       final text = item.trim();
@@ -216,45 +201,45 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
   Future<void> _showCreateAgentDialog(BuildContext context) async {
     final agentProvider = context.read<AIAgentProvider>();
     final appProvider = context.read<AppProvider>();
-    if (appProvider.aiProviderStatus.isEmpty) {
-      await appProvider.fetchAIProviderStatus(force: true);
-    }
     if (!context.mounted) {
       return;
     }
-    final status = appProvider.aiProviderStatus;
+    var defaultAgentProvider = <String, dynamic>{};
+    try {
+      defaultAgentProvider = await appProvider.apiService
+          .getAIDefaultAgentProvider();
+    } catch (_) {
+      defaultAgentProvider = <String, dynamic>{};
+    }
     final draft = agentProvider.createAgentDraft;
     final template = _preferredAgentTemplate(agentProvider);
-
-    final statusProvider =
-        (status['configured_provider'] ?? status['provider'] ?? '')
-            .toString()
-            .trim()
-            .toLowerCase();
-    final statusProtocol = _providerToProtocol(statusProvider);
-    final statusModel = (status['configured_model'] ?? status['model'] ?? '')
+    final defaultPrimary =
+        (defaultAgentProvider['primary'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final defaultProtocol = (defaultAgentProvider['protocol'] ?? '')
         .toString()
         .trim();
-    final statusBaseUrl = (status['openai_base_url'] ?? '').toString().trim();
-    final statusApiKey = appProvider.aiProviderApiKeyFor(statusProvider);
+    final defaultModel = (defaultPrimary['model'] ?? '').toString().trim();
+    final defaultBaseUrl = (defaultPrimary['base_url'] ?? '').toString().trim();
+    final defaultApiKey = (defaultPrimary['api_key'] ?? '').toString().trim();
 
     final initialProtocol = _firstNonEmpty([
-      statusProtocol,
+      defaultProtocol,
       (draft['protocol'] ?? '').toString(),
       template?.protocol ?? '',
     ], fallback: 'openai_compatible');
     final initialPrimaryModel = _firstNonEmpty([
-      statusModel,
+      defaultModel,
       (draft['primary_model'] ?? '').toString(),
       template?.primary.model ?? '',
     ], fallback: 'gpt-4o-mini');
     final initialPrimaryBaseUrl = _firstNonEmpty([
-      statusProvider == 'openai' ? statusBaseUrl : '',
+      defaultBaseUrl,
       (draft['primary_base_url'] ?? '').toString(),
       template?.primary.baseUrl ?? '',
     ], fallback: 'https://api.openai.com/v1');
     final initialPrimaryApiKey = _firstNonEmpty([
-      statusApiKey,
+      defaultApiKey,
       (draft['primary_api_key'] ?? '').toString(),
       template?.primary.apiKey ?? '',
     ]);
@@ -523,18 +508,43 @@ class _AgentTabPanel extends StatefulWidget {
 
 class _AgentTabPanelState extends State<_AgentTabPanel> {
   final TextEditingController _inputController = TextEditingController();
+  final TextEditingController _scheduleThemeController =
+      TextEditingController();
+  String _scheduleMode = 'auto';
+  bool _scheduleAutoEnabled = true;
+  Set<String> _scheduleManualPlanIds = <String>{};
+  String _scheduleSessionId = '';
+  bool _scheduleSaving = false;
 
   @override
   void dispose() {
     _inputController.dispose();
+    _scheduleThemeController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AIAgentProvider>();
+    final appProvider = context.watch<AppProvider>();
     final sessions = provider.sessionsOf(widget.agent.id);
     final selectedSessionId = provider.selectedSessionIdOf(widget.agent.id);
+    final selectedBinding = selectedSessionId.trim().isEmpty
+        ? const <String, dynamic>{}
+        : provider.scheduleBindingOf(selectedSessionId);
+    _syncScheduleBindingState(selectedSessionId, selectedBinding);
+
+    if (selectedSessionId.trim().isNotEmpty &&
+        !appProvider.isSectionLoaded(DataSection.plans) &&
+        !appProvider.isSectionLoading(DataSection.plans)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        context.read<AppProvider>().ensurePlansLoaded();
+      });
+    }
+
     final messages = provider.messagesOf(selectedSessionId);
     final artifacts = provider.artifactsOf(selectedSessionId);
     final artifactsByMessage = <String, AIAgentArtifact>{};
@@ -546,6 +556,7 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
     final sessionList = _buildSessionPanel(
       context,
       provider,
+      appProvider,
       sessions,
       selectedSessionId,
     );
@@ -579,6 +590,7 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
   Widget _buildSessionPanel(
     BuildContext context,
     AIAgentProvider provider,
+    AppProvider appProvider,
     List<AIAgentSession> sessions,
     String selectedSessionId,
   ) {
@@ -633,6 +645,13 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
               label: const Text('压缩当前会话'),
             ),
             if (selectedSession != null) ...[
+              const SizedBox(height: 10),
+              _buildScheduleBindingPanel(
+                context,
+                provider,
+                appProvider,
+                selectedSession,
+              ),
               const SizedBox(height: 6),
               Wrap(
                 spacing: 6,
@@ -693,6 +712,245 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
         ),
       ),
     );
+  }
+
+  Widget _buildScheduleBindingPanel(
+    BuildContext context,
+    AIAgentProvider provider,
+    AppProvider appProvider,
+    AIAgentSession session,
+  ) {
+    final plans = appProvider.plans;
+    final matchedPlans = provider.matchedPlansOf(session.id);
+    final isManual = _scheduleMode == 'manual';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '当前日程绑定',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            value: _scheduleMode,
+            decoration: const InputDecoration(
+              labelText: '模式',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+            items: const [
+              DropdownMenuItem(value: 'auto', child: Text('自动')),
+              DropdownMenuItem(value: 'manual', child: Text('手动')),
+            ],
+            onChanged: (value) {
+              if (value == null) {
+                return;
+              }
+              setState(() => _scheduleMode = value);
+            },
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _scheduleThemeController,
+            decoration: const InputDecoration(
+              labelText: '主题（可选）',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+          const SizedBox(height: 4),
+          SwitchListTile(
+            value: _scheduleAutoEnabled,
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: const Text('启用自动主题匹配'),
+            onChanged: (value) {
+              setState(() => _scheduleAutoEnabled = value);
+            },
+          ),
+          if (isManual) ...[
+            const SizedBox(height: 4),
+            if (plans.isEmpty)
+              const Text(
+                '暂无可选计划，请先在计划管理中创建计划。',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              )
+            else
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: plans
+                    .map((item) {
+                      final selected = _scheduleManualPlanIds.contains(item.id);
+                      final title = item.title.trim().isEmpty
+                          ? item.id
+                          : item.title.trim();
+                      return FilterChip(
+                        selected: selected,
+                        label: Text(title, overflow: TextOverflow.ellipsis),
+                        onSelected: (value) {
+                          setState(() {
+                            if (value) {
+                              _scheduleManualPlanIds.add(item.id);
+                            } else {
+                              _scheduleManualPlanIds.remove(item.id);
+                            }
+                          });
+                        },
+                      );
+                    })
+                    .toList(growable: false),
+              ),
+          ],
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              FilledButton.icon(
+                onPressed: _scheduleSaving
+                    ? null
+                    : () => _saveScheduleBinding(context, provider, session.id),
+                icon: _scheduleSaving
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.save_outlined),
+                label: const Text('保存绑定'),
+              ),
+              const SizedBox(width: 8),
+              if (!appProvider.isSectionLoaded(DataSection.plans))
+                OutlinedButton.icon(
+                  onPressed: appProvider.isSectionLoading(DataSection.plans)
+                      ? null
+                      : () =>
+                            context.read<AppProvider>().fetchPlans(force: true),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('加载计划'),
+                ),
+            ],
+          ),
+          if (matchedPlans.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              '匹配计划 (${matchedPlans.length})',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 4),
+            ...matchedPlans.take(5).map((item) {
+              final title = (item['title'] ?? '').toString().trim();
+              final date = (item['target_date'] ?? '').toString().trim();
+              final status = (item['status'] ?? '').toString().trim();
+              final note = <String>[
+                if (date.isNotEmpty) date,
+                if (status.isNotEmpty) status,
+              ].join(' | ');
+              return Text(
+                '- ${title.isEmpty ? (item['id'] ?? '').toString() : title}'
+                '${note.isEmpty ? '' : ' ($note)'}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 11, color: Colors.grey),
+              );
+            }),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _saveScheduleBinding(
+    BuildContext context,
+    AIAgentProvider provider,
+    String sessionId,
+  ) async {
+    if (sessionId.trim().isEmpty) {
+      return;
+    }
+    setState(() => _scheduleSaving = true);
+    try {
+      await provider.updateSessionScheduleBinding(
+        sessionId: sessionId,
+        mode: _scheduleMode,
+        theme: _scheduleThemeController.text.trim(),
+        manualPlanIds: _scheduleManualPlanIds.toList(growable: false),
+        autoEnabled: _scheduleAutoEnabled,
+      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('会话日程绑定已保存')));
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      final msg = provider.errorMessage ?? '保存会话日程绑定失败';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    } finally {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _scheduleSaving = false);
+    }
+  }
+
+  void _syncScheduleBindingState(
+    String selectedSessionId,
+    Map<String, dynamic> binding,
+  ) {
+    final normalizedSessionId = selectedSessionId.trim();
+    if (normalizedSessionId.isEmpty) {
+      _scheduleSessionId = '';
+      _scheduleMode = 'auto';
+      _scheduleAutoEnabled = true;
+      _scheduleManualPlanIds = <String>{};
+      if (_scheduleThemeController.text.isNotEmpty) {
+        _scheduleThemeController.text = '';
+      }
+      return;
+    }
+    if (_scheduleSessionId == normalizedSessionId) {
+      return;
+    }
+    _scheduleSessionId = normalizedSessionId;
+    final mode = (binding['mode'] ?? '').toString().trim().toLowerCase();
+    _scheduleMode = mode == 'manual' ? 'manual' : 'auto';
+    _scheduleAutoEnabled = _asLocalBool(binding['auto_enabled'], true);
+    _scheduleThemeController.text = (binding['theme'] ?? '').toString().trim();
+    final rawManual =
+        (binding['manual_plan_ids'] as List?) ?? const <dynamic>[];
+    _scheduleManualPlanIds = rawManual
+        .map((e) => e.toString().trim())
+        .where((e) => e.isNotEmpty)
+        .toSet();
+  }
+
+  bool _asLocalBool(dynamic value, bool fallback) {
+    if (value is bool) {
+      return value;
+    }
+    if (value is num) {
+      return value != 0;
+    }
+    if (value is String) {
+      final normalized = value.trim().toLowerCase();
+      if (normalized == 'true' || normalized == '1') {
+        return true;
+      }
+      if (normalized == 'false' || normalized == '0') {
+        return false;
+      }
+    }
+    return fallback;
   }
 
   Widget _buildChatPanel(

@@ -54,6 +54,8 @@ type LearnRequest struct {
 	UserID         string               `json:"user_id"`
 	Profile        LearnProfileSnapshot `json:"profile"`
 	ProfileSummary string               `json:"profile_summary"`
+	ScheduleBinding *ScheduleBinding     `json:"schedule_binding,omitempty"`
+	PromptPatch     PromptRuntimePatch   `json:"prompt_patch,omitempty"`
 }
 
 type LearnResult struct {
@@ -110,11 +112,13 @@ type LearnPlanItemNote struct {
 }
 
 type OptimizeLearnRequest struct {
-	Plan       LearnResult `json:"plan"`
-	Action     string      `json:"action"`
-	Days       int         `json:"days"`
-	Reason     string      `json:"reason"`
-	Supplement string      `json:"supplement"`
+	Plan            LearnResult         `json:"plan"`
+	Action          string              `json:"action"`
+	Days            int                 `json:"days"`
+	Reason          string              `json:"reason"`
+	Supplement      string              `json:"supplement"`
+	ScheduleBinding *ScheduleBinding    `json:"schedule_binding,omitempty"`
+	PromptPatch     PromptRuntimePatch  `json:"prompt_patch,omitempty"`
 }
 
 type OptimizeLearnResult struct {
@@ -243,11 +247,35 @@ type ChatRequest struct {
 	SystemPrompt string        `json:"system_prompt,omitempty"`
 	Messages     []ChatMessage `json:"messages"`
 	Mode         string        `json:"mode,omitempty"`
+	PromptPatch  PromptRuntimePatch `json:"prompt_patch,omitempty"`
 }
 
 type ChatResponse struct {
 	Content string       `json:"content"`
 	Intent  IntentResult `json:"intent"`
+}
+
+type PromptRuntimePatch struct {
+	SegmentUpdates  map[string]string `json:"segment_updates,omitempty"`
+	SegmentDeletes  []string          `json:"segment_deletes,omitempty"`
+	ReplaceSegments bool              `json:"replace_segments,omitempty"`
+}
+
+type ScheduleBinding struct {
+	Mode               string   `json:"mode"`
+	Theme              string   `json:"theme,omitempty"`
+	ManualPlanIDs      []string `json:"manual_plan_ids,omitempty"`
+	AutoEnabled        bool     `json:"auto_enabled"`
+	UpdatedAt          string   `json:"updated_at,omitempty"`
+	LastAutoTheme      string   `json:"last_auto_theme,omitempty"`
+	LastMatchedPlanIDs []string `json:"last_matched_plan_ids,omitempty"`
+}
+
+type DefaultAgentProvider struct {
+	Available bool                `json:"available"`
+	Provider  string              `json:"provider"`
+	Protocol  AgentProtocol       `json:"protocol,omitempty"`
+	Primary   AgentProviderConfig `json:"primary,omitempty"`
 }
 
 type Client interface {

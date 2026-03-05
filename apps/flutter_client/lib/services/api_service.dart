@@ -425,6 +425,14 @@ class ApiService {
     return _extractDataMap(response);
   }
 
+  Future<Map<String, dynamic>> getAIDefaultAgentProvider() async {
+    final response = await _request(
+      method: 'GET',
+      path: '/ai/provider/default-agent',
+    );
+    return _extractDataMap(response);
+  }
+
   Future<Map<String, dynamic>> updateAIProviderConfig({
     required String provider,
     String? apiKey,
@@ -556,6 +564,30 @@ class ApiService {
 
   Future<void> deleteAIAgentSession(String sessionId) async {
     await _request(method: 'DELETE', path: '/ai/sessions/$sessionId');
+  }
+
+  Future<Map<String, dynamic>> getAISessionScheduleBinding(
+    String sessionId,
+  ) async {
+    final response = await _request(
+      method: 'GET',
+      path: '/ai/sessions/$sessionId/schedule-binding',
+      timeout: _aiRequestTimeout,
+    );
+    return _extractDataMap(response);
+  }
+
+  Future<Map<String, dynamic>> updateAISessionScheduleBinding(
+    String sessionId,
+    Map<String, dynamic> input,
+  ) async {
+    final response = await _request(
+      method: 'PUT',
+      path: '/ai/sessions/$sessionId/schedule-binding',
+      jsonBody: input,
+      timeout: _aiRequestTimeout,
+    );
+    return _extractDataMap(response);
   }
 
   Future<List<AIAgentMessage>> getAISessionMessages(
