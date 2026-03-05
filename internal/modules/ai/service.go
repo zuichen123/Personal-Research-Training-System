@@ -117,6 +117,12 @@ func (s *Service) ProviderStatus() ProviderStatus {
 	return s.providerStatusLocked()
 }
 
+func (s *Service) DefaultAgentProviderConfig() (AgentProtocol, AgentProviderConfig, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.defaultAgentProviderConfigLocked()
+}
+
 func (s *Service) UpdateProviderConfig(req UpdateProviderConfigRequest) (ProviderStatus, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -305,6 +311,41 @@ func (s *Service) providerStatusLocked() ProviderStatus {
 		status.OpenAIBaseURL = strings.TrimSpace(s.runtime.OpenAIBaseURL)
 	}
 	return status
+}
+
+func (s *Service) defaultAgentProviderConfigLocked() (AgentProtocol, AgentProviderConfig, bool) {
+	switch strings.ToLower(strings.TrimSpace(s.runtime.Provider)) {
+	case "openai":
+		cfg := AgentProviderConfig{
+			BaseURL: strings.TrimSpace(s.runtime.OpenAIBaseURL),
+			APIKey:  strings.TrimSpace(s.runtime.OpenAIAPIKey),
+			Model:   strings.TrimSpace(s.runtime.OpenAIModel),
+		}
+		if cfg.APIKey == "" || cfg.Model == "" {
+			return "", AgentProviderConfig{}, false
+		}
+		return AgentProtocolOpenAICompatible, cfg, true
+	case "gemini":
+		cfg := AgentProviderConfig{
+			APIKey: strings.TrimSpace(s.runtime.GeminiAPIKey),
+			Model:  strings.TrimSpace(s.runtime.GeminiModel),
+		}
+		if cfg.APIKey == "" || cfg.Model == "" {
+			return "", AgentProviderConfig{}, false
+		}
+		return AgentProtocolGeminiNative, cfg, true
+	case "claude":
+		cfg := AgentProviderConfig{
+			APIKey: strings.TrimSpace(s.runtime.ClaudeAPIKey),
+			Model:  strings.TrimSpace(s.runtime.ClaudeModel),
+		}
+		if cfg.APIKey == "" || cfg.Model == "" {
+			return "", AgentProviderConfig{}, false
+		}
+		return AgentProtocolClaudeNative, cfg, true
+	default:
+		return "", AgentProviderConfig{}, false
+	}
 }
 
 func (s *Service) applyProviderConfigLocked(provider string) error {

@@ -245,6 +245,49 @@ func TestService_UpdateProviderConfig_PersistsToStore(t *testing.T) {
 	}
 }
 
+func TestService_DefaultAgentProviderConfig_OpenAI(t *testing.T) {
+	svc := NewService(
+		NewMockClient(0),
+		newQuestionServiceForTest(),
+		false,
+		RuntimeConfig{
+			Provider:      "openai",
+			OpenAIBaseURL: "https://api.openai.com/v1",
+			OpenAIAPIKey:  "runtime-openai-key",
+			OpenAIModel:   "gpt-4.1-mini",
+		},
+	)
+	protocol, cfg, ok := svc.DefaultAgentProviderConfig()
+	if !ok {
+		t.Fatal("expected default provider config to be available")
+	}
+	if protocol != AgentProtocolOpenAICompatible {
+		t.Fatalf("unexpected protocol: %s", protocol)
+	}
+	if cfg.APIKey != "runtime-openai-key" {
+		t.Fatalf("unexpected api key: %s", cfg.APIKey)
+	}
+	if cfg.Model != "gpt-4.1-mini" {
+		t.Fatalf("unexpected model: %s", cfg.Model)
+	}
+	if cfg.BaseURL != "https://api.openai.com/v1" {
+		t.Fatalf("unexpected base url: %s", cfg.BaseURL)
+	}
+}
+
+func TestService_DefaultAgentProviderConfig_MockUnavailable(t *testing.T) {
+	svc := NewService(
+		NewMockClient(0),
+		newQuestionServiceForTest(),
+		false,
+		RuntimeConfig{Provider: "mock"},
+	)
+	_, _, ok := svc.DefaultAgentProviderConfig()
+	if ok {
+		t.Fatal("expected default provider config to be unavailable for mock")
+	}
+}
+
 func TestService_OptimizeLearningPlan_RejectsInvalidAction(t *testing.T) {
 	svc := NewService(
 		NewMockClient(0),

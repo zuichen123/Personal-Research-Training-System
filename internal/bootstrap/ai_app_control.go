@@ -668,7 +668,11 @@ func (c *aiAppControl) executeAgent(ctx context.Context, operation string, param
 		}
 		return ai.AppControlResult{Summary: fmt.Sprintf("已获取 %d 个智能体。", len(items)), Data: map[string]any{"items": items}}, nil
 	case "create":
-		req := applyCreateAgentDefaults(buildUpsertAgentRequest(params), params)
+		req := applyCreateAgentDefaults(
+			buildUpsertAgentRequest(params),
+			params,
+			loadAgentCreateProviderDefaults(c.aiService),
+		)
 		item, err := c.aiService.CreateAgent(ctx, req)
 		if err != nil {
 			return ai.AppControlResult{}, err
@@ -827,7 +831,32 @@ func summarizeAgentItems(items []ai.Agent, limit int) string {
 	return strings.Join(chunks, "; ")
 }
 
-func applyCreateAgentDefaults(req ai.UpsertAgentRequest, params map[string]any) ai.UpsertAgentRequest {
+type createAgentProviderDefaults struct {
+	Protocol ai.AgentProtocol
+	Primary  ai.AgentProviderConfig
+	Ready    bool
+}
+
+func loadAgentCreateProviderDefaults(service *ai.Service) createAgentProviderDefaults {
+	if service == nil {
+		return createAgentProviderDefaults{}
+	}
+	protocol, primary, ok := service.DefaultAgentProviderConfig()
+	if !ok {
+		return createAgentProviderDefaults{}
+	}
+	return createAgentProviderDefaults{
+		Protocol: protocol,
+		Primary:  primary,
+		Ready:    true,
+	}
+}
+
+func applyCreateAgentDefaults(
+	req ai.UpsertAgentRequest,
+	params map[string]any,
+	defaults createAgentProviderDefaults,
+) ai.UpsertAgentRequest {
 	req.Name = firstNonEmpty(req.Name, asString(params["agent_name"]), asString(params["title"]), asString(params["keyword"]))
 	if req.Name == "" {
 		req.Name = "new-agent"
@@ -835,11 +864,30 @@ func applyCreateAgentDefaults(req ai.UpsertAgentRequest, params map[string]any) 
 
 	protocol := strings.ToLower(strings.TrimSpace(string(req.Protocol)))
 	if protocol == "" {
-		req.Protocol = ai.AgentProtocolMock
-		return req
+		if defaults.Ready {
+			req.Protocol = defaults.Protocol
+			protocol = strings.ToLower(strings.TrimSpace(string(req.Protocol)))
+		} else {
+			req.Protocol = ai.AgentProtocolMock
+			return req
+		}
 	}
 	if protocol == string(ai.AgentProtocolMock) {
 		return req
+	}
+
+	explicitProtocol := strings.TrimSpace(asString(params["protocol"])) != ""
+	missingPrimary := strings.TrimSpace(req.Primary.APIKey) == "" || strings.TrimSpace(req.Primary.Model) == ""
+	if missingPrimary && defaults.Ready {
+		if !explicitProtocol || strings.EqualFold(protocol, string(defaults.Protocol)) {
+			req.Protocol = defaults.Protocol
+			protocol = strings.ToLower(strings.TrimSpace(string(req.Protocol)))
+		}
+		if strings.EqualFold(protocol, string(defaults.Protocol)) {
+			req.Primary.BaseURL = firstNonEmpty(req.Primary.BaseURL, defaults.Primary.BaseURL)
+			req.Primary.APIKey = firstNonEmpty(req.Primary.APIKey, defaults.Primary.APIKey)
+			req.Primary.Model = firstNonEmpty(req.Primary.Model, defaults.Primary.Model)
+		}
 	}
 	if strings.TrimSpace(req.Primary.APIKey) == "" || strings.TrimSpace(req.Primary.Model) == "" {
 		req.Protocol = ai.AgentProtocolMock

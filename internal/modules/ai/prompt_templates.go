@@ -221,6 +221,8 @@ Use manage_app for software management requests such as creating/updating/deleti
 When action is manage_app, extract "module" and "operation" with required fields in params.
 If id is unknown for get/update/delete, include searchable fields such as title/name/keyword/target_date/status/source so the backend can resolve the target.
 For creating agents, always provide params.name. If user did not specify one, set params.name="new-agent".
+For creating agents without explicit provider credentials, do not invent fake api_key/model and do not force mock;
+the backend will try configured provider defaults. If provider availability must be confirmed, call module=provider operation=status.
 For bulk-delete requests like "delete all plans / clear all plans", set module=plan, operation=delete_all, and params.all=true.
 If conversation already contains recent [tool_result] messages, decide whether another manage_app tool step is still required.
 If no further tool call is needed, return action=none.

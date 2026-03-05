@@ -286,7 +286,7 @@ func TestExecutePlanDelete_WithAllFlagAndFilter(t *testing.T) {
 
 func TestApplyCreateAgentDefaults_UsesDefaultNameAndMockProtocol(t *testing.T) {
 	req := buildUpsertAgentRequest(map[string]any{})
-	got := applyCreateAgentDefaults(req, map[string]any{})
+	got := applyCreateAgentDefaults(req, map[string]any{}, createAgentProviderDefaults{})
 
 	if got.Name != "new-agent" {
 		t.Fatalf("expected default name new-agent, got %q", got.Name)
@@ -306,13 +306,38 @@ func TestApplyCreateAgentDefaults_KeepConfiguredProvider(t *testing.T) {
 		},
 	}
 	req := buildUpsertAgentRequest(params)
-	got := applyCreateAgentDefaults(req, params)
+	got := applyCreateAgentDefaults(req, params, createAgentProviderDefaults{})
 
 	if got.Name != "math-agent" {
 		t.Fatalf("expected name=math-agent, got %q", got.Name)
 	}
 	if got.Protocol != ai.AgentProtocolOpenAICompatible {
 		t.Fatalf("expected protocol=%s, got %s", ai.AgentProtocolOpenAICompatible, got.Protocol)
+	}
+}
+
+func TestApplyCreateAgentDefaults_UseGlobalProviderDefaultsWhenPrimaryMissing(t *testing.T) {
+	params := map[string]any{
+		"name": "math-agent",
+	}
+	req := buildUpsertAgentRequest(params)
+	got := applyCreateAgentDefaults(req, params, createAgentProviderDefaults{
+		Protocol: ai.AgentProtocolGeminiNative,
+		Primary: ai.AgentProviderConfig{
+			APIKey: "gemini-key",
+			Model:  "gemini-2.0-flash",
+		},
+		Ready: true,
+	})
+
+	if got.Protocol != ai.AgentProtocolGeminiNative {
+		t.Fatalf("expected protocol=%s, got %s", ai.AgentProtocolGeminiNative, got.Protocol)
+	}
+	if got.Primary.APIKey != "gemini-key" {
+		t.Fatalf("expected default api key to be applied, got %q", got.Primary.APIKey)
+	}
+	if got.Primary.Model != "gemini-2.0-flash" {
+		t.Fatalf("expected default model to be applied, got %q", got.Primary.Model)
 	}
 }
 
