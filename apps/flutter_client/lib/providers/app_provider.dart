@@ -83,9 +83,18 @@ class AppProvider with ChangeNotifier {
 
   Map<String, dynamic> _aiProviderStatus = {};
   Map<String, dynamic> get aiProviderStatus => _aiProviderStatus;
+  final Map<String, String> _aiProviderApiKeyCache = <String, String>{};
 
   List<Map<String, dynamic>> _aiPromptTemplates = [];
   List<Map<String, dynamic>> get aiPromptTemplates => _aiPromptTemplates;
+
+  String aiProviderApiKeyFor(String provider) {
+    final normalized = provider.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return '';
+    }
+    return _aiProviderApiKeyCache[normalized] ?? '';
+  }
 
   Map<String, dynamic>? _aiLearningPlan;
   Map<String, dynamic>? get aiLearningPlan => _aiLearningPlan;
@@ -479,12 +488,17 @@ class AppProvider with ChangeNotifier {
     String? openAIBaseURL,
   }) async {
     await _runAction('更新AI模型API地址', () async {
+      final normalizedProvider = provider.trim().toLowerCase();
+      final normalizedApiKey = (apiKey ?? '').trim();
       _aiProviderStatus = await _api.updateAIProviderConfig(
         provider: provider,
         apiKey: apiKey,
         model: model,
         openAIBaseURL: openAIBaseURL,
       );
+      if (normalizedProvider.isNotEmpty && normalizedApiKey.isNotEmpty) {
+        _aiProviderApiKeyCache[normalizedProvider] = normalizedApiKey;
+      }
       _isSectionLoaded[DataSection.ai] = true;
       notifyListeners();
     });

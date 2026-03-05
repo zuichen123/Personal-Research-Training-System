@@ -216,6 +216,12 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
   Future<void> _showCreateAgentDialog(BuildContext context) async {
     final agentProvider = context.read<AIAgentProvider>();
     final appProvider = context.read<AppProvider>();
+    if (appProvider.aiProviderStatus.isEmpty) {
+      await appProvider.fetchAIProviderStatus(force: true);
+    }
+    if (!context.mounted) {
+      return;
+    }
     final status = appProvider.aiProviderStatus;
     final draft = agentProvider.createAgentDraft;
     final template = _preferredAgentTemplate(agentProvider);
@@ -230,23 +236,25 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
         .toString()
         .trim();
     final statusBaseUrl = (status['openai_base_url'] ?? '').toString().trim();
+    final statusApiKey = appProvider.aiProviderApiKeyFor(statusProvider);
 
     final initialProtocol = _firstNonEmpty([
+      statusProtocol,
       (draft['protocol'] ?? '').toString(),
       template?.protocol ?? '',
-      statusProtocol,
     ], fallback: 'openai_compatible');
     final initialPrimaryModel = _firstNonEmpty([
-      (draft['primary_model'] ?? '').toString(),
       statusModel,
+      (draft['primary_model'] ?? '').toString(),
       template?.primary.model ?? '',
     ], fallback: 'gpt-4o-mini');
     final initialPrimaryBaseUrl = _firstNonEmpty([
+      statusProvider == 'openai' ? statusBaseUrl : '',
       (draft['primary_base_url'] ?? '').toString(),
-      statusBaseUrl,
       template?.primary.baseUrl ?? '',
     ], fallback: 'https://api.openai.com/v1');
     final initialPrimaryApiKey = _firstNonEmpty([
+      statusApiKey,
       (draft['primary_api_key'] ?? '').toString(),
       template?.primary.apiKey ?? '',
     ]);

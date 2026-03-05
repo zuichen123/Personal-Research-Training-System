@@ -667,6 +667,12 @@ class _SettingsScreenState extends State<SettingsScreen>
   }) async {
     final isEdit = agent != null;
     final appProvider = context.read<AppProvider>();
+    if (appProvider.aiProviderStatus.isEmpty) {
+      await appProvider.fetchAIProviderStatus(force: true);
+    }
+    if (!context.mounted) {
+      return;
+    }
     final status = appProvider.aiProviderStatus;
     final draft = provider.createAgentDraft;
     final template = _preferredAgentTemplate(provider);
@@ -683,6 +689,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         .toString()
         .trim();
     final statusBaseUrl = (status['openai_base_url'] ?? '').toString().trim();
+    final statusApiKey = appProvider.aiProviderApiKeyFor(statusProvider);
 
     final currentConfigModel = _modelController.text.trim();
     final currentConfigBaseUrl = _openAIBaseURLController.text.trim();
@@ -691,30 +698,31 @@ class _SettingsScreenState extends State<SettingsScreen>
     final initialProtocol = isEdit
         ? agent.protocol
         : _firstNonEmpty([
+            statusProtocol,
             (draft['protocol'] ?? '').toString(),
             template?.protocol ?? '',
-            statusProtocol,
           ], fallback: 'openai_compatible');
     final initialPrimaryModel = isEdit
         ? (agent.primary.model.isNotEmpty ? agent.primary.model : 'gpt-4o-mini')
         : _firstNonEmpty([
-            (draft['primary_model'] ?? '').toString(),
             currentConfigModel,
             statusModel,
+            (draft['primary_model'] ?? '').toString(),
             template?.primary.model ?? '',
           ], fallback: 'gpt-4o-mini');
     final initialPrimaryBaseUrl = isEdit
         ? agent.primary.baseUrl
         : _firstNonEmpty([
-            (draft['primary_base_url'] ?? '').toString(),
             currentConfigBaseUrl,
-            statusBaseUrl,
+            statusProvider == 'openai' ? statusBaseUrl : '',
+            (draft['primary_base_url'] ?? '').toString(),
             template?.primary.baseUrl ?? '',
           ], fallback: 'https://api.openai.com/v1');
     final initialPrimaryApiKey = isEdit
         ? ''
         : _firstNonEmpty([
             currentConfigApiKey,
+            statusApiKey,
             (draft['primary_api_key'] ?? '').toString(),
             template?.primary.apiKey ?? '',
           ]);
