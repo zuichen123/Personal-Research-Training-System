@@ -127,6 +127,7 @@ func (s *Service) CreateAgent(ctx context.Context, req UpsertAgentRequest) (Agen
 	if s.agentStore == nil {
 		return Agent{}, errs.BadRequest("ai agent store is not ready")
 	}
+	req = s.applyCreateAgentProviderDefaults(req)
 	item, err := normalizeAgentRequest(req, "")
 	if err != nil {
 		return Agent{}, err
@@ -139,6 +140,46 @@ func (s *Service) CreateAgent(ctx context.Context, req UpsertAgentRequest) (Agen
 		return Agent{}, err
 	}
 	return redactAgentSecrets(created), nil
+}
+
+func (s *Service) applyCreateAgentProviderDefaults(req UpsertAgentRequest) UpsertAgentRequest {
+	defaultProtocol, defaultPrimary, hasDefault := s.DefaultAgentProviderConfig()
+
+	protocol := AgentProtocol(strings.ToLower(strings.TrimSpace(string(req.Protocol))))
+	if protocol == "" {
+		if hasDefault {
+			req.Protocol = defaultProtocol
+			protocol = defaultProtocol
+		} else {
+			req.Protocol = AgentProtocolMock
+			return req
+		}
+	}
+	if protocol == AgentProtocolMock {
+		return req
+	}
+
+	primary := normalizeProviderConfig(req.Primary)
+	missingPrimary := primary.APIKey == "" || primary.Model == ""
+	if missingPrimary && hasDefault {
+		if !strings.EqualFold(string(protocol), string(defaultProtocol)) {
+			req.Protocol = defaultProtocol
+			protocol = defaultProtocol
+			req.Primary = defaultPrimary
+		} else {
+			req.Primary.BaseURL = firstNonEmpty(req.Primary.BaseURL, defaultPrimary.BaseURL)
+			req.Primary.APIKey = firstNonEmpty(req.Primary.APIKey, defaultPrimary.APIKey)
+			req.Primary.Model = firstNonEmpty(req.Primary.Model, defaultPrimary.Model)
+		}
+	}
+
+	primary = normalizeProviderConfig(req.Primary)
+	if primary.APIKey == "" || primary.Model == "" {
+		req.Protocol = AgentProtocolMock
+		req.Primary = AgentProviderConfig{}
+		req.Fallback = AgentProviderConfig{}
+	}
+	return req
 }
 
 func (s *Service) UpdateAgent(ctx context.Context, id string, req UpsertAgentRequest) (Agent, error) {

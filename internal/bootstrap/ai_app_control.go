@@ -876,14 +876,13 @@ func applyCreateAgentDefaults(
 		return req
 	}
 
-	explicitProtocol := strings.TrimSpace(asString(params["protocol"])) != ""
 	missingPrimary := strings.TrimSpace(req.Primary.APIKey) == "" || strings.TrimSpace(req.Primary.Model) == ""
 	if missingPrimary && defaults.Ready {
-		if !explicitProtocol || strings.EqualFold(protocol, string(defaults.Protocol)) {
+		if !strings.EqualFold(protocol, string(defaults.Protocol)) {
 			req.Protocol = defaults.Protocol
 			protocol = strings.ToLower(strings.TrimSpace(string(req.Protocol)))
-		}
-		if strings.EqualFold(protocol, string(defaults.Protocol)) {
+			req.Primary = defaults.Primary
+		} else {
 			req.Primary.BaseURL = firstNonEmpty(req.Primary.BaseURL, defaults.Primary.BaseURL)
 			req.Primary.APIKey = firstNonEmpty(req.Primary.APIKey, defaults.Primary.APIKey)
 			req.Primary.Model = firstNonEmpty(req.Primary.Model, defaults.Primary.Model)

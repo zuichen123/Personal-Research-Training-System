@@ -288,6 +288,61 @@ func TestService_DefaultAgentProviderConfig_MockUnavailable(t *testing.T) {
 	}
 }
 
+func TestService_ApplyCreateAgentProviderDefaults_UsesConfiguredProvider(t *testing.T) {
+	svc := NewService(
+		NewMockClient(0),
+		newQuestionServiceForTest(),
+		false,
+		RuntimeConfig{
+			Provider:      "openai",
+			OpenAIBaseURL: "https://api.openai.com/v1",
+			OpenAIAPIKey:  "runtime-openai-key",
+			OpenAIModel:   "gpt-4.1-mini",
+		},
+	)
+	got := svc.applyCreateAgentProviderDefaults(UpsertAgentRequest{
+		Name: "manual-agent",
+	})
+	if got.Protocol != AgentProtocolOpenAICompatible {
+		t.Fatalf("expected protocol=%s, got %s", AgentProtocolOpenAICompatible, got.Protocol)
+	}
+	if got.Primary.APIKey != "runtime-openai-key" {
+		t.Fatalf("expected api key from configured provider, got %q", got.Primary.APIKey)
+	}
+	if got.Primary.Model != "gpt-4.1-mini" {
+		t.Fatalf("expected model from configured provider, got %q", got.Primary.Model)
+	}
+}
+
+func TestService_ApplyCreateAgentProviderDefaults_OverrideMismatchedProtocol(t *testing.T) {
+	svc := NewService(
+		NewMockClient(0),
+		newQuestionServiceForTest(),
+		false,
+		RuntimeConfig{
+			Provider:     "gemini",
+			GeminiAPIKey: "runtime-gemini-key",
+			GeminiModel:  "gemini-2.0-flash",
+		},
+	)
+	got := svc.applyCreateAgentProviderDefaults(UpsertAgentRequest{
+		Name:     "manual-agent",
+		Protocol: AgentProtocolOpenAICompatible,
+		Primary: AgentProviderConfig{
+			Model: "gpt-4o-mini",
+		},
+	})
+	if got.Protocol != AgentProtocolGeminiNative {
+		t.Fatalf("expected protocol=%s, got %s", AgentProtocolGeminiNative, got.Protocol)
+	}
+	if got.Primary.APIKey != "runtime-gemini-key" {
+		t.Fatalf("expected api key from configured provider, got %q", got.Primary.APIKey)
+	}
+	if got.Primary.Model != "gemini-2.0-flash" {
+		t.Fatalf("expected model from configured provider, got %q", got.Primary.Model)
+	}
+}
+
 func TestService_OptimizeLearningPlan_RejectsInvalidAction(t *testing.T) {
 	svc := NewService(
 		NewMockClient(0),

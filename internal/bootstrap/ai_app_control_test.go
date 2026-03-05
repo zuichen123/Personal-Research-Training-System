@@ -341,6 +341,35 @@ func TestApplyCreateAgentDefaults_UseGlobalProviderDefaultsWhenPrimaryMissing(t 
 	}
 }
 
+func TestApplyCreateAgentDefaults_OverrideMismatchedProtocolWhenPrimaryMissing(t *testing.T) {
+	params := map[string]any{
+		"name":     "math-agent",
+		"protocol": "openai_compatible",
+		"primary": map[string]any{
+			"model": "gpt-4o-mini",
+		},
+	}
+	req := buildUpsertAgentRequest(params)
+	got := applyCreateAgentDefaults(req, params, createAgentProviderDefaults{
+		Protocol: ai.AgentProtocolGeminiNative,
+		Primary: ai.AgentProviderConfig{
+			APIKey: "gemini-key",
+			Model:  "gemini-2.0-flash",
+		},
+		Ready: true,
+	})
+
+	if got.Protocol != ai.AgentProtocolGeminiNative {
+		t.Fatalf("expected protocol=%s, got %s", ai.AgentProtocolGeminiNative, got.Protocol)
+	}
+	if got.Primary.APIKey != "gemini-key" {
+		t.Fatalf("expected default api key to be applied, got %q", got.Primary.APIKey)
+	}
+	if got.Primary.Model != "gemini-2.0-flash" {
+		t.Fatalf("expected default model to replace mismatched value, got %q", got.Primary.Model)
+	}
+}
+
 func TestResolveAgentID_DirectAlias(t *testing.T) {
 	control := &aiAppControl{}
 	id, err := control.resolveAgentID(context.Background(), "delete", map[string]any{
