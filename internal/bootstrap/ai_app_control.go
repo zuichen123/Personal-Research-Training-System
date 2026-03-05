@@ -327,6 +327,9 @@ func (c *aiAppControl) executePlan(ctx context.Context, operation string, params
 		}
 		return ai.AppControlResult{Summary: fmt.Sprintf("Plan %s updated.", item.ID), Data: map[string]any{"item": item}}, nil
 	case "delete":
+		if shouldDeleteAllPlans(operation, params) {
+			return c.deletePlanItems(ctx, params)
+		}
 		id, candidates, err := c.resolvePlanID(ctx, params)
 		if err != nil {
 			return ai.AppControlResult{}, err
@@ -338,8 +341,81 @@ func (c *aiAppControl) executePlan(ctx context.Context, operation string, params
 			return ai.AppControlResult{}, err
 		}
 		return ai.AppControlResult{Summary: fmt.Sprintf("Deleted plan %s.", id)}, nil
+	case "delete_all", "clear", "purge":
+		return c.deletePlanItems(ctx, params)
 	default:
 		return ai.AppControlResult{}, errs.BadRequest("unsupported plan operation")
+	}
+}
+
+func (c *aiAppControl) deletePlanItems(
+	ctx context.Context,
+	params map[string]any,
+) (ai.AppControlResult, error) {
+	planType := firstNonEmpty(asString(params["plan_type"]), asString(params["type"]))
+	items, err := c.planService.List(ctx, planType)
+	if err != nil {
+		return ai.AppControlResult{}, err
+	}
+	filtered := filterPlanItems(items, params)
+	if len(filtered) == 0 {
+		return ai.AppControlResult{
+			Summary: "No plan matched; nothing deleted.",
+			Data: map[string]any{
+				"deleted_count": 0,
+				"deleted_ids":   []string{},
+				"source_count":  len(items),
+			},
+		}, nil
+	}
+	deletedIDs := make([]string, 0, len(filtered))
+	for _, item := range filtered {
+		if err := c.planService.Delete(ctx, item.ID); err != nil {
+			return ai.AppControlResult{}, err
+		}
+		deletedIDs = append(deletedIDs, item.ID)
+	}
+	summary := fmt.Sprintf("Deleted %d plan(s).", len(deletedIDs))
+	preview := summarizePlanItems(filtered, 5)
+	if preview != "" {
+		summary = fmt.Sprintf("%s Preview: %s", summary, preview)
+	}
+	return ai.AppControlResult{
+		Summary: summary,
+		Data: map[string]any{
+			"deleted_count": len(deletedIDs),
+			"deleted_ids":   deletedIDs,
+			"source_count":  len(items),
+		},
+	}, nil
+}
+
+func shouldDeleteAllPlans(operation string, params map[string]any) bool {
+	op := strings.ToLower(strings.TrimSpace(operation))
+	if op == "delete_all" || op == "clear" || op == "purge" {
+		return true
+	}
+	if asBool(params["all"], false) || asBool(params["delete_all"], false) || asBool(params["bulk"], false) {
+		return true
+	}
+	scope := strings.ToLower(firstNonEmpty(asString(params["scope"]), asString(params["target"])))
+	if scope == "all" || scope == "all_plans" || scope == "plans" {
+		return true
+	}
+	keyword := strings.ToLower(
+		firstNonEmpty(
+			asString(params["keyword"]),
+			asString(params["query"]),
+			asString(params["q"]),
+			asString(params["title"]),
+			asString(params["name"]),
+		),
+	)
+	switch keyword {
+	case "all", "all plans", "全部", "所有", "全部计划", "所有计划":
+		return true
+	default:
+		return false
 	}
 }
 

@@ -21,6 +21,7 @@ const (
 	agentIntentAutoThreshold    = 0.75
 	agentIntentConfirmThreshold = 0.45
 	agentContextKeepRecent      = 20
+	agentManageAppMaxSteps      = 4
 
 	agentAutoCompressMinNewMessages = 30
 	agentAutoCompressCooldown       = 30 * time.Minute
@@ -465,18 +466,30 @@ func (s *Service) SendSessionMessage(
 
 	intent := normalizeIntent(intentResp.Intent)
 	if shouldAutoExecute(intent) {
-		executed, err := s.executeAgentAction(ctx, session, agent, intent.Action, intent.Params)
+		executed, finalIntent, err := s.executeAgentActionWithAutoFollowUp(
+			ctx,
+			session,
+			agent,
+			messages,
+			intent,
+		)
 		if err != nil {
 			return SessionMessageResponse{}, err
 		}
-		assistant, artifact, err := s.persistAssistantWithArtifact(ctx, sessionID, intent, nil, executed)
+		assistant, artifact, err := s.persistAssistantWithArtifact(
+			ctx,
+			sessionID,
+			finalIntent,
+			nil,
+			executed,
+		)
 		if err != nil {
 			return SessionMessageResponse{}, err
 		}
 		s.runAutoCompressionBestEffort(ctx, sessionID)
 		return SessionMessageResponse{
 			AssistantMessage: assistant,
-			Intent:           intent,
+			Intent:           finalIntent,
 			Artifact:         artifact,
 		}, nil
 	}
@@ -804,6 +817,257 @@ func (s *Service) persistAssistantWithArtifact(
 		artifact = &stored
 	}
 	return created, artifact, nil
+}
+
+func (s *Service) executeAgentActionWithAutoFollowUp(
+	ctx context.Context,
+	session AgentSession,
+	agent Agent,
+	baseMessages []ChatMessage,
+	intent IntentResult,
+) (actionExecutionResult, IntentResult, error) {
+	normalized := normalizeIntent(intent)
+	executed, err := s.executeAgentAction(ctx, session, agent, normalized.Action, normalized.Params)
+	if err != nil {
+		if !strings.EqualFold(normalized.Action, "manage_app") {
+			return actionExecutionResult{}, normalized, err
+		}
+		recovered, ok := s.recoverManageAppIntentAfterError(
+			ctx,
+			agent,
+			baseMessages,
+			normalized,
+			err,
+		)
+		if !ok {
+			return actionExecutionResult{}, normalized, err
+		}
+		executed, err = s.executeAgentAction(
+			ctx,
+			session,
+			agent,
+			recovered.Action,
+			recovered.Params,
+		)
+		if err != nil {
+			return actionExecutionResult{}, recovered, err
+		}
+		normalized = recovered
+	}
+	if !strings.EqualFold(normalized.Action, "manage_app") {
+		return executed, normalized, nil
+	}
+	return s.executeManageAppActionLoop(ctx, session, agent, baseMessages, normalized, executed)
+}
+
+func (s *Service) recoverManageAppIntentAfterError(
+	ctx context.Context,
+	agent Agent,
+	baseMessages []ChatMessage,
+	prevIntent IntentResult,
+	execErr error,
+) (IntentResult, bool) {
+	req := buildAppControlRequest(prevIntent.Params)
+	retryMessages := append([]ChatMessage{}, baseMessages...)
+	retryMessages = append(retryMessages, ChatMessage{
+		Role: "assistant",
+		Content: fmt.Sprintf(
+			"[tool_error] module=%s operation=%s error=%s",
+			req.Module,
+			req.Operation,
+			strings.TrimSpace(execErr.Error()),
+		),
+	})
+	retryMessages = append(retryMessages, ChatMessage{
+		Role: "system",
+		Content: "The previous manage_app tool call failed. " +
+			"If the request is still actionable, return a corrected next manage_app intent. " +
+			"If no safe correction exists, return action=none.",
+	})
+	resp, _, err := s.chatWithFallback(ctx, agent, ChatRequest{
+		SystemPrompt: agent.SystemPrompt,
+		Messages:     retryMessages,
+		Mode:         "detect_intent",
+	})
+	if err != nil {
+		return IntentResult{}, false
+	}
+	next := normalizeIntent(resp.Intent)
+	if !shouldAutoExecute(next) || !strings.EqualFold(next.Action, "manage_app") {
+		return IntentResult{}, false
+	}
+	if sameManageAppIntent(prevIntent, next) {
+		return IntentResult{}, false
+	}
+	return next, true
+}
+
+func (s *Service) executeManageAppActionLoop(
+	ctx context.Context,
+	session AgentSession,
+	agent Agent,
+	baseMessages []ChatMessage,
+	initialIntent IntentResult,
+	initialResult actionExecutionResult,
+) (actionExecutionResult, IntentResult, error) {
+	summaries := make([]string, 0, agentManageAppMaxSteps)
+	if text := strings.TrimSpace(initialResult.Content); text != "" {
+		summaries = append(summaries, text)
+	}
+	loopMessages := append([]ChatMessage{}, baseMessages...)
+	loopMessages = append(loopMessages, buildToolResultChatMessage(1, initialIntent, initialResult))
+
+	finalIntent := initialIntent
+	finalMeta := initialResult.Meta
+
+	for step := 1; step < agentManageAppMaxSteps; step++ {
+		nextIntent, _, err := s.detectNextToolIntent(ctx, agent, loopMessages)
+		if err != nil {
+			break
+		}
+		nextIntent = normalizeIntent(nextIntent)
+		if !shouldAutoExecute(nextIntent) || !strings.EqualFold(nextIntent.Action, "manage_app") {
+			break
+		}
+		if sameManageAppIntent(finalIntent, nextIntent) {
+			break
+		}
+		nextResult, execErr := s.executeAgentAction(
+			ctx,
+			session,
+			agent,
+			nextIntent.Action,
+			nextIntent.Params,
+		)
+		if execErr != nil {
+			return actionExecutionResult{}, nextIntent, execErr
+		}
+		if text := strings.TrimSpace(nextResult.Content); text != "" {
+			summaries = append(summaries, text)
+		}
+		loopMessages = append(
+			loopMessages,
+			buildToolResultChatMessage(step+1, nextIntent, nextResult),
+		)
+		finalIntent = nextIntent
+		finalMeta = nextResult.Meta
+	}
+
+	combined := strings.TrimSpace(strings.Join(summaries, "\n"))
+	if combined == "" {
+		combined = strings.TrimSpace(initialResult.Content)
+	}
+	if combined == "" {
+		combined = "已执行管理操作。"
+	}
+	return actionExecutionResult{
+		Content: combined,
+		Meta:    finalMeta,
+	}, finalIntent, nil
+}
+
+func (s *Service) detectNextToolIntent(
+	ctx context.Context,
+	agent Agent,
+	messages []ChatMessage,
+) (IntentResult, agentCallMeta, error) {
+	nextMessages := append([]ChatMessage{}, messages...)
+	nextMessages = append(nextMessages, ChatMessage{
+		Role: "system",
+		Content: "You have executed a manage_app tool call. " +
+			"If more tool calls are required to finish the latest user request, return the next intent. " +
+			"Otherwise return action=none.",
+	})
+	resp, meta, err := s.chatWithFallback(ctx, agent, ChatRequest{
+		SystemPrompt: agent.SystemPrompt,
+		Messages:     nextMessages,
+		Mode:         "detect_intent",
+	})
+	if err != nil {
+		return IntentResult{}, meta, err
+	}
+	return resp.Intent, meta, nil
+}
+
+func buildToolResultChatMessage(
+	step int,
+	intent IntentResult,
+	result actionExecutionResult,
+) ChatMessage {
+	req := buildAppControlRequest(intent.Params)
+	summary := strings.TrimSpace(result.Content)
+	if summary == "" {
+		summary = "tool executed"
+	}
+	return ChatMessage{
+		Role: "assistant",
+		Content: fmt.Sprintf(
+			"[tool_result #%d] module=%s operation=%s summary=%s",
+			step,
+			req.Module,
+			req.Operation,
+			truncateText(summary, 360),
+		),
+	}
+}
+
+func sameManageAppIntent(left, right IntentResult) bool {
+	if !strings.EqualFold(strings.TrimSpace(left.Action), "manage_app") ||
+		!strings.EqualFold(strings.TrimSpace(right.Action), "manage_app") {
+		return false
+	}
+	leftReq := buildAppControlRequest(left.Params)
+	rightReq := buildAppControlRequest(right.Params)
+	if leftReq.Module != rightReq.Module || leftReq.Operation != rightReq.Operation {
+		return false
+	}
+	leftID := firstNonEmpty(
+		mapParamString(leftReq.Params, "id"),
+		mapParamString(leftReq.Params, "plan_id"),
+		mapParamString(leftReq.Params, "item_id"),
+		mapParamString(leftReq.Params, "target_id"),
+	)
+	rightID := firstNonEmpty(
+		mapParamString(rightReq.Params, "id"),
+		mapParamString(rightReq.Params, "plan_id"),
+		mapParamString(rightReq.Params, "item_id"),
+		mapParamString(rightReq.Params, "target_id"),
+	)
+	if leftID != "" || rightID != "" {
+		return strings.EqualFold(leftID, rightID)
+	}
+	leftSelector := strings.Join([]string{
+		mapParamString(leftReq.Params, "title"),
+		mapParamString(leftReq.Params, "keyword"),
+		mapParamString(leftReq.Params, "target_date"),
+		mapParamString(leftReq.Params, "status"),
+		mapParamString(leftReq.Params, "source"),
+		mapParamString(leftReq.Params, "all"),
+	}, "|")
+	rightSelector := strings.Join([]string{
+		mapParamString(rightReq.Params, "title"),
+		mapParamString(rightReq.Params, "keyword"),
+		mapParamString(rightReq.Params, "target_date"),
+		mapParamString(rightReq.Params, "status"),
+		mapParamString(rightReq.Params, "source"),
+		mapParamString(rightReq.Params, "all"),
+	}, "|")
+	return strings.EqualFold(leftSelector, rightSelector)
+}
+
+func mapParamString(params map[string]any, key string) string {
+	if params == nil {
+		return ""
+	}
+	raw, ok := params[key]
+	if !ok {
+		return ""
+	}
+	text := strings.TrimSpace(fmt.Sprintf("%v", raw))
+	if text == "<nil>" {
+		return ""
+	}
+	return strings.ToLower(text)
 }
 
 func (s *Service) executeAgentAction(

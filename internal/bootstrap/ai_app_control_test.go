@@ -184,3 +184,101 @@ func TestExecutePlanDelete_Ambiguous(t *testing.T) {
 		t.Fatalf("expected bad request, got %v", err)
 	}
 }
+
+func TestExecutePlanDeleteAll_ByOperation(t *testing.T) {
+	repo := newTestPlanRepo([]plan.Item{
+		{
+			ID:         "p-1",
+			PlanType:   plan.DayPlan,
+			Title:      "Math",
+			TargetDate: "2026-03-10",
+			Status:     string(plan.StatusPending),
+			Priority:   3,
+			Source:     plan.SourceManual,
+			CreatedAt:  time.Now().UTC(),
+			UpdatedAt:  time.Now().UTC(),
+		},
+		{
+			ID:         "p-2",
+			PlanType:   plan.WeekPlan,
+			Title:      "English",
+			TargetDate: "2026-03-11",
+			Status:     string(plan.StatusInProgress),
+			Priority:   2,
+			Source:     plan.SourceManual,
+			CreatedAt:  time.Now().UTC(),
+			UpdatedAt:  time.Now().UTC(),
+		},
+	})
+	control := &aiAppControl{planService: plan.NewService(repo)}
+
+	result, err := control.executePlan(context.Background(), "delete_all", map[string]any{})
+	if err != nil {
+		t.Fatalf("executePlan(delete_all) error = %v", err)
+	}
+	if result.Summary == "" {
+		t.Fatal("expected non-empty summary")
+	}
+	if len(repo.items) != 0 {
+		t.Fatalf("expected all plans deleted, remaining=%d", len(repo.items))
+	}
+	if asInt(result.Data["deleted_count"], 0) != 2 {
+		t.Fatalf("expected deleted_count=2, got %v", result.Data["deleted_count"])
+	}
+}
+
+func TestExecutePlanDelete_WithAllFlagAndFilter(t *testing.T) {
+	repo := newTestPlanRepo([]plan.Item{
+		{
+			ID:         "p-1",
+			PlanType:   plan.DayPlan,
+			Title:      "Math",
+			TargetDate: "2026-03-10",
+			Status:     string(plan.StatusPending),
+			Priority:   3,
+			Source:     plan.SourceManual,
+			CreatedAt:  time.Now().UTC(),
+			UpdatedAt:  time.Now().UTC(),
+		},
+		{
+			ID:         "p-2",
+			PlanType:   plan.DayPlan,
+			Title:      "English",
+			TargetDate: "2026-03-11",
+			Status:     string(plan.StatusCompleted),
+			Priority:   2,
+			Source:     plan.SourceManual,
+			CreatedAt:  time.Now().UTC(),
+			UpdatedAt:  time.Now().UTC(),
+		},
+		{
+			ID:         "p-3",
+			PlanType:   plan.DayPlan,
+			Title:      "Physics",
+			TargetDate: "2026-03-12",
+			Status:     string(plan.StatusPending),
+			Priority:   4,
+			Source:     plan.SourceManual,
+			CreatedAt:  time.Now().UTC(),
+			UpdatedAt:  time.Now().UTC(),
+		},
+	})
+	control := &aiAppControl{planService: plan.NewService(repo)}
+
+	_, err := control.executePlan(context.Background(), "delete", map[string]any{
+		"all":    true,
+		"status": "pending",
+	})
+	if err != nil {
+		t.Fatalf("executePlan(delete with all=true) error = %v", err)
+	}
+	if _, exists := repo.items["p-2"]; !exists {
+		t.Fatal("expected non-matching plan p-2 to remain")
+	}
+	if _, exists := repo.items["p-1"]; exists {
+		t.Fatal("expected matching plan p-1 deleted")
+	}
+	if _, exists := repo.items["p-3"]; exists {
+		t.Fatal("expected matching plan p-3 deleted")
+	}
+}

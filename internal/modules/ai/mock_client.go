@@ -402,7 +402,18 @@ func (m *MockClient) Chat(ctx context.Context, req ChatRequest) (ChatResponse, e
 			Params:     map[string]any{},
 		}
 		lower := strings.ToLower(lastUser)
-		if strings.Contains(lower, "agent") || strings.Contains(lower, "智能体") {
+		if (strings.Contains(lower, "删除") || strings.Contains(lower, "delete")) &&
+			(strings.Contains(lower, "计划") || strings.Contains(lower, "plan")) &&
+			(strings.Contains(lower, "全部") || strings.Contains(lower, "所有") || strings.Contains(lower, "all")) {
+			intent.Action = "manage_app"
+			intent.Confidence = 0.9
+			intent.Reason = "bulk plan delete command detected"
+			intent.Params = map[string]any{
+				"module":    "plan",
+				"operation": "delete_all",
+				"all":       true,
+			}
+		} else if strings.Contains(lower, "agent") || strings.Contains(lower, "智能体") {
 			intent.Action = "manage_app"
 			intent.Confidence = 0.88
 			intent.Reason = "agent management keyword detected"
@@ -420,9 +431,19 @@ func (m *MockClient) Chat(ctx context.Context, req ChatRequest) (ChatResponse, e
 			intent.Confidence = 0.85
 			intent.Reason = "question generation keyword detected"
 		} else if strings.Contains(lower, "计划") || strings.Contains(lower, "plan") {
-			intent.Action = "build_plan"
-			intent.Confidence = 0.85
-			intent.Reason = "learning plan keyword detected"
+			if strings.Contains(lower, "删除") || strings.Contains(lower, "delete") {
+				intent.Action = "manage_app"
+				intent.Confidence = 0.86
+				intent.Reason = "plan delete command detected"
+				intent.Params = map[string]any{
+					"module":    "plan",
+					"operation": "delete",
+				}
+			} else {
+				intent.Action = "build_plan"
+				intent.Confidence = 0.85
+				intent.Reason = "learning plan keyword detected"
+			}
 		} else if strings.Contains(lower, "删除") && strings.Contains(lower, "题目") {
 			intent.Action = "manage_app"
 			intent.Confidence = 0.86
