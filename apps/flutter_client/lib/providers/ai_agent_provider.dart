@@ -309,6 +309,9 @@ class AIAgentProvider with ChangeNotifier {
       }
       _errorMessage = null;
       notifyListeners();
+      if (_shouldRefreshAgentList(result.intent)) {
+        await refreshAgents();
+      }
       await _loadSessions(_selectedAgentId);
       await _loadMessages(activeSessionId);
     } catch (e) {
@@ -396,6 +399,9 @@ class AIAgentProvider with ChangeNotifier {
       }
       _errorMessage = null;
       notifyListeners();
+      if (_shouldRefreshAgentList(result.intent)) {
+        await refreshAgents();
+      }
       await _loadMessages(sessionId);
       await _loadArtifacts(sessionId);
     } catch (e) {
@@ -538,6 +544,15 @@ class AIAgentProvider with ChangeNotifier {
       _loading = false;
       notifyListeners();
     }
+  }
+
+  bool _shouldRefreshAgentList(AIAgentIntent intent) {
+    if (intent.action.trim().toLowerCase() != 'manage_app') {
+      return false;
+    }
+    final module =
+        intent.params['module']?.toString().trim().toLowerCase() ?? '';
+    return module == 'agent' || module == 'agents';
   }
 
   void _cacheCreateAgentDraft({
