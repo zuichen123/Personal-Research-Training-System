@@ -37,10 +37,9 @@ class _SettingsScreenState extends State<SettingsScreen>
   final _targetDestinationController = TextEditingController();
   final _notesController = TextEditingController();
 
-  final _customPromptController = TextEditingController();
   final _outputPromptController = TextEditingController();
-  final _customPromptFocusNode = FocusNode();
   final _outputPromptFocusNode = FocusNode();
+  final Map<String, TextEditingController> _segmentPromptControllers = {};
 
   bool _profileDirty = false;
   bool _syncingProfileForm = false;
@@ -69,6 +68,49 @@ class _SettingsScreenState extends State<SettingsScreen>
     _customAcademicStatus,
   ];
 
+  static const List<String> _editablePromptSegmentKeys = [
+    'persona',
+    'identity',
+    'user_background',
+    'ai_memo',
+    'user_profile',
+    'scoring_criteria',
+    'tool_instructions',
+    'current_schedule',
+    'learning_progress',
+    'rules',
+    'reserved_slot_1',
+    'reserved_slot_2',
+    'reserved_slot_3',
+    'reserved_slot_4',
+    'reserved_slot_5',
+    'task_prompt',
+  ];
+
+  static const Set<String> _optionalPromptSegments = {
+    'ai_memo',
+    'user_profile',
+  };
+
+  static const Map<String, String> _promptSegmentLabels = {
+    'persona': '人格设定 (persona)',
+    'identity': '身份设定 (identity)',
+    'user_background': '用户背景 (user_background)',
+    'ai_memo': 'AI备忘 (ai_memo)',
+    'user_profile': '用户画像 (user_profile)',
+    'scoring_criteria': '评分标准 (scoring_criteria)',
+    'tool_instructions': '工具说明 (tool_instructions)',
+    'current_schedule': '当前日程 (current_schedule)',
+    'learning_progress': '学习进度 (learning_progress)',
+    'rules': '遵守规则 (rules)',
+    'reserved_slot_1': '预留拼接位1 (reserved_slot_1)',
+    'reserved_slot_2': '预留拼接位2 (reserved_slot_2)',
+    'reserved_slot_3': '预留拼接位3 (reserved_slot_3)',
+    'reserved_slot_4': '预留拼接位4 (reserved_slot_4)',
+    'reserved_slot_5': '预留拼接位5 (reserved_slot_5)',
+    'task_prompt': '任务指令 (task_prompt)',
+  };
+
   @override
   void initState() {
     super.initState();
@@ -84,7 +126,11 @@ class _SettingsScreenState extends State<SettingsScreen>
     _bindProfileDirtyListener(_targetDestinationController);
     _bindProfileDirtyListener(_notesController);
 
-    _bindPromptDirtyListener(_customPromptController);
+    for (final key in _editablePromptSegmentKeys) {
+      final controller = TextEditingController();
+      _segmentPromptControllers[key] = controller;
+      _bindPromptDirtyListener(controller);
+    }
     _bindPromptDirtyListener(_outputPromptController);
 
     _checkBackendHealth();
@@ -113,10 +159,11 @@ class _SettingsScreenState extends State<SettingsScreen>
     _targetDestinationController.dispose();
     _notesController.dispose();
 
-    _customPromptController.dispose();
     _outputPromptController.dispose();
-    _customPromptFocusNode.dispose();
     _outputPromptFocusNode.dispose();
+    for (final controller in _segmentPromptControllers.values) {
+      controller.dispose();
+    }
 
     super.dispose();
   }
@@ -509,19 +556,24 @@ class _SettingsScreenState extends State<SettingsScreen>
                   value: (selectedPrompt?['preset_output_format_prompt'] ?? '')
                       .toString(),
                 ),
-                _input(
-                  _customPromptController,
-                  '定制 Prompt（留空则使用预置）',
-                  focusNode: _customPromptFocusNode,
-                  maxLines: 6,
-                  minLines: 4,
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    '以下分段均可手动编辑。留空将回退到默认值；ai_memo / user_profile 允许为空。',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
                 ),
+                ..._buildPromptSegmentInputs(),
                 _input(
                   _outputPromptController,
-                  '输出格式说明 Prompt（留空则使用预置）',
+                  '输出格式 (output_format，留空则使用预置)',
                   focusNode: _outputPromptFocusNode,
                   maxLines: 6,
                   minLines: 4,
+                ),
+                _readonlyMultiline(
+                  label: '用户输入 (user_input)',
+                  value: '运行时注入，不持久化保存。',
                 ),
                 _readonlyMultiline(
                   label: '当前生效 Prompt',
@@ -546,7 +598,9 @@ class _SettingsScreenState extends State<SettingsScreen>
                     OutlinedButton.icon(
                       onPressed: () {
                         setState(() {
-                          _customPromptController.clear();
+                          for (final controller in _segmentPromptControllers.values) {
+                            controller.clear();
+                          }
                           _outputPromptController.clear();
                           _promptDirty = true;
                         });
@@ -1132,6 +1186,43 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
   }
 
+  List<Widget> _buildPromptSegmentInputs() {
+    final widgets = <Widget>[];
+    for (final key in _editablePromptSegmentKeys) {
+      final controller = _segmentPromptControllers[key];
+      if (controller == null) {
+        continue;
+      }
+      final label = _promptSegmentLabels[key] ?? key;
+      final isOptional = _optionalPromptSegments.contains(key);
+      final isTaskPrompt = key == 'task_prompt';
+      widgets.add(
+        _input(
+          controller,
+          isOptional ? '$label（可空）' : '$label（留空回退默认）',
+          maxLines: isTaskPrompt ? 6 : 4,
+          minLines: isTaskPrompt ? 3 : 2,
+        ),
+      );
+    }
+    return widgets;
+  }
+
+  Map<String, String> _asStringMap(dynamic value) {
+    if (value is! Map) {
+      return <String, String>{};
+    }
+    final out = <String, String>{};
+    value.forEach((key, raw) {
+      final normalizedKey = key.toString().trim();
+      if (normalizedKey.isEmpty) {
+        return;
+      }
+      out[normalizedKey] = raw?.toString() ?? '';
+    });
+    return out;
+  }
+
   void _bindProfileDirtyListener(TextEditingController controller) {
     controller.addListener(() {
       if (_syncingProfileForm) return;
@@ -1183,7 +1274,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
 
     if (_promptDirty) return;
-    if (_customPromptFocusNode.hasFocus || _outputPromptFocusNode.hasFocus) {
+    if (_outputPromptFocusNode.hasFocus) {
       return;
     }
     _applyPromptForm(_currentPromptConfig(templates));
@@ -1206,7 +1297,18 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   void _applyPromptForm(Map<String, dynamic>? config) {
     _syncingPromptForm = true;
-    _customPromptController.text = (config?['custom_prompt'] ?? '').toString();
+    final overrides = _asStringMap(config?['segment_overrides']);
+    final customPrompt = (config?['custom_prompt'] ?? '').toString().trim();
+    if ((overrides['task_prompt'] ?? '').trim().isEmpty && customPrompt.isNotEmpty) {
+      overrides['task_prompt'] = customPrompt;
+    }
+    for (final key in _editablePromptSegmentKeys) {
+      final controller = _segmentPromptControllers[key];
+      if (controller == null) {
+        continue;
+      }
+      controller.text = (overrides[key] ?? '').toString();
+    }
     _outputPromptController.text = (config?['output_format_prompt'] ?? '')
         .toString();
     _syncingPromptForm = false;
@@ -1343,10 +1445,18 @@ class _SettingsScreenState extends State<SettingsScreen>
       return;
     }
     try {
+      final segmentUpdates = <String, String>{};
+      for (final key in _editablePromptSegmentKeys) {
+        final value = _segmentPromptControllers[key]?.text.trim() ?? '';
+        if (value.isNotEmpty) {
+          segmentUpdates[key] = value;
+        }
+      }
       await provider.updateAIPromptTemplate(
         key: key,
-        customPrompt: _customPromptController.text,
         outputFormatPrompt: _outputPromptController.text,
+        segmentUpdates: segmentUpdates,
+        replaceSegments: true,
       );
       _promptDirty = false;
       if (!mounted) return;

@@ -524,12 +524,18 @@ class AppProvider with ChangeNotifier {
     required String key,
     String? customPrompt,
     String? outputFormatPrompt,
+    Map<String, String>? segmentUpdates,
+    List<String>? segmentDeletes,
+    bool? replaceSegments,
   }) async {
     await _runAction('更新AI Prompt配置', () async {
       final updated = await _api.updateAIPromptTemplate(
         key: key,
         customPrompt: customPrompt,
         outputFormatPrompt: outputFormatPrompt,
+        segmentUpdates: segmentUpdates,
+        segmentDeletes: segmentDeletes,
+        replaceSegments: replaceSegments,
       );
       _upsertPromptTemplate(updated);
       _isSectionLoaded[DataSection.ai] = true;

@@ -458,6 +458,9 @@ class ApiService {
     required String key,
     String? customPrompt,
     String? outputFormatPrompt,
+    Map<String, String>? segmentUpdates,
+    List<String>? segmentDeletes,
+    bool? replaceSegments,
   }) async {
     final body = <String, dynamic>{};
     if (customPrompt != null) {
@@ -465,6 +468,15 @@ class ApiService {
     }
     if (outputFormatPrompt != null) {
       body['output_format_prompt'] = outputFormatPrompt;
+    }
+    if (segmentUpdates != null) {
+      body['segment_updates'] = segmentUpdates;
+    }
+    if (segmentDeletes != null) {
+      body['segment_deletes'] = segmentDeletes;
+    }
+    if (replaceSegments != null) {
+      body['replace_segments'] = replaceSegments;
     }
     final response = await _request(
       method: 'PUT',
