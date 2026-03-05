@@ -315,3 +315,45 @@ func TestApplyCreateAgentDefaults_KeepConfiguredProvider(t *testing.T) {
 		t.Fatalf("expected protocol=%s, got %s", ai.AgentProtocolOpenAICompatible, got.Protocol)
 	}
 }
+
+func TestResolveAgentID_DirectAlias(t *testing.T) {
+	control := &aiAppControl{}
+	id, err := control.resolveAgentID(context.Background(), "delete", map[string]any{
+		"agent_id": "agent-001",
+	})
+	if err != nil {
+		t.Fatalf("resolveAgentID() error = %v", err)
+	}
+	if id != "agent-001" {
+		t.Fatalf("expected agent-001, got %s", id)
+	}
+}
+
+func TestResolveAgentIDFromItems_ByName(t *testing.T) {
+	items := []ai.Agent{
+		{ID: "a-1", Name: "Math Tutor", Protocol: ai.AgentProtocolMock, Enabled: true},
+		{ID: "a-2", Name: "English Tutor", Protocol: ai.AgentProtocolMock, Enabled: true},
+	}
+	id, candidates := resolveAgentIDFromItems(map[string]any{"name": "Math Tutor"}, items)
+	if id != "a-1" {
+		t.Fatalf("expected a-1, got %s", id)
+	}
+	if len(candidates) != 1 {
+		t.Fatalf("expected 1 candidate, got %d", len(candidates))
+	}
+}
+
+func TestResolveAgentIDFromItems_AmbiguousKeyword(t *testing.T) {
+	items := []ai.Agent{
+		{ID: "a-1", Name: "Math Tutor Alpha", Protocol: ai.AgentProtocolMock, Enabled: true},
+		{ID: "a-2", Name: "Math Tutor Beta", Protocol: ai.AgentProtocolMock, Enabled: true},
+		{ID: "a-3", Name: "English Tutor", Protocol: ai.AgentProtocolMock, Enabled: true},
+	}
+	id, candidates := resolveAgentIDFromItems(map[string]any{"keyword": "math tutor"}, items)
+	if id != "" {
+		t.Fatalf("expected empty id for ambiguous keyword, got %s", id)
+	}
+	if len(candidates) != 2 {
+		t.Fatalf("expected 2 candidates, got %d", len(candidates))
+	}
+}

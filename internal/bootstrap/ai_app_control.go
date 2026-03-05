@@ -675,7 +675,10 @@ func (c *aiAppControl) executeAgent(ctx context.Context, operation string, param
 		}
 		return ai.AppControlResult{Summary: fmt.Sprintf("已创建智能体 %s。", item.Name), Data: map[string]any{"item": item}}, nil
 	case "update":
-		id := asString(params["id"])
+		id, err := c.resolveAgentID(ctx, "update", params)
+		if err != nil {
+			return ai.AppControlResult{}, err
+		}
 		req := buildUpsertAgentRequest(params)
 		item, err := c.aiService.UpdateAgent(ctx, id, req)
 		if err != nil {
@@ -683,7 +686,10 @@ func (c *aiAppControl) executeAgent(ctx context.Context, operation string, param
 		}
 		return ai.AppControlResult{Summary: fmt.Sprintf("已更新智能体 %s。", item.Name), Data: map[string]any{"item": item}}, nil
 	case "delete":
-		id := asString(params["id"])
+		id, err := c.resolveAgentID(ctx, "delete", params)
+		if err != nil {
+			return ai.AppControlResult{}, err
+		}
 		if err := c.aiService.DeleteAgent(ctx, id); err != nil {
 			return ai.AppControlResult{}, err
 		}
@@ -691,6 +697,134 @@ func (c *aiAppControl) executeAgent(ctx context.Context, operation string, param
 	default:
 		return ai.AppControlResult{}, errs.BadRequest("unsupported agent operation")
 	}
+}
+
+func (c *aiAppControl) resolveAgentID(ctx context.Context, operation string, params map[string]any) (string, error) {
+	directID := firstNonEmpty(
+		asString(params["id"]),
+		asString(params["agent_id"]),
+		asString(params["item_id"]),
+		asString(params["target_id"]),
+	)
+	if directID != "" {
+		return directID, nil
+	}
+	if c.aiService == nil {
+		return "", errs.BadRequest("ai service is not ready")
+	}
+	items, err := c.aiService.ListAgents(ctx)
+	if err != nil {
+		return "", err
+	}
+	resolved, candidates := resolveAgentIDFromItems(params, items)
+	if resolved != "" {
+		return resolved, nil
+	}
+	return "", buildAgentResolveError(operation, candidates)
+}
+
+func resolveAgentIDFromItems(params map[string]any, items []ai.Agent) (string, []ai.Agent) {
+	candidates := filterAgentItems(items, params)
+	if len(candidates) == 1 {
+		return candidates[0].ID, candidates
+	}
+	name := strings.TrimSpace(firstNonEmpty(asString(params["name"]), asString(params["title"])))
+	if name != "" && len(candidates) > 1 {
+		exact := make([]ai.Agent, 0, len(candidates))
+		for _, item := range candidates {
+			if strings.EqualFold(strings.TrimSpace(item.Name), name) {
+				exact = append(exact, item)
+			}
+		}
+		if len(exact) == 1 {
+			return exact[0].ID, exact
+		}
+		if len(exact) > 1 {
+			candidates = exact
+		}
+	}
+	return "", candidates
+}
+
+func filterAgentItems(items []ai.Agent, params map[string]any) []ai.Agent {
+	keyword := strings.ToLower(
+		firstNonEmpty(
+			asString(params["keyword"]),
+			asString(params["query"]),
+			asString(params["q"]),
+			asString(params["name"]),
+			asString(params["title"]),
+		),
+	)
+	protocol := strings.ToLower(asString(params["protocol"]))
+	matchEnabled := hasValue(params, "enabled")
+	enabled := asBool(params["enabled"], false)
+
+	out := make([]ai.Agent, 0, len(items))
+	for _, item := range items {
+		if protocol != "" && strings.ToLower(strings.TrimSpace(string(item.Protocol))) != protocol {
+			continue
+		}
+		if matchEnabled && item.Enabled != enabled {
+			continue
+		}
+		if keyword != "" {
+			name := strings.ToLower(strings.TrimSpace(item.Name))
+			id := strings.ToLower(strings.TrimSpace(item.ID))
+			if !strings.Contains(name, keyword) && !strings.Contains(id, keyword) {
+				continue
+			}
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
+func buildAgentResolveError(operation string, candidates []ai.Agent) error {
+	op := strings.TrimSpace(operation)
+	if op == "" {
+		op = "operate"
+	}
+	if len(candidates) == 0 {
+		return errs.BadRequest(
+			fmt.Sprintf(
+				"agent %s requires id, or provide name/keyword/protocol/enabled to find a unique agent",
+				op,
+			),
+		)
+	}
+	return errs.BadRequest(
+		fmt.Sprintf(
+			"agent %s is ambiguous: matched %d item(s). Candidates: %s",
+			op,
+			len(candidates),
+			summarizeAgentItems(candidates, 5),
+		),
+	)
+}
+
+func summarizeAgentItems(items []ai.Agent, limit int) string {
+	if len(items) == 0 || limit == 0 {
+		return ""
+	}
+	if limit < 0 || limit > len(items) {
+		limit = len(items)
+	}
+	chunks := make([]string, 0, limit)
+	for i := 0; i < limit; i++ {
+		item := items[i]
+		chunks = append(
+			chunks,
+			fmt.Sprintf(
+				"id=%s name=%q protocol=%s enabled=%t",
+				item.ID,
+				item.Name,
+				item.Protocol,
+				item.Enabled,
+			),
+		)
+	}
+	return strings.Join(chunks, "; ")
 }
 
 func applyCreateAgentDefaults(req ai.UpsertAgentRequest, params map[string]any) ai.UpsertAgentRequest {
