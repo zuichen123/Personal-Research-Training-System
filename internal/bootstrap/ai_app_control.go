@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"self-study-tool/internal/modules/ai"
@@ -92,17 +93,47 @@ func (c *aiAppControl) executeQuestion(ctx context.Context, operation string, pa
 		if err != nil {
 			return ai.AppControlResult{}, err
 		}
+		filtered := filterQuestionItems(items, params)
+		opts := parseQuestionFetchOptions(params, true)
+		sourceCount := len(filtered)
+		truncated := false
+		if opts.Limit > 0 && len(filtered) > opts.Limit {
+			filtered = filtered[:opts.Limit]
+			truncated = true
+		}
+		resultItems := make([]map[string]any, 0, len(filtered))
+		for _, item := range filtered {
+			resultItems = append(resultItems, c.buildQuestionPayload(ctx, item, opts))
+		}
+		summary := fmt.Sprintf("Retrieved %d question(s).", len(resultItems))
+		if truncated {
+			summary = fmt.Sprintf("%s (result truncated by limit=%d)", summary, opts.Limit)
+		}
 		return ai.AppControlResult{
-			Summary: fmt.Sprintf("已获取 %d 道题目。", len(items)),
-			Data:    map[string]any{"items": items},
+			Summary: summary,
+			Data: map[string]any{
+				"items":             resultItems,
+				"count":             len(resultItems),
+				"source_count":      sourceCount,
+				"truncated":         truncated,
+				"effective_include": opts.includeSummary(),
+			},
 		}, nil
 	case "get":
-		id := asString(params["id"])
+		id := firstNonEmpty(asString(params["id"]), asString(params["question_id"]))
 		item, err := c.questionService.GetByID(ctx, id)
 		if err != nil {
 			return ai.AppControlResult{}, err
 		}
-		return ai.AppControlResult{Summary: fmt.Sprintf("已获取题目 %s。", item.ID), Data: map[string]any{"item": item}}, nil
+		opts := parseQuestionFetchOptions(params, false)
+		payload := c.buildQuestionPayload(ctx, item, opts)
+		return ai.AppControlResult{
+			Summary: fmt.Sprintf("Question %s loaded.", item.ID),
+			Data: map[string]any{
+				"item":              payload,
+				"effective_include": opts.includeSummary(),
+			},
+		}, nil
 	case "create":
 		in := question.CreateInput{
 			Title:        asString(params["title"]),
@@ -1046,6 +1077,415 @@ func (c *aiAppControl) executePrompt(ctx context.Context, operation string, para
 	default:
 		return ai.AppControlResult{}, errs.BadRequest("unsupported prompt operation")
 	}
+}
+
+type questionFetchOptions struct {
+	Limit             int
+	AttemptLimit      int
+	ContentMaxChars   int
+	IncludeQuestion   bool
+	IncludeContent    bool
+	IncludeOptions    bool
+	IncludeAnswerKey  bool
+	IncludeTags       bool
+	IncludeUserAnswer bool
+	IncludeAttempts   bool
+}
+
+func parseQuestionFetchOptions(params map[string]any, forList bool) questionFetchOptions {
+	opts := questionFetchOptions{
+		Limit:             0,
+		AttemptLimit:      asInt(firstNonNil(params["attempt_limit"], params["user_answer_limit"]), 3),
+		ContentMaxChars:   asInt(firstNonNil(params["content_max_chars"], params["stem_max_chars"]), 0),
+		IncludeQuestion:   true,
+		IncludeContent:    !forList,
+		IncludeOptions:    !forList,
+		IncludeAnswerKey:  !forList,
+		IncludeTags:       true,
+		IncludeUserAnswer: false,
+		IncludeAttempts:   false,
+	}
+	if forList {
+		opts.Limit = asInt(firstNonNil(params["limit"], params["question_limit"]), 10)
+	}
+
+	view := strings.ToLower(firstNonEmpty(asString(params["view"]), asString(params["detail"]), asString(params["mode"])))
+	switch view {
+	case "basic", "summary", "compact":
+		opts.IncludeContent = false
+		opts.IncludeOptions = false
+		opts.IncludeAnswerKey = false
+		opts.IncludeUserAnswer = false
+		opts.IncludeAttempts = false
+	case "content", "question":
+		opts.IncludeContent = true
+	case "answer", "answers", "grading":
+		opts.IncludeContent = true
+		opts.IncludeOptions = true
+		opts.IncludeAnswerKey = true
+	case "practice", "attempt", "attempts":
+		opts.IncludeUserAnswer = true
+		opts.IncludeAttempts = true
+	case "full", "all":
+		opts.IncludeContent = true
+		opts.IncludeOptions = true
+		opts.IncludeAnswerKey = true
+		opts.IncludeUserAnswer = true
+		opts.IncludeAttempts = true
+	}
+	if asBool(firstNonNil(params["include_full"], params["full"]), false) {
+		opts.IncludeContent = true
+		opts.IncludeOptions = true
+		opts.IncludeAnswerKey = true
+		opts.IncludeUserAnswer = true
+		opts.IncludeAttempts = true
+	}
+
+	includeSet := parseQuestionIncludeSet(firstNonNil(params["include"], params["fields"], params["with"]))
+	if _, ok := includeSet["full"]; ok {
+		opts.IncludeContent = true
+		opts.IncludeOptions = true
+		opts.IncludeAnswerKey = true
+		opts.IncludeUserAnswer = true
+		opts.IncludeAttempts = true
+	}
+	if _, ok := includeSet["question"]; ok {
+		opts.IncludeQuestion = true
+	}
+	if _, ok := includeSet["content"]; ok {
+		opts.IncludeContent = true
+	}
+	if _, ok := includeSet["options"]; ok {
+		opts.IncludeOptions = true
+	}
+	if _, ok := includeSet["answer_key"]; ok {
+		opts.IncludeAnswerKey = true
+	}
+	if _, ok := includeSet["tags"]; ok {
+		opts.IncludeTags = true
+	}
+	if _, ok := includeSet["user_answer"]; ok {
+		opts.IncludeUserAnswer = true
+	}
+	if _, ok := includeSet["attempts"]; ok {
+		opts.IncludeAttempts = true
+	}
+
+	excludeSet := parseQuestionIncludeSet(params["exclude"])
+	if _, ok := excludeSet["question"]; ok {
+		opts.IncludeQuestion = false
+	}
+	if _, ok := excludeSet["content"]; ok {
+		opts.IncludeContent = false
+	}
+	if _, ok := excludeSet["options"]; ok {
+		opts.IncludeOptions = false
+	}
+	if _, ok := excludeSet["answer_key"]; ok {
+		opts.IncludeAnswerKey = false
+	}
+	if _, ok := excludeSet["tags"]; ok {
+		opts.IncludeTags = false
+	}
+	if _, ok := excludeSet["user_answer"]; ok {
+		opts.IncludeUserAnswer = false
+	}
+	if _, ok := excludeSet["attempts"]; ok {
+		opts.IncludeAttempts = false
+	}
+
+	applyBoolOverride(params, "include_question", &opts.IncludeQuestion)
+	applyBoolOverride(params, "include_content", &opts.IncludeContent)
+	applyBoolOverride(params, "include_stem", &opts.IncludeContent)
+	applyBoolOverride(params, "include_options", &opts.IncludeOptions)
+	applyBoolOverride(params, "include_answer_key", &opts.IncludeAnswerKey)
+	applyBoolOverride(params, "include_tags", &opts.IncludeTags)
+	applyBoolOverride(params, "include_user_answer", &opts.IncludeUserAnswer)
+	applyBoolOverride(params, "include_attempts", &opts.IncludeAttempts)
+
+	if opts.AttemptLimit <= 0 {
+		opts.AttemptLimit = 3
+	}
+	if opts.ContentMaxChars < 0 {
+		opts.ContentMaxChars = 0
+	}
+	if opts.Limit < 0 {
+		opts.Limit = 0
+	}
+	if !opts.IncludeQuestion &&
+		!opts.IncludeContent &&
+		!opts.IncludeOptions &&
+		!opts.IncludeAnswerKey &&
+		!opts.IncludeUserAnswer &&
+		!opts.IncludeAttempts &&
+		!opts.IncludeTags {
+		opts.IncludeQuestion = true
+	}
+	return opts
+}
+
+func (opts questionFetchOptions) includeSummary() []string {
+	out := make([]string, 0, 7)
+	if opts.IncludeQuestion {
+		out = append(out, "question")
+	}
+	if opts.IncludeContent {
+		out = append(out, "content")
+	}
+	if opts.IncludeOptions {
+		out = append(out, "options")
+	}
+	if opts.IncludeAnswerKey {
+		out = append(out, "answer_key")
+	}
+	if opts.IncludeTags {
+		out = append(out, "tags")
+	}
+	if opts.IncludeUserAnswer {
+		out = append(out, "user_answer")
+	}
+	if opts.IncludeAttempts {
+		out = append(out, "attempts")
+	}
+	return out
+}
+
+func filterQuestionItems(items []question.Question, params map[string]any) []question.Question {
+	idSet := extractQuestionIDSet(params)
+	subject := strings.ToLower(asString(params["subject"]))
+	source := strings.ToLower(asString(params["source"]))
+	keyword := strings.ToLower(
+		firstNonEmpty(
+			asString(params["keyword"]),
+			asString(params["query"]),
+			asString(params["q"]),
+			asString(params["title"]),
+			asString(params["stem"]),
+		),
+	)
+	minDifficulty := 0
+	maxDifficulty := 0
+	if hasValue(params, "min_difficulty") {
+		minDifficulty = asInt(params["min_difficulty"], 0)
+	}
+	if hasValue(params, "max_difficulty") {
+		maxDifficulty = asInt(params["max_difficulty"], 0)
+	}
+
+	out := make([]question.Question, 0, len(items))
+	for _, item := range items {
+		if len(idSet) > 0 {
+			if _, ok := idSet[item.ID]; !ok {
+				continue
+			}
+		}
+		if subject != "" && strings.ToLower(strings.TrimSpace(item.Subject)) != subject {
+			continue
+		}
+		if source != "" && strings.ToLower(strings.TrimSpace(string(item.Source))) != source {
+			continue
+		}
+		if minDifficulty > 0 && item.Difficulty < minDifficulty {
+			continue
+		}
+		if maxDifficulty > 0 && item.Difficulty > maxDifficulty {
+			continue
+		}
+		if keyword != "" {
+			title := strings.ToLower(strings.TrimSpace(item.Title))
+			stem := strings.ToLower(strings.TrimSpace(item.Stem))
+			if !strings.Contains(title, keyword) && !strings.Contains(stem, keyword) {
+				continue
+			}
+		}
+		out = append(out, item)
+	}
+
+	sort.SliceStable(out, func(i, j int) bool {
+		left := out[i]
+		right := out[j]
+		if left.UpdatedAt.Equal(right.UpdatedAt) {
+			return left.ID < right.ID
+		}
+		return left.UpdatedAt.After(right.UpdatedAt)
+	})
+	return out
+}
+
+func extractQuestionIDSet(params map[string]any) map[string]struct{} {
+	out := map[string]struct{}{}
+	ids := asStringSlice(firstNonNil(params["question_ids"], params["ids"]))
+	ids = append(ids, firstNonEmpty(asString(params["id"]), asString(params["question_id"])))
+	for _, id := range ids {
+		trimmed := strings.TrimSpace(id)
+		if trimmed == "" {
+			continue
+		}
+		out[trimmed] = struct{}{}
+	}
+	return out
+}
+
+func parseQuestionIncludeSet(raw any) map[string]struct{} {
+	out := map[string]struct{}{}
+	for _, token := range splitFlexibleTokens(raw) {
+		normalized := normalizeQuestionIncludeToken(token)
+		if normalized == "" {
+			continue
+		}
+		out[normalized] = struct{}{}
+	}
+	return out
+}
+
+func splitFlexibleTokens(raw any) []string {
+	base := asStringSlice(raw)
+	if len(base) == 0 {
+		return []string{}
+	}
+	out := make([]string, 0, len(base))
+	for _, item := range base {
+		parts := strings.FieldsFunc(item, func(r rune) bool {
+			return r == ',' || r == ';' || r == '|'
+		})
+		if len(parts) == 0 {
+			if strings.TrimSpace(item) != "" {
+				out = append(out, strings.TrimSpace(item))
+			}
+			continue
+		}
+		for _, part := range parts {
+			trimmed := strings.TrimSpace(part)
+			if trimmed == "" {
+				continue
+			}
+			out = append(out, trimmed)
+		}
+	}
+	return out
+}
+
+func normalizeQuestionIncludeToken(token string) string {
+	switch strings.ToLower(strings.TrimSpace(token)) {
+	case "question", "questions", "basic", "summary", "compact", "meta":
+		return "question"
+	case "content", "stem", "question_content":
+		return "content"
+	case "options", "option":
+		return "options"
+	case "answer", "answers", "answer_key", "key":
+		return "answer_key"
+	case "tag", "tags":
+		return "tags"
+	case "user_answer", "user_answers", "answer_history":
+		return "user_answer"
+	case "attempt", "attempts", "practice", "practice_attempts":
+		return "attempts"
+	case "full", "all":
+		return "full"
+	default:
+		return ""
+	}
+}
+
+func applyBoolOverride(params map[string]any, key string, target *bool) {
+	if !hasValue(params, key) {
+		return
+	}
+	*target = asBool(params[key], *target)
+}
+
+func truncateQuestionContent(content string, maxChars int) string {
+	text := strings.TrimSpace(content)
+	if maxChars <= 0 {
+		return text
+	}
+	runes := []rune(text)
+	if len(runes) <= maxChars {
+		return text
+	}
+	return strings.TrimSpace(string(runes[:maxChars])) + " ..."
+}
+
+func (c *aiAppControl) buildQuestionPayload(
+	ctx context.Context,
+	item question.Question,
+	opts questionFetchOptions,
+) map[string]any {
+	out := map[string]any{
+		"id": item.ID,
+	}
+	if opts.IncludeQuestion {
+		out["title"] = item.Title
+		out["type"] = item.Type
+		out["subject"] = item.Subject
+		out["source"] = item.Source
+		out["difficulty"] = item.Difficulty
+		out["mastery_level"] = item.MasteryLevel
+		out["created_at"] = item.CreatedAt
+		out["updated_at"] = item.UpdatedAt
+	}
+	if opts.IncludeContent {
+		out["stem"] = truncateQuestionContent(item.Stem, opts.ContentMaxChars)
+	}
+	if opts.IncludeOptions {
+		out["options"] = item.Options
+	}
+	if opts.IncludeAnswerKey {
+		out["answer_key"] = item.AnswerKey
+	}
+	if opts.IncludeTags {
+		out["tags"] = item.Tags
+	}
+	if !opts.IncludeUserAnswer && !opts.IncludeAttempts {
+		return out
+	}
+	attemptsAll := c.listQuestionAttempts(ctx, item.ID)
+	attempts := attemptsAll
+	if opts.AttemptLimit > 0 && len(attempts) > opts.AttemptLimit {
+		attempts = attempts[:opts.AttemptLimit]
+	}
+	if opts.IncludeUserAnswer {
+		out["recent_user_answers"] = summarizeAttemptAnswers(attempts)
+	}
+	if opts.IncludeAttempts {
+		out["recent_attempts"] = attempts
+	}
+	out["attempt_count"] = len(attemptsAll)
+	return out
+}
+
+func (c *aiAppControl) listQuestionAttempts(ctx context.Context, questionID string) []practice.Attempt {
+	if c.practiceService == nil {
+		return []practice.Attempt{}
+	}
+	items, err := c.practiceService.ListAttemptsByQuestionID(ctx, questionID)
+	if err != nil || len(items) == 0 {
+		return []practice.Attempt{}
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].SubmittedAt.Equal(items[j].SubmittedAt) {
+			return items[i].ID > items[j].ID
+		}
+		return items[i].SubmittedAt.After(items[j].SubmittedAt)
+	})
+	return items
+}
+
+func summarizeAttemptAnswers(items []practice.Attempt) []map[string]any {
+	if len(items) == 0 {
+		return []map[string]any{}
+	}
+	out := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		out = append(out, map[string]any{
+			"user_answer":  item.UserAnswer,
+			"correct":      item.Correct,
+			"score":        item.Score,
+			"submitted_at": item.SubmittedAt,
+		})
+	}
+	return out
 }
 
 func buildUpsertAgentRequest(params map[string]any) ai.UpsertAgentRequest {
