@@ -43,13 +43,16 @@ class DownloadedResource {
   final Uint8List bytes;
 }
 
+typedef AIStreamProgressCallback = void Function(String message);
+
 class ApiService {
   ApiService({String? baseUrl, http.Client? client})
     : baseUrl = baseUrl ?? _defaultBaseUrl(),
       _client = client ?? http.Client();
 
   static const Duration _defaultRequestTimeout = Duration(seconds: 15);
-  static const Duration _aiRequestTimeout = Duration(seconds: 60);
+  static const Duration _aiRequestTimeout = Duration(seconds: 120);
+  static const Duration _aiStreamIdleTimeout = Duration(seconds: 20);
 
   final String baseUrl;
   final http.Client _client;
@@ -616,14 +619,15 @@ class ApiService {
   Future<AISendMessageResult> sendAISessionMessage(
     String sessionId, {
     required String content,
+    AIStreamProgressCallback? onProgress,
   }) async {
-    final response = await _request(
-      method: 'POST',
+    final data = await _requestAIStreamData(
       path: '/ai/sessions/$sessionId/messages',
       jsonBody: {'content': content},
       timeout: _aiRequestTimeout,
+      onProgress: onProgress,
     );
-    return AISendMessageResult.fromJson(_extractDataMap(response));
+    return AISendMessageResult.fromJson(_asMap(data));
   }
 
   Future<AISendMessageResult> confirmAISessionAction(
@@ -631,19 +635,20 @@ class ApiService {
     required String messageId,
     String action = '',
     Map<String, dynamic>? params,
+    AIStreamProgressCallback? onProgress,
   }) async {
     final body = <String, dynamic>{
       'message_id': messageId,
       if (action.trim().isNotEmpty) 'action': action.trim(),
       if (params != null && params.isNotEmpty) 'params': params,
     };
-    final response = await _request(
-      method: 'POST',
+    final data = await _requestAIStreamData(
       path: '/ai/sessions/$sessionId/confirm',
       jsonBody: body,
       timeout: _aiRequestTimeout,
+      onProgress: onProgress,
     );
-    return AISendMessageResult.fromJson(_extractDataMap(response));
+    return AISendMessageResult.fromJson(_asMap(data));
   }
 
   Future<Map<String, dynamic>> compressAISessionMessages(
@@ -715,39 +720,36 @@ class ApiService {
   Future<Map<String, dynamic>> buildLearningPlan(
     Map<String, dynamic> input,
   ) async {
-    final response = await _request(
-      method: 'POST',
+    final data = await _requestAIStreamData(
       path: '/ai/learning',
       jsonBody: input,
       timeout: _aiRequestTimeout,
     );
-    return _extractDataMap(response);
+    return _asMap(data);
   }
 
   Future<Map<String, dynamic>> optimizeLearningPlan(
     Map<String, dynamic> input,
   ) async {
-    final response = await _request(
-      method: 'POST',
+    final data = await _requestAIStreamData(
       path: '/ai/learning/optimize',
       jsonBody: input,
       timeout: _aiRequestTimeout,
     );
-    return _extractDataMap(response);
+    return _asMap(data);
   }
 
   Future<List<Question>> generateAIQuestions(
     Map<String, dynamic> input, {
     bool persist = false,
   }) async {
-    final response = await _request(
-      method: 'POST',
+    final data = await _requestAIStreamData(
       path: '/ai/questions/generate',
       query: {'persist': '$persist'},
       jsonBody: input,
       timeout: _aiRequestTimeout,
     );
-    return _extractDataList(response).map(Question.fromJson).toList();
+    return _asMapList(data).map(Question.fromJson).toList();
   }
 
   Future<List<Question>> searchAIQuestions({
@@ -765,35 +767,344 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>> gradeWithAI(Map<String, dynamic> input) async {
-    final response = await _request(
-      method: 'POST',
+    final data = await _requestAIStreamData(
       path: '/ai/grade',
       jsonBody: input,
       timeout: _aiRequestTimeout,
     );
-    return _extractDataMap(response);
+    return _asMap(data);
   }
 
   Future<Map<String, dynamic>> evaluateWithAI(
     Map<String, dynamic> input,
   ) async {
-    final response = await _request(
-      method: 'POST',
+    final data = await _requestAIStreamData(
       path: '/ai/evaluate',
       jsonBody: input,
       timeout: _aiRequestTimeout,
     );
-    return _extractDataMap(response);
+    return _asMap(data);
   }
 
   Future<Map<String, dynamic>> scoreWithAI(Map<String, dynamic> input) async {
-    final response = await _request(
-      method: 'POST',
+    final data = await _requestAIStreamData(
       path: '/ai/score',
       jsonBody: input,
       timeout: _aiRequestTimeout,
     );
-    return _extractDataMap(response);
+    return _asMap(data);
+  }
+
+  Future<dynamic> _requestAIStreamData({
+    required String path,
+    required Map<String, dynamic> jsonBody,
+    Map<String, String>? query,
+    Duration timeout = _aiRequestTimeout,
+    AIStreamProgressCallback? onProgress,
+  }) async {
+    final traceId = newTraceId();
+    final mergedQuery = <String, String>{...?query, 'stream': '1'};
+    final uri = Uri.parse(
+      '$baseUrl$path',
+    ).replace(queryParameters: mergedQuery);
+    final payload = jsonEncode(jsonBody);
+    final started = DateTime.now();
+
+    _logger.info(
+      module: 'api',
+      event: 'api.stream.start',
+      message: 'AI stream request started',
+      data: {
+        'method': 'POST',
+        'path': path,
+        'query': mergedQuery,
+        'trace_id': traceId,
+        'payload_size': payload.length,
+      },
+    );
+
+    final request = http.Request('POST', uri);
+    request.headers['X-Trace-ID'] = traceId;
+    request.headers['Content-Type'] = 'application/json';
+    request.body = payload;
+
+    late http.StreamedResponse streamedResponse;
+    try {
+      streamedResponse = await _client
+          .send(request)
+          .timeout(
+            timeout,
+            onTimeout: () => throw TimeoutException(
+              'No stream response received in ${timeout.inSeconds}s',
+              timeout,
+            ),
+          );
+    } catch (e) {
+      final latency = DateTime.now().difference(started).inMilliseconds;
+      _logger.error(
+        module: 'api',
+        event: 'api.stream.error',
+        message: 'AI stream request failed before response',
+        data: {
+          'method': 'POST',
+          'path': path,
+          'query': mergedQuery,
+          'latency_ms': latency,
+          'trace_id': traceId,
+        },
+        error: e.toString(),
+      );
+      rethrow;
+    }
+
+    if (streamedResponse.statusCode < 200 ||
+        streamedResponse.statusCode >= 300) {
+      final response = await http.Response.fromStream(streamedResponse);
+      final ex = _toApiException(response);
+      final latency = DateTime.now().difference(started).inMilliseconds;
+      _logger.error(
+        module: 'api',
+        event: 'api.stream.error',
+        message: 'AI stream response failed',
+        data: {
+          'method': 'POST',
+          'path': path,
+          'query': mergedQuery,
+          'status': response.statusCode,
+          'latency_ms': latency,
+          'trace_id': traceId,
+          'response_trace_id': response.headers['x-trace-id'],
+        },
+        error: ex.toString(),
+      );
+      throw ex;
+    }
+
+    try {
+      final data = await _readSSEData(
+        stream: streamedResponse.stream,
+        idleTimeout: _aiStreamIdleTimeout,
+        timeout: timeout,
+        onProgress: onProgress,
+      );
+      final latency = DateTime.now().difference(started).inMilliseconds;
+      _logger.info(
+        module: 'api',
+        event: 'api.stream.end',
+        message: 'AI stream request finished',
+        data: {
+          'method': 'POST',
+          'path': path,
+          'query': mergedQuery,
+          'status': streamedResponse.statusCode,
+          'latency_ms': latency,
+          'trace_id': traceId,
+          'response_trace_id': streamedResponse.headers['x-trace-id'],
+        },
+      );
+      return data;
+    } catch (e) {
+      final latency = DateTime.now().difference(started).inMilliseconds;
+      _logger.error(
+        module: 'api',
+        event: 'api.stream.error',
+        message: 'AI stream body parse failed',
+        data: {
+          'method': 'POST',
+          'path': path,
+          'query': mergedQuery,
+          'status': streamedResponse.statusCode,
+          'latency_ms': latency,
+          'trace_id': traceId,
+          'response_trace_id': streamedResponse.headers['x-trace-id'],
+        },
+        error: e.toString(),
+      );
+      rethrow;
+    }
+  }
+
+  Future<dynamic> _readSSEData({
+    required Stream<List<int>> stream,
+    required Duration idleTimeout,
+    required Duration timeout,
+    AIStreamProgressCallback? onProgress,
+  }) async {
+    Future<dynamic> consume() async {
+      final lineStream = stream
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .timeout(
+            idleTimeout,
+            onTimeout: (sink) => sink.addError(
+              TimeoutException(
+                'No stream event received in ${idleTimeout.inSeconds}s',
+                idleTimeout,
+              ),
+            ),
+          );
+
+      var currentEvent = 'message';
+      final dataLines = <String>[];
+      dynamic resultData;
+      var hasResult = false;
+
+      void resetEvent() {
+        currentEvent = 'message';
+        dataLines.clear();
+      }
+
+      void emitProgress(dynamic payload) {
+        if (onProgress == null) {
+          return;
+        }
+        final message = _extractStreamProgressMessage(payload);
+        if (message.isNotEmpty) {
+          onProgress(message);
+        }
+      }
+
+      void handleEvent() {
+        if (dataLines.isEmpty) {
+          resetEvent();
+          return;
+        }
+        final payloadText = dataLines.join('\n');
+        final payload = _decodeStreamPayload(payloadText);
+        switch (currentEvent) {
+          case 'start':
+          case 'progress':
+            emitProgress(payload);
+            break;
+          case 'error':
+            throw _streamPayloadToException(payload);
+          case 'result':
+            if (payload is Map<String, dynamic> &&
+                payload.containsKey('data')) {
+              resultData = payload['data'];
+            } else {
+              resultData = payload;
+            }
+            hasResult = true;
+            break;
+          default:
+            break;
+        }
+        resetEvent();
+      }
+
+      await for (final line in lineStream) {
+        if (line.isEmpty) {
+          handleEvent();
+          continue;
+        }
+        if (line.startsWith(':')) {
+          continue;
+        }
+        if (line.startsWith('event:')) {
+          currentEvent = line.substring(6).trim();
+          continue;
+        }
+        if (line.startsWith('data:')) {
+          dataLines.add(line.substring(5).trimLeft());
+          continue;
+        }
+      }
+      if (dataLines.isNotEmpty) {
+        handleEvent();
+      }
+      if (!hasResult) {
+        throw ApiException(
+          code: 'stream_no_result',
+          message: 'AI stream ended without result',
+          statusCode: 502,
+        );
+      }
+      return resultData;
+    }
+
+    return consume().timeout(
+      timeout,
+      onTimeout: () => throw TimeoutException(
+        'AI stream exceeded ${timeout.inSeconds}s',
+        timeout,
+      ),
+    );
+  }
+
+  dynamic _decodeStreamPayload(String payload) {
+    final normalized = payload.trim();
+    if (normalized.isEmpty) {
+      return <String, dynamic>{};
+    }
+    try {
+      return jsonDecode(normalized);
+    } catch (_) {
+      return <String, dynamic>{'message': normalized};
+    }
+  }
+
+  String _extractStreamProgressMessage(dynamic payload) {
+    if (payload is! Map<String, dynamic>) {
+      return '';
+    }
+    final direct = payload['message']?.toString().trim() ?? '';
+    if (direct.isNotEmpty) {
+      return direct;
+    }
+    final elapsedMS = (payload['elapsed_ms'] as num?)?.toInt();
+    if (elapsedMS == null || elapsedMS <= 0) {
+      return '';
+    }
+    return 'AI request is running (${(elapsedMS / 1000).floor()}s)';
+  }
+
+  ApiException _streamPayloadToException(dynamic payload) {
+    if (payload is Map<String, dynamic>) {
+      final errorObj = payload['error'];
+      if (errorObj is Map<String, dynamic>) {
+        final statusCode = (errorObj['http_status'] as num?)?.toInt() ?? 500;
+        return ApiException(
+          code: errorObj['code']?.toString() ?? 'ai_stream_error',
+          message:
+              errorObj['message']?.toString() ?? 'AI stream request failed',
+          statusCode: statusCode,
+        );
+      }
+      final fallbackMessage = payload['message']?.toString() ?? '';
+      if (fallbackMessage.trim().isNotEmpty) {
+        return ApiException(
+          code: 'ai_stream_error',
+          message: fallbackMessage.trim(),
+          statusCode: 500,
+        );
+      }
+    }
+    return ApiException(
+      code: 'ai_stream_error',
+      message: 'AI stream request failed',
+      statusCode: 500,
+    );
+  }
+
+  Map<String, dynamic> _asMap(dynamic raw) {
+    if (raw is Map<String, dynamic>) {
+      return raw;
+    }
+    if (raw is Map) {
+      return raw.cast<String, dynamic>();
+    }
+    return <String, dynamic>{};
+  }
+
+  List<Map<String, dynamic>> _asMapList(dynamic raw) {
+    if (raw is! List) {
+      return const <Map<String, dynamic>>[];
+    }
+    return raw
+        .whereType<Map>()
+        .map((item) => item.cast<String, dynamic>())
+        .toList(growable: false);
   }
 
   Future<http.Response> _request({

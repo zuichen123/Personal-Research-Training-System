@@ -64,6 +64,11 @@ func (h *Handler) generate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	persist, _ := strconv.ParseBool(r.URL.Query().Get("persist"))
+	if h.maybeStreamOperation(w, r, "generate_questions", func() (any, error) {
+		return h.service.Generate(r.Context(), req, persist)
+	}) {
+		return
+	}
 	items, err := h.service.Generate(r.Context(), req, persist)
 	if err != nil {
 		httpx.WriteError(w, err)
@@ -79,6 +84,11 @@ func (h *Handler) grade(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.maybeStreamOperation(w, r, "grade", func() (any, error) {
+		return h.service.Grade(r.Context(), req)
+	}) {
+		return
+	}
 	result, err := h.service.Grade(r.Context(), req)
 	if err != nil {
 		httpx.WriteError(w, err)
@@ -206,6 +216,11 @@ func (h *Handler) learning(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.maybeStreamOperation(w, r, "build_learning_plan", func() (any, error) {
+		return h.service.Learn(r.Context(), req)
+	}) {
+		return
+	}
 	result, err := h.service.Learn(r.Context(), req)
 	if err != nil {
 		httpx.WriteError(w, err)
@@ -221,6 +236,11 @@ func (h *Handler) optimizeLearning(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.maybeStreamOperation(w, r, "optimize_learning_plan", func() (any, error) {
+		return h.service.OptimizeLearningPlan(r.Context(), req)
+	}) {
+		return
+	}
 	result, err := h.service.OptimizeLearningPlan(r.Context(), req)
 	if err != nil {
 		httpx.WriteError(w, err)
@@ -236,6 +256,11 @@ func (h *Handler) evaluate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.maybeStreamOperation(w, r, "evaluate", func() (any, error) {
+		return h.service.Evaluate(r.Context(), req)
+	}) {
+		return
+	}
 	result, err := h.service.Evaluate(r.Context(), req)
 	if err != nil {
 		httpx.WriteError(w, err)
@@ -251,6 +276,11 @@ func (h *Handler) score(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.maybeStreamOperation(w, r, "score", func() (any, error) {
+		return h.service.Score(r.Context(), req)
+	}) {
+		return
+	}
 	result, err := h.service.Score(r.Context(), req)
 	if err != nil {
 		httpx.WriteError(w, err)

@@ -118,9 +118,15 @@ func (h *Handler) sendSessionMessage(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, err)
 		return
 	}
+	sessionID := strings.TrimSpace(chi.URLParam(r, "id"))
+	if h.maybeStreamOperation(w, r, "agent_chat", func() (any, error) {
+		return h.service.SendSessionMessage(r.Context(), sessionID, req)
+	}) {
+		return
+	}
 	result, err := h.service.SendSessionMessage(
 		r.Context(),
-		strings.TrimSpace(chi.URLParam(r, "id")),
+		sessionID,
 		req,
 	)
 	if err != nil {
@@ -166,9 +172,15 @@ func (h *Handler) confirmSessionAction(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, err)
 		return
 	}
+	sessionID := strings.TrimSpace(chi.URLParam(r, "id"))
+	if h.maybeStreamOperation(w, r, "agent_confirm_action", func() (any, error) {
+		return h.service.ConfirmSessionAction(r.Context(), sessionID, req)
+	}) {
+		return
+	}
 	result, err := h.service.ConfirmSessionAction(
 		r.Context(),
-		strings.TrimSpace(chi.URLParam(r, "id")),
+		sessionID,
 		req,
 	)
 	if err != nil {

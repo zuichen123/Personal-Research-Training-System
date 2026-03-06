@@ -330,6 +330,31 @@ class AIAgentProvider with ChangeNotifier {
       final result = await _api.sendAISessionMessage(
         activeSessionId,
         content: text,
+        onProgress: (message) {
+          final normalized = message.trim();
+          if (normalized.isEmpty) {
+            return;
+          }
+          final currentMessages = List<AIAgentMessage>.from(
+            _messagesBySession[activeSessionId] ?? const <AIAgentMessage>[],
+          );
+          final index = currentMessages.indexWhere(
+            (item) => item.id == localAssistantPlaceholder.id,
+          );
+          if (index < 0) {
+            return;
+          }
+          final original = currentMessages[index];
+          currentMessages[index] = _buildLocalMessage(
+            id: original.id,
+            sessionId: original.sessionId,
+            role: original.role,
+            content: normalized,
+            createdAt: original.createdAt,
+          );
+          _messagesBySession[activeSessionId] = currentMessages;
+          notifyListeners();
+        },
       );
       final currentMessages = List<AIAgentMessage>.from(
         _messagesBySession[activeSessionId] ?? const <AIAgentMessage>[],
@@ -575,7 +600,10 @@ class AIAgentProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  void _applyScheduleBindingPayload(String sessionId, Map<String, dynamic> data) {
+  void _applyScheduleBindingPayload(
+    String sessionId,
+    Map<String, dynamic> data,
+  ) {
     final binding =
         (data['binding'] as Map?)?.cast<String, dynamic>() ??
         <String, dynamic>{};
