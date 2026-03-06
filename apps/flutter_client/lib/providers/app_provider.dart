@@ -273,9 +273,14 @@ class AppProvider with ChangeNotifier {
   Future<void> submitPractice(
     String questionId,
     List<String> userAnswers,
+    int elapsedSeconds,
   ) async {
     await _runAction('提交练习', () async {
-      final attempt = await _api.submitPractice(questionId, userAnswers);
+      final attempt = await _api.submitPractice(
+        questionId,
+        userAnswers,
+        elapsedSeconds,
+      );
       _attempts.insert(0, attempt);
       _isSectionLoaded[DataSection.attempts] = true;
       if (!attempt.correct) {

@@ -37,14 +37,18 @@ func TestService_SubmitWrongAnswerCreatesMistake(t *testing.T) {
 	}
 
 	attempt, err := practiceService.Submit(context.Background(), SubmitInput{
-		QuestionID: q.ID,
-		UserAnswer: []string{"not sure"},
+		QuestionID:     q.ID,
+		UserAnswer:     []string{"not sure"},
+		ElapsedSeconds: 37,
 	})
 	if err != nil {
 		t.Fatalf("submit error: %v", err)
 	}
 	if attempt.Correct {
 		t.Fatal("expected incorrect attempt")
+	}
+	if attempt.ElapsedSeconds != 37 {
+		t.Fatalf("expected elapsed_seconds=37, got %d", attempt.ElapsedSeconds)
 	}
 
 	mistakes, err := mistakeService.List(context.Background(), q.ID)
@@ -53,5 +57,41 @@ func TestService_SubmitWrongAnswerCreatesMistake(t *testing.T) {
 	}
 	if len(mistakes) != 1 {
 		t.Fatalf("expected 1 mistake, got %d", len(mistakes))
+	}
+}
+
+func TestService_SubmitRejectsNegativeElapsedSeconds(t *testing.T) {
+	questionRepo := question.NewMemoryRepository()
+	questionService := question.NewService(questionRepo)
+
+	mistakeRepo := mistake.NewMemoryRepository()
+	mistakeService := mistake.NewService(mistakeRepo)
+
+	aiService := ai.NewService(
+		ai.NewMockClient(0*time.Millisecond),
+		questionService,
+		false,
+		ai.RuntimeConfig{Provider: "mock"},
+	)
+	practiceService := NewService(NewMemoryRepository(), questionService, aiService, mistakeService)
+
+	q, err := questionService.Create(context.Background(), question.CreateInput{
+		Title:      "Binary Search",
+		Stem:       "What is complexity of binary search?",
+		Type:       question.ShortAnswer,
+		AnswerKey:  []string{"O(log n)"},
+		Difficulty: 2,
+	})
+	if err != nil {
+		t.Fatalf("create question error: %v", err)
+	}
+
+	_, err = practiceService.Submit(context.Background(), SubmitInput{
+		QuestionID:     q.ID,
+		UserAnswer:     []string{"O(log n)"},
+		ElapsedSeconds: -1,
+	})
+	if err == nil {
+		t.Fatal("expected error for negative elapsed seconds")
 	}
 }

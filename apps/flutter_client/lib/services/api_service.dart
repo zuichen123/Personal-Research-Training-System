@@ -124,11 +124,16 @@ class ApiService {
   Future<PracticeAttempt> submitPractice(
     String questionId,
     List<String> userAnswer,
+    int elapsedSeconds,
   ) async {
     final response = await _request(
       method: 'POST',
       path: '/practice/submit',
-      jsonBody: {'question_id': questionId, 'user_answer': userAnswer},
+      jsonBody: {
+        'question_id': questionId,
+        'user_answer': userAnswer,
+        'elapsed_seconds': elapsedSeconds,
+      },
     );
     return PracticeAttempt.fromJson(_extractDataMap(response));
   }

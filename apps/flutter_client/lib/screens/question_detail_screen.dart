@@ -26,6 +26,7 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
   final TextEditingController _answerController = TextEditingController();
   bool _submitting = false;
   Map<String, dynamic>? _gradeResult;
+  DateTime _answerStartedAt = DateTime.now();
 
   @override
   void dispose() {
@@ -459,11 +460,18 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
         'question': _toAIQuestionPayload(widget.question),
         'user_answer': [answer],
       };
+      final elapsedSeconds = DateTime.now()
+          .difference(_answerStartedAt)
+          .inSeconds
+          .clamp(0, 1 << 30);
       await provider.gradeWithAI(payload);
-      await provider.submitPractice(widget.question.id, [answer]);
+      await provider.submitPractice(widget.question.id, [
+        answer,
+      ], elapsedSeconds);
       if (!mounted) return;
       setState(() {
         _gradeResult = provider.aiGradeResult;
+        _answerStartedAt = DateTime.now();
       });
     } catch (_) {
       if (!mounted) return;

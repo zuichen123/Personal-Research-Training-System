@@ -31,12 +31,13 @@ func (r *SQLiteRepository) Create(ctx context.Context, item Attempt) (Attempt, e
 
 	_, err = r.db.ExecContext(ctx, `
 		INSERT INTO practice_attempts (
-			id, question_id, user_answer_json, score, correct, feedback, submitted_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?)
+			id, question_id, user_answer_json, elapsed_seconds, score, correct, feedback, submitted_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		item.ID,
 		item.QuestionID,
 		string(answerJSON),
+		item.ElapsedSeconds,
 		item.Score,
 		correctValue,
 		item.Feedback,
@@ -51,7 +52,7 @@ func (r *SQLiteRepository) Create(ctx context.Context, item Attempt) (Attempt, e
 
 func (r *SQLiteRepository) List(ctx context.Context) ([]Attempt, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, question_id, user_answer_json, score, correct, feedback, submitted_at
+		SELECT id, question_id, user_answer_json, elapsed_seconds, score, correct, feedback, submitted_at
 		FROM practice_attempts
 		ORDER BY submitted_at DESC
 	`)
@@ -104,6 +105,7 @@ func scanAttempt(s attemptScanner) (Attempt, error) {
 		&item.ID,
 		&item.QuestionID,
 		&answerRaw,
+		&item.ElapsedSeconds,
 		&item.Score,
 		&correctValue,
 		&item.Feedback,

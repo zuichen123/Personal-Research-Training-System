@@ -5,6 +5,7 @@ import '../models/practice.dart';
 import '../models/question.dart';
 import '../providers/app_provider.dart';
 import 'practice_attempt_detail_screen.dart';
+import 'practice_session_screen.dart';
 
 class PracticeScreen extends StatelessWidget {
   const PracticeScreen({super.key});
@@ -18,7 +19,7 @@ class PracticeScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('练习与AI批阅'),
+        title: const Text('Practice'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -31,8 +32,8 @@ class PracticeScreen extends StatelessWidget {
         child: _buildBody(context, provider, attempts, loading),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showPracticeDialog(context),
-        label: const Text('开始练习'),
+        onPressed: () => _openPracticeSession(context),
+        label: const Text('Start Session'),
         icon: const Icon(Icons.play_arrow),
       ),
     );
@@ -55,31 +56,27 @@ class PracticeScreen extends StatelessWidget {
       return ListView(
         children: [
           const SizedBox(height: 96),
-          Center(child: Text('加载失败：${provider.errorMessage}')),
+          Center(child: Text('Load failed: ${provider.errorMessage}')),
         ],
       );
     }
 
     if (attempts.isEmpty) {
       return ListView(
-        children: [
-          const SizedBox(height: 64),
+        children: const [
+          SizedBox(height: 72),
           Center(
             child: Column(
               children: [
-                Icon(
-                  Icons.edit_note_outlined,
-                  size: 64,
-                  color: Colors.purple.withValues(alpha: 0.4),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  '暂无练习记录',
+                Icon(Icons.edit_note_outlined, size: 64, color: Colors.grey),
+                SizedBox(height: 16),
+                Text(
+                  'No practice history yet',
                   style: TextStyle(fontSize: 16, color: Colors.grey),
                 ),
-                const SizedBox(height: 8),
-                const Text(
-                  '点击右下角按钮开始你的第一次练习',
+                SizedBox(height: 8),
+                Text(
+                  'Tap "Start Session" to begin',
                   style: TextStyle(fontSize: 13, color: Colors.grey),
                 ),
               ],
@@ -97,7 +94,7 @@ class PracticeScreen extends StatelessWidget {
         final question = _questionById(provider.questions, a.questionId);
         final stem = (question?.stem ?? '').trim();
         final subject = (question?.subject ?? '').trim();
-        final type = _questionTypeZh(question?.type ?? '');
+        final type = _questionTypeLabel(question?.type ?? '');
         final count = attemptCountByQuestion[a.questionId] ?? 1;
         final scoreColor = a.score >= 80
             ? Colors.green
@@ -108,26 +105,35 @@ class PracticeScreen extends StatelessWidget {
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           child: ListTile(
             onTap: () async {
-              Question? question = _questionById(
+              Question? targetQuestion = _questionById(
                 provider.questions,
                 a.questionId,
               );
-              if (question == null && provider.questions.isEmpty) {
+              if (targetQuestion == null && provider.questions.isEmpty) {
                 await provider.fetchQuestions(force: true);
-                if (!context.mounted) return;
-                question = _questionById(provider.questions, a.questionId);
+                if (!context.mounted) {
+                  return;
+                }
+                targetQuestion = _questionById(
+                  provider.questions,
+                  a.questionId,
+                );
               }
-              if (!context.mounted) return;
+              if (!context.mounted) {
+                return;
+              }
               await Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => PracticeAttemptDetailScreen(
                     attempt: a,
-                    question: question,
+                    question: targetQuestion,
                     allAttempts: provider.attempts,
                   ),
                 ),
               );
-              if (!context.mounted) return;
+              if (!context.mounted) {
+                return;
+              }
               await provider.fetchAttempts(force: true);
             },
             leading: CircleAvatar(
@@ -145,7 +151,7 @@ class PracticeScreen extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    stem.isEmpty ? '题干未加载或已删除' : stem,
+                    stem.isEmpty ? 'Question not found' : stem,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -153,7 +159,7 @@ class PracticeScreen extends StatelessWidget {
                 const SizedBox(width: 8),
                 Chip(
                   label: Text(
-                    '历史$count次',
+                    'Attempts $count',
                     style: const TextStyle(fontSize: 11),
                   ),
                   visualDensity: VisualDensity.compact,
@@ -168,7 +174,7 @@ class PracticeScreen extends StatelessWidget {
               ],
             ),
             subtitle: Text(
-              '科目: ${subject.isEmpty ? '-' : subject}  类型: $type\n反馈: ${a.feedback}',
+              'Subject: ${subject.isEmpty ? '-' : subject}  Type: $type\nDuration: ${_formatDuration(a.elapsedSeconds)}  Feedback: ${a.feedback}',
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
             ),
@@ -176,12 +182,12 @@ class PracticeScreen extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                   _formatDate(a.submittedAt),
-                   style: const TextStyle(fontSize: 12),
+                  _formatDate(a.submittedAt),
+                  style: const TextStyle(fontSize: 12),
                 ),
                 const SizedBox(height: 4),
                 IconButton(
-                  tooltip: '删除',
+                  tooltip: 'Delete',
                   onPressed: () async {
                     await _deleteAttempt(context, a.id);
                   },
@@ -216,7 +222,9 @@ class PracticeScreen extends StatelessWidget {
     final seen = <String>{};
     final result = <PracticeAttempt>[];
     for (final item in attempts) {
-      if (seen.contains(item.questionId)) continue;
+      if (seen.contains(item.questionId)) {
+        continue;
+      }
       seen.add(item.questionId);
       result.add(item);
     }
@@ -236,26 +244,32 @@ class PracticeScreen extends StatelessWidget {
     AppProvider provider,
     List<PracticeAttempt> attempts,
   ) {
-    if (attempts.isEmpty) return;
-    if (provider.questions.isNotEmpty) return;
+    if (attempts.isEmpty) {
+      return;
+    }
+    if (provider.questions.isNotEmpty) {
+      return;
+    }
     if (provider.isSectionLoaded(DataSection.questions) ||
         provider.isSectionLoading(DataSection.questions)) {
       return;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!context.mounted) return;
+      if (!context.mounted) {
+        return;
+      }
       context.read<AppProvider>().fetchQuestions();
     });
   }
 
-  String _questionTypeZh(String type) {
+  String _questionTypeLabel(String type) {
     switch (type) {
       case 'single_choice':
-        return '单选';
+        return 'Single Choice';
       case 'multi_choice':
-        return '多选';
+        return 'Multiple Choice';
       case 'short_answer':
-        return '简答';
+        return 'Short Answer';
       default:
         return type.trim().isEmpty ? '-' : type;
     }
@@ -269,21 +283,28 @@ class PracticeScreen extends StatelessWidget {
     return '$y-$m-$d';
   }
 
+  String _formatDuration(int seconds) {
+    final normalized = seconds < 0 ? 0 : seconds;
+    final mins = (normalized ~/ 60).toString().padLeft(2, '0');
+    final secs = (normalized % 60).toString().padLeft(2, '0');
+    return '$mins:$secs';
+  }
+
   Future<void> _deleteAttempt(BuildContext context, String id) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          title: const Text('删除练习记录'),
-          content: const Text('确认删除这条练习记录？'),
+          title: const Text('Delete practice attempt'),
+          content: const Text('Are you sure you want to delete this attempt?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('取消'),
+              child: const Text('Cancel'),
             ),
             FilledButton(
               onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('删除'),
+              child: const Text('Delete'),
             ),
           ],
         );
@@ -299,129 +320,26 @@ class PracticeScreen extends StatelessWidget {
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('已删除练习记录')));
+      ).showSnackBar(const SnackBar(content: Text('Attempt deleted')));
     } catch (_) {
       if (!context.mounted) {
         return;
       }
-      final message = context.read<AppProvider>().errorMessage ?? '删除失败';
+      final message =
+          context.read<AppProvider>().errorMessage ?? 'Delete failed';
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
-  Future<void> _showPracticeDialog(BuildContext context) async {
-    final provider = context.read<AppProvider>();
-    if (provider.questions.isEmpty) {
-      await provider.fetchQuestions(force: true);
-      if (!context.mounted) return;
+  Future<void> _openPracticeSession(BuildContext context) async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const PracticeSessionScreen()));
+    if (!context.mounted) {
+      return;
     }
-    String? selectedQuestionId = provider.questions.isEmpty
-        ? null
-        : provider.questions.first.id;
-    final questionIdController = TextEditingController();
-    final answerController = TextEditingController();
-
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setState) {
-            return AlertDialog(
-              title: const Text('提交练习'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (provider.questions.isNotEmpty)
-                    DropdownButtonFormField<String>(
-                      value: selectedQuestionId,
-                      decoration: const InputDecoration(labelText: '选择题目'),
-                      items: provider.questions
-                          .map(
-                            (Question q) => DropdownMenuItem(
-                              value: q.id,
-                              child: Text(
-                                q.title.isEmpty ? q.stem : q.title,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) =>
-                          setState(() => selectedQuestionId = value),
-                    ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: questionIdController,
-                    decoration: const InputDecoration(
-                      labelText: '或手动输入题目ID',
-                      hintText: '可留空（使用下拉选择）',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: answerController,
-                    decoration: const InputDecoration(
-                      labelText: '你的答案',
-                      hintText: '多点答案请用逗号分隔',
-                    ),
-                    maxLines: 3,
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(),
-                  child: const Text('取消'),
-                ),
-                FilledButton(
-                  onPressed: () async {
-                    final manualId = questionIdController.text.trim();
-                    final questionId = manualId.isNotEmpty
-                        ? manualId
-                        : (selectedQuestionId ?? '');
-                    final answers = answerController.text
-                        .split(',')
-                        .map((e) => e.trim())
-                        .where((e) => e.isNotEmpty)
-                        .toList();
-
-                    if (questionId.isEmpty || answers.isEmpty) {
-                      if (ctx.mounted) {
-                        ScaffoldMessenger.of(ctx).showSnackBar(
-                          const SnackBar(content: Text('题目ID和答案不能为空')),
-                        );
-                      }
-                      return;
-                    }
-
-                    try {
-                      await provider.submitPractice(questionId, answers);
-                      if (ctx.mounted) {
-                        Navigator.of(ctx).pop();
-                        ScaffoldMessenger.of(
-                          ctx,
-                        ).showSnackBar(const SnackBar(content: Text('提交成功')));
-                      }
-                    } catch (e) {
-                      if (ctx.mounted) {
-                        ScaffoldMessenger.of(
-                          ctx,
-                        ).showSnackBar(SnackBar(content: Text('提交失败：$e')));
-                      }
-                    }
-                  },
-                  child: const Text('提交'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-
-    questionIdController.dispose();
-    answerController.dispose();
+    await context.read<AppProvider>().fetchAttempts(force: true);
   }
 }

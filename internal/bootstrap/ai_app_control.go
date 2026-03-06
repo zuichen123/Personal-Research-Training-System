@@ -218,8 +218,12 @@ func (c *aiAppControl) executePractice(ctx context.Context, operation string, pa
 		return ai.AppControlResult{Summary: fmt.Sprintf("已获取 %d 条练习记录。", len(items)), Data: map[string]any{"items": items}}, nil
 	case "submit":
 		in := practice.SubmitInput{
-			QuestionID: asString(params["question_id"]),
-			UserAnswer: asStringSlice(params["user_answer"]),
+			QuestionID: firstNonEmpty(asString(params["question_id"]), asString(params["questionId"])),
+			UserAnswer: asStringSlice(firstNonNil(params["user_answer"], params["answer"])),
+			ElapsedSeconds: firstNonNegativeInt(
+				asInt(firstNonNil(params["elapsed_seconds"], params["elapsed"], params["duration_seconds"]), 0),
+				0,
+			),
 		}
 		item, err := c.practiceService.Submit(ctx, in)
 		if err != nil {
@@ -1065,6 +1069,24 @@ func buildUpsertAgentRequest(params map[string]any) ai.UpsertAgentRequest {
 		IntentCapabilities: pickStringSlice(params, "intent_capabilities", []string{"chat", "generate_questions", "build_plan", "manage_app"}),
 		Enabled:            boolPtr(asBool(params["enabled"], true)),
 	}
+}
+
+func firstNonNil(values ...any) any {
+	for _, item := range values {
+		if item != nil {
+			return item
+		}
+	}
+	return nil
+}
+
+func firstNonNegativeInt(values ...int) int {
+	for _, item := range values {
+		if item >= 0 {
+			return item
+		}
+	}
+	return 0
 }
 
 func asMap(v any) map[string]any {

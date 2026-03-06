@@ -35,6 +35,9 @@ func (s *Service) Submit(ctx context.Context, in SubmitInput) (Attempt, error) {
 	if len(in.UserAnswer) == 0 {
 		return Attempt{}, errs.BadRequest("user_answer is required")
 	}
+	if in.ElapsedSeconds < 0 {
+		return Attempt{}, errs.BadRequest("elapsed_seconds must be >= 0")
+	}
 
 	q, err := s.questionService.GetByID(ctx, in.QuestionID)
 	if err != nil {
@@ -50,13 +53,14 @@ func (s *Service) Submit(ctx context.Context, in SubmitInput) (Attempt, error) {
 	}
 
 	attempt := Attempt{
-		ID:          uuid.NewString(),
-		QuestionID:  q.ID,
-		UserAnswer:  in.UserAnswer,
-		Score:       gradeResult.Score,
-		Correct:     gradeResult.Correct,
-		Feedback:    gradeResult.Feedback,
-		SubmittedAt: time.Now().UTC(),
+		ID:             uuid.NewString(),
+		QuestionID:     q.ID,
+		UserAnswer:     in.UserAnswer,
+		ElapsedSeconds: in.ElapsedSeconds,
+		Score:          gradeResult.Score,
+		Correct:        gradeResult.Correct,
+		Feedback:       gradeResult.Feedback,
+		SubmittedAt:    time.Now().UTC(),
 	}
 
 	stored, err := s.repo.Create(ctx, attempt)

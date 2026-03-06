@@ -2,6 +2,7 @@ class PracticeAttempt {
   final String id;
   final String questionId;
   final List<String> userAnswer;
+  final int elapsedSeconds;
   final double score;
   final bool correct;
   final String feedback;
@@ -11,6 +12,7 @@ class PracticeAttempt {
     required this.id,
     required this.questionId,
     required this.userAnswer,
+    required this.elapsedSeconds,
     required this.score,
     required this.correct,
     required this.feedback,
@@ -26,6 +28,7 @@ class PracticeAttempt {
               ?.map((e) => e.toString())
               .toList() ??
           [],
+      elapsedSeconds: (json['elapsed_seconds'] as num?)?.toInt() ?? 0,
       score: (json['score'] as num?)?.toDouble() ?? 0.0,
       correct: json['correct'] ?? false,
       feedback: json['feedback'] ?? '',
@@ -40,6 +43,7 @@ class PracticeAttempt {
       'id': id,
       'question_id': questionId,
       'user_answer': userAnswer,
+      'elapsed_seconds': elapsedSeconds,
       'score': score,
       'correct': correct,
       'feedback': feedback,
