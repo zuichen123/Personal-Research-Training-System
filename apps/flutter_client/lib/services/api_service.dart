@@ -880,6 +880,30 @@ class ApiService {
       throw ex;
     }
 
+    final contentType = (streamedResponse.headers['content-type'] ?? '')
+        .toLowerCase();
+    if (!contentType.contains('text/event-stream')) {
+      final response = await http.Response.fromStream(streamedResponse);
+      final data = _decodeNonStreamResponseData(response);
+      final latency = DateTime.now().difference(started).inMilliseconds;
+      _logger.warn(
+        module: 'api',
+        event: 'api.stream.fallback',
+        message: 'AI stream fallback to JSON response',
+        data: {
+          'method': 'POST',
+          'path': path,
+          'query': mergedQuery,
+          'status': response.statusCode,
+          'latency_ms': latency,
+          'trace_id': traceId,
+          'response_trace_id': response.headers['x-trace-id'],
+          'content_type': contentType,
+        },
+      );
+      return data;
+    }
+
     try {
       final data = await _readSSEData(
         stream: streamedResponse.stream,
@@ -946,6 +970,7 @@ class ApiService {
 
       var currentEvent = 'message';
       final dataLines = <String>[];
+      final plainLines = <String>[];
       dynamic resultData;
       var hasResult = false;
 
@@ -1009,11 +1034,25 @@ class ApiService {
           dataLines.add(line.substring(5).trimLeft());
           continue;
         }
+        plainLines.add(line);
       }
       if (dataLines.isNotEmpty) {
         handleEvent();
       }
       if (!hasResult) {
+        final fallbackPayloadText = plainLines.join('\n').trim();
+        if (fallbackPayloadText.isNotEmpty) {
+          final fallbackPayload = _decodeStreamPayload(fallbackPayloadText);
+          if (fallbackPayload is Map<String, dynamic> &&
+              fallbackPayload.containsKey('error')) {
+            throw _streamPayloadToException(fallbackPayload);
+          }
+          if (fallbackPayload is Map<String, dynamic> &&
+              fallbackPayload.containsKey('data')) {
+            return fallbackPayload['data'];
+          }
+          return fallbackPayload;
+        }
         throw ApiException(
           code: 'stream_no_result',
           message: 'AI stream ended without result',
@@ -1030,6 +1069,33 @@ class ApiService {
         timeout,
       ),
     );
+  }
+
+  dynamic _decodeNonStreamResponseData(http.Response response) {
+    final body = response.body.trim();
+    if (body.isEmpty) {
+      throw ApiException(
+        code: 'empty_body',
+        message: 'AI response body is empty',
+        statusCode: response.statusCode,
+      );
+    }
+    final decoded = jsonDecode(body);
+    if (decoded is Map<String, dynamic>) {
+      final errorObj = decoded['error'];
+      if (errorObj is Map<String, dynamic>) {
+        throw ApiException(
+          code: errorObj['code']?.toString() ?? 'api_error',
+          message: errorObj['message']?.toString() ?? 'AI request failed',
+          statusCode: response.statusCode,
+        );
+      }
+      if (decoded.containsKey('data')) {
+        return decoded['data'];
+      }
+      return decoded;
+    }
+    return decoded;
   }
 
   dynamic _decodeStreamPayload(String payload) {
