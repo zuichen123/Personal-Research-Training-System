@@ -105,6 +105,7 @@ type actionExecutionResult struct {
 	Content         string
 	ArtifactType    string
 	ArtifactPayload map[string]any
+	ToolData        map[string]any
 	Meta            agentCallMeta
 }
 
@@ -989,6 +990,10 @@ func (s *Service) executeManageAppActionLoop(
 	}
 
 	combined := strings.TrimSpace(strings.Join(summaries, "\n"))
+	if reply, replyMeta, err := s.buildManageAppFinalReply(ctx, session, agent, loopMessages); err == nil {
+		combined = strings.TrimSpace(reply)
+		finalMeta = replyMeta
+	}
 	if combined == "" {
 		combined = strings.TrimSpace(initialResult.Content)
 	}
@@ -999,6 +1004,41 @@ func (s *Service) executeManageAppActionLoop(
 		Content: combined,
 		Meta:    finalMeta,
 	}, finalIntent, nil
+}
+
+func (s *Service) buildManageAppFinalReply(
+	ctx context.Context,
+	session AgentSession,
+	agent Agent,
+	messages []ChatMessage,
+) (string, agentCallMeta, error) {
+	finalMessages := append([]ChatMessage{}, messages...)
+	finalMessages = append(finalMessages, ChatMessage{
+		Role: "system",
+		Content: "Tool execution phase is complete. " +
+			"Now provide the final answer to the user directly based on [tool_result] messages. " +
+			"If user asked for a list (for example questions/plans/resources), enumerate key items instead of only reporting count. " +
+			"Do not request another tool call in this step.",
+	})
+	resp, meta, err := s.chatWithFallback(ctx, agent, ChatRequest{
+		SystemPrompt: agent.SystemPrompt,
+		Messages:     finalMessages,
+		Mode:         "chat",
+		PromptPatch: s.buildSessionSchedulePromptPatch(
+			ctx,
+			session,
+			latestUserMessageContentFromChatMessages(messages),
+			false,
+		),
+	})
+	if err != nil {
+		return "", meta, err
+	}
+	content := strings.TrimSpace(resp.Content)
+	if content == "" {
+		return "", meta, errs.Internal("empty manage_app final reply")
+	}
+	return content, meta, nil
 }
 
 func (s *Service) detectNextToolIntent(
@@ -1034,16 +1074,32 @@ func buildToolResultChatMessage(
 	if summary == "" {
 		summary = "tool executed"
 	}
+	dataPreview := toolDataPreview(result.ToolData)
+	if dataPreview == "" {
+		dataPreview = "{}"
+	}
 	return ChatMessage{
 		Role: "assistant",
 		Content: fmt.Sprintf(
-			"[tool_result #%d] module=%s operation=%s summary=%s",
+			"[tool_result #%d] module=%s operation=%s summary=%s data_preview=%s",
 			step,
 			req.Module,
 			req.Operation,
 			truncateText(summary, 360),
+			dataPreview,
 		),
 	}
+}
+
+func toolDataPreview(data map[string]any) string {
+	if len(data) == 0 {
+		return ""
+	}
+	raw, err := json.Marshal(data)
+	if err != nil {
+		return ""
+	}
+	return truncateText(compactSpaces(string(raw)), 1200)
 }
 
 func sameManageAppIntent(left, right IntentResult) bool {
@@ -1134,7 +1190,11 @@ func (s *Service) executeAgentAction(
 			Content:         fmt.Sprintf("已为主题“%s”生成 %d 道题。", req.Topic, len(items)),
 			ArtifactType:    "question_set",
 			ArtifactPayload: payload,
-			Meta:            meta,
+			ToolData: map[string]any{
+				"request": req,
+				"count":   len(items),
+			},
+			Meta: meta,
 		}, nil
 	case "build_plan":
 		req := buildLearnRequest(params)
@@ -1156,7 +1216,15 @@ func (s *Service) executeAgentAction(
 			Content:         fmt.Sprintf("已生成学习计划（%s 至 %s）。", planResult.PlanStartDate, planResult.PlanEndDate),
 			ArtifactType:    "learning_plan",
 			ArtifactPayload: payload,
-			Meta:            meta,
+			ToolData: map[string]any{
+				"request": req,
+				"plan": map[string]any{
+					"final_goal":      planResult.FinalGoal,
+					"plan_start_date": planResult.PlanStartDate,
+					"plan_end_date":   planResult.PlanEndDate,
+				},
+			},
+			Meta: meta,
 		}, nil
 	case "manage_app":
 		req := buildAppControlRequest(params)
@@ -1187,6 +1255,11 @@ func (s *Service) executeAgentAction(
 		}
 		return actionExecutionResult{
 			Content: content,
+			ToolData: map[string]any{
+				"module":    req.Module,
+				"operation": req.Operation,
+				"data":      result.Data,
+			},
 			Meta: agentCallMeta{
 				ProviderUsed: "internal",
 				ModelUsed:    "app_control",
@@ -1278,6 +1351,8 @@ func (s *Service) chatWithFallback(
 	agent Agent,
 	req ChatRequest,
 ) (ChatResponse, agentCallMeta, error) {
+	req.PromptPatch = buildAgentToolPromptPatch(agent, req.PromptPatch)
+
 	var meta agentCallMeta
 	primaryClient, err := s.buildAgentClient(agent.Protocol, agent.Primary)
 	if err == nil && primaryClient.IsReady() {
@@ -1768,6 +1843,20 @@ func latestUserMessageContent(items []AgentMessage) string {
 	return ""
 }
 
+func latestUserMessageContentFromChatMessages(items []ChatMessage) string {
+	for i := len(items) - 1; i >= 0; i-- {
+		if !strings.EqualFold(strings.TrimSpace(items[i].Role), "user") {
+			continue
+		}
+		text := strings.TrimSpace(items[i].Content)
+		if text == "" {
+			continue
+		}
+		return text
+	}
+	return ""
+}
+
 func cloneAnyMap(in map[string]any) map[string]any {
 	out := make(map[string]any, len(in))
 	for k, v := range in {
@@ -1813,6 +1902,70 @@ func firstNonEmpty(values ...string) string {
 
 func compactSpaces(text string) string {
 	return strings.Join(strings.Fields(strings.TrimSpace(text)), " ")
+}
+
+func buildAgentToolPromptPatch(agent Agent, base PromptRuntimePatch) PromptRuntimePatch {
+	patch := normalizePromptRuntimePatch(base)
+	if patch.SegmentUpdates == nil {
+		patch.SegmentUpdates = map[string]string{}
+	}
+	for _, deleted := range patch.SegmentDeletes {
+		if normalizePromptSegmentKey(deleted) == promptSegmentToolInstructions {
+			return patch
+		}
+	}
+	if _, exists := patch.SegmentUpdates[promptSegmentToolInstructions]; exists {
+		return patch
+	}
+	patch.SegmentUpdates[promptSegmentToolInstructions] = buildToolInstructionsForCapabilities(agent.IntentCapabilities)
+	return patch
+}
+
+func buildToolInstructionsForCapabilities(capabilities []string) string {
+	actions := supportedToolActionsFromCapabilities(capabilities)
+	if len(actions) == 0 {
+		return strings.TrimSpace(
+			"Enabled tool actions for this agent: none.\n" +
+				"Do not call generate_questions/build_plan/manage_app; use action=none and answer directly.",
+		)
+	}
+
+	joined := strings.Join(actions, ", ")
+	lines := []string{
+		"Enabled tool actions for this agent (from intent_capabilities): " + joined + ".",
+		"When detecting intent, choose action from the enabled list above (or none when no tool call is needed).",
+	}
+	for _, action := range actions {
+		switch action {
+		case "generate_questions":
+			lines = append(lines, "- generate_questions: create question artifacts; params should include topic/subject/count/difficulty when available.")
+		case "build_plan":
+			lines = append(lines, "- build_plan: generate learning-plan artifacts; params should include subject/unit/goals/final_goal/date range when available.")
+		case "manage_app":
+			lines = append(lines, "- manage_app: execute app management operations; params must include module + operation and required target fields.")
+		}
+	}
+	lines = append(lines, "For mutating operations, verify target identity fields before execution.")
+	return strings.TrimSpace(strings.Join(lines, "\n"))
+}
+
+func supportedToolActionsFromCapabilities(capabilities []string) []string {
+	set := map[string]struct{}{}
+	for _, item := range capabilities {
+		key := strings.ToLower(strings.TrimSpace(item))
+		if key == "" {
+			continue
+		}
+		set[key] = struct{}{}
+	}
+	ordered := []string{"generate_questions", "build_plan", "manage_app"}
+	out := make([]string, 0, len(ordered))
+	for _, action := range ordered {
+		if _, ok := set[action]; ok {
+			out = append(out, action)
+		}
+	}
+	return out
 }
 
 func truncateText(text string, max int) string {
