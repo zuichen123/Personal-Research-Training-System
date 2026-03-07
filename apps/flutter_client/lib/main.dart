@@ -24,7 +24,7 @@ Future<void> main() async {
     AppLogger.instance.error(
       module: 'app',
       event: 'flutter.error',
-      message: 'Flutter异常',
+      message: 'Flutter\u5f02\u5e38',
       error: details.exceptionAsString(),
       stack: details.stack.toString(),
     );
@@ -35,7 +35,7 @@ Future<void> main() async {
     AppLogger.instance.error(
       module: 'app',
       event: 'platform.error',
-      message: '平台异常',
+      message: '\u5e73\u53f0\u5f02\u5e38',
       error: error.toString(),
       stack: stack.toString(),
     );
@@ -94,7 +94,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AIAgentProvider()),
       ],
       child: MaterialApp(
-        title: '自学工具',
+        title: '\u81ea\u5b66\u5de5\u5177',
         debugShowCheckedModeBanner: false,
         theme: _buildTheme(Brightness.light),
         darkTheme: _buildTheme(Brightness.dark),
@@ -138,9 +138,9 @@ class _MainScreenState extends State<MainScreen> {
     QuestionsScreen(),
     MistakesScreen(),
     PracticeScreen(),
+    CourseScheduleScreen(),
     PomodoroScreen(),
   ];
-
   static const _destinations = [
     _NavItem(
       icon: Icons.psychology_outlined,
@@ -150,45 +150,44 @@ class _MainScreenState extends State<MainScreen> {
     _NavItem(
       icon: Icons.question_answer_outlined,
       selectedIcon: Icons.question_answer,
-      label: '题库',
+      label: '\u9898\u5e93',
     ),
     _NavItem(
       icon: Icons.menu_book_outlined,
       selectedIcon: Icons.menu_book,
-      label: '错题',
+      label: '\u9519\u9898',
     ),
     _NavItem(
       icon: Icons.edit_note_outlined,
       selectedIcon: Icons.edit_note,
-      label: '练习',
-    ),
-    _NavItem(
-      icon: Icons.timer_outlined,
-      selectedIcon: Icons.timer,
-      label: '专注',
-    ),
-  ];
-
-  static const _drawerItems = [
-    _NavItem(
-      icon: Icons.folder_outlined,
-      selectedIcon: Icons.folder,
-      label: '学习资料',
-    ),
-    _NavItem(
-      icon: Icons.event_note_outlined,
-      selectedIcon: Icons.event_note,
-      label: '计划管理',
+      label: '\u7ec3\u4e60',
     ),
     _NavItem(
       icon: Icons.calendar_month_outlined,
       selectedIcon: Icons.calendar_month,
-      label: 'Course Schedule',
+      label: '\u8bfe\u7a0b\u8868',
+    ),
+    _NavItem(
+      icon: Icons.timer_outlined,
+      selectedIcon: Icons.timer,
+      label: '\u4e13\u6ce8',
+    ),
+  ];
+  static const _drawerItems = [
+    _NavItem(
+      icon: Icons.folder_outlined,
+      selectedIcon: Icons.folder,
+      label: '\u5b66\u4e60\u8d44\u6599',
+    ),
+    _NavItem(
+      icon: Icons.event_note_outlined,
+      selectedIcon: Icons.event_note,
+      label: '\u8ba1\u5212\u7ba1\u7406',
     ),
     _NavItem(
       icon: Icons.settings_outlined,
       selectedIcon: Icons.settings,
-      label: '设置',
+      label: '\u8bbe\u7f6e',
     ),
   ];
 
@@ -222,9 +221,6 @@ class _MainScreenState extends State<MainScreen> {
         screen = const PlansScreen();
         break;
       case 2:
-        screen = const CourseScheduleScreen();
-        break;
-      case 3:
         provider.ensureAILoaded();
         provider.ensureProfileLoaded();
         screen = const SettingsScreen();
@@ -258,7 +254,7 @@ class _MainScreenState extends State<MainScreen> {
                 Icon(Icons.school, size: 32, color: cs.primary),
                 const SizedBox(width: 12),
                 Text(
-                  '自学工具',
+                  '\u81ea\u5b66\u5de5\u5177',
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -323,7 +319,7 @@ class _MainScreenState extends State<MainScreen> {
                 child: Builder(
                   builder: (ctx) => IconButton.filledTonal(
                     icon: const Icon(Icons.menu),
-                    tooltip: '更多功能',
+                    tooltip: '\u66f4\u591a\u529f\u80fd',
                     onPressed: () => Scaffold.of(ctx).openDrawer(),
                   ),
                 ),
@@ -340,7 +336,7 @@ class _MainScreenState extends State<MainScreen> {
         leading: Builder(
           builder: (ctx) => IconButton(
             icon: const Icon(Icons.menu),
-            tooltip: '更多功能',
+            tooltip: '\u66f4\u591a\u529f\u80fd',
             onPressed: () => Scaffold.of(ctx).openDrawer(),
           ),
         ),

@@ -138,6 +138,8 @@ class AppProvider with ChangeNotifier {
         await ensureAttemptsLoaded();
         break;
       case 4:
+        return;
+      case 5:
         await ensurePomodoroLoaded();
         break;
       default:

@@ -33,8 +33,8 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
       id: 'mon_math_1',
       weekday: DateTime.monday,
       period: 1,
-      subject: 'Math',
-      topic: 'Quadratic Function',
+      subject: '\u6570\u5b66',
+      topic: '\u4e8c\u6b21\u51fd\u6570',
       classroom: 'A-301',
       startTime: '08:00',
       endTime: '08:45',
@@ -43,8 +43,8 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
       id: 'mon_eng_2',
       weekday: DateTime.monday,
       period: 2,
-      subject: 'English',
-      topic: 'Reading Comprehension',
+      subject: '\u82f1\u8bed',
+      topic: '\u9605\u8bfb\u7406\u89e3',
       classroom: 'B-204',
       startTime: '09:00',
       endTime: '09:45',
@@ -53,8 +53,8 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
       id: 'tue_phy_3',
       weekday: DateTime.tuesday,
       period: 3,
-      subject: 'Physics',
-      topic: 'Newton Laws',
+      subject: '\u7269\u7406',
+      topic: '\u725b\u987f\u5b9a\u5f8b',
       classroom: 'Lab-2',
       startTime: '10:00',
       endTime: '10:45',
@@ -63,8 +63,8 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
       id: 'wed_chem_4',
       weekday: DateTime.wednesday,
       period: 4,
-      subject: 'Chemistry',
-      topic: 'Mole Concept',
+      subject: '\u5316\u5b66',
+      topic: '\u7269\u8d28\u7684\u91cf',
       classroom: 'Lab-1',
       startTime: '11:00',
       endTime: '11:45',
@@ -73,8 +73,8 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
       id: 'thu_bio_5',
       weekday: DateTime.thursday,
       period: 5,
-      subject: 'Biology',
-      topic: 'Cell Structure',
+      subject: '\u751f\u7269',
+      topic: '\u7ec6\u80de\u7ed3\u6784',
       classroom: 'A-202',
       startTime: '14:00',
       endTime: '14:45',
@@ -83,8 +83,8 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
       id: 'fri_hist_6',
       weekday: DateTime.friday,
       period: 6,
-      subject: 'History',
-      topic: 'Industrial Revolution',
+      subject: '\u5386\u53f2',
+      topic: '\u5de5\u4e1a\u9769\u547d',
       classroom: 'C-101',
       startTime: '15:00',
       endTime: '15:45',
@@ -107,10 +107,10 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Course Schedule'),
+        title: const Text('\u667a\u80fd\u8bfe\u7a0b\u8868'),
         actions: [
           IconButton(
-            tooltip: 'Open Plans',
+            tooltip: '\u6253\u5f00\u8ba1\u5212',
             icon: const Icon(Icons.event_note_outlined),
             onPressed: () {
               Navigator.of(
@@ -167,9 +167,11 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                _smallChip('Month lessons: $monthLessons'),
-                _smallChip('Day lessons: $dayLessons'),
-                _smallChip('Mastery records: ${_masteryRecords.length}'),
+                _smallChip('\u672c\u6708\u8bfe\u7a0b: $monthLessons'),
+                _smallChip('\u5f53\u65e5\u8bfe\u7a0b: $dayLessons'),
+                _smallChip(
+                  '\u638c\u63e1\u8bb0\u5f55: ${_masteryRecords.length}',
+                ),
               ],
             ),
           ],
@@ -270,10 +272,10 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text('Lessons: ${monthLessons.length}'),
+                  Text('\u8bfe\u7a0b\u6570: ${monthLessons.length}'),
                   const SizedBox(height: 6),
                   if (topSubjects.isEmpty)
-                    const Text('No lessons')
+                    const Text('\u6682\u65e0\u8bfe\u7a0b')
                   else
                     ...topSubjects
                         .take(2)
@@ -285,7 +287,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
                           ),
                         ),
                   const Spacer(),
-                  const Text('Tap to month view'),
+                  const Text('\u70b9\u51fb\u67e5\u770b\u6708\u89c6\u56fe'),
                 ],
               ),
             ),
@@ -296,7 +298,15 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
   }
 
   Widget _buildMonthView(BuildContext context) {
-    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const weekdays = [
+      '\u4e00',
+      '\u4e8c',
+      '\u4e09',
+      '\u56db',
+      '\u4e94',
+      '\u516d',
+      '\u65e5',
+    ];
     final year = _focusDate.year;
     final month = _focusDate.month;
     final firstWeekday = DateTime(year, month, 1).weekday;
@@ -411,9 +421,11 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('No lesson on ${_dateLabel(_focusDate)}'),
+              Text('${_dateLabel(_focusDate)} \u65e0\u8bfe\u7a0b'),
               const SizedBox(height: 6),
-              const Text('Switch to month view and choose another day.'),
+              const Text(
+                '\u53ef\u5207\u6362\u5230\u6708\u89c6\u56fe\u9009\u62e9\u5176\u4ed6\u65e5\u671f\u3002',
+              ),
             ],
           ),
         ),
@@ -435,7 +447,9 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
                         ).colorScheme.primaryContainer.withValues(alpha: 0.3)
                       : null,
                   child: ListTile(
-                    title: Text('${lesson.subject}  P${lesson.period}'),
+                    title: Text(
+                      '${lesson.subject}  \u7b2c${lesson.period}\u8282',
+                    ),
                     subtitle: Text(
                       '${lesson.topic}  |  ${lesson.startTime}-${lesson.endTime}  |  ${lesson.classroom}',
                     ),
@@ -465,12 +479,12 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('No lesson selected'),
+              const Text('\u672a\u9009\u62e9\u8bfe\u7a0b'),
               const SizedBox(height: 8),
               FilledButton.icon(
                 onPressed: () => setState(() => _view = CourseScheduleView.day),
                 icon: const Icon(Icons.view_day),
-                label: const Text('Back to day view'),
+                label: const Text('\u8fd4\u56de\u65e5\u89c6\u56fe'),
               ),
             ],
           ),
@@ -506,7 +520,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
             Row(
               children: [
                 Text(
-                  'Current Lesson',
+                  '\u5f53\u524d\u8bfe\u7a0b',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
@@ -517,7 +531,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              '${lesson.subject}  P${lesson.period}',
+              '${lesson.subject}  \u7b2c${lesson.period}\u8282',
               style: Theme.of(
                 context,
               ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
@@ -540,7 +554,11 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.play_arrow),
-                label: Text(_startingLesson ? 'Starting...' : 'Start Lesson'),
+                label: Text(
+                  _startingLesson
+                      ? '\u542f\u52a8\u4e2d...'
+                      : '\u5f00\u59cb\u4e0a\u8bfe',
+                ),
               ),
             ),
           ],
@@ -557,13 +575,17 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Knowledge Summary',
+              '\u77e5\u8bc6\u70b9\u603b\u7ed3',
               style: TextStyle(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
-            Text('- Topic: ${lesson.topic}'),
-            Text('- Key concept: ${lesson.subject} fundamentals'),
-            const Text('- Placeholder for AI-generated summary details'),
+            Text('- \u4e3b\u9898\uff1a${lesson.topic}'),
+            Text(
+              '- \u6838\u5fc3\u6982\u5ff5\uff1a${lesson.subject}\u57fa\u7840\u77e5\u8bc6',
+            ),
+            const Text(
+              '- AI\u751f\u6210\u603b\u7ed3\uff08\u5f85\u8865\u5145\uff09',
+            ),
           ],
         ),
       ),
@@ -578,19 +600,21 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'After-Class Practice',
+              '\u8bfe\u540e\u7ec3\u4e60',
               style: TextStyle(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
-            const Text('- Placeholder for AI question generation'),
             const Text(
-              '- Placeholder for homework checklist and completion status',
+              '- AI\u51fa\u9898\u5185\u5bb9\uff08\u5f85\u8865\u5145\uff09',
+            ),
+            const Text(
+              '- \u4f5c\u4e1a\u6e05\u5355\u4e0e\u5b8c\u6210\u72b6\u6001\uff08\u5f85\u8865\u5145\uff09',
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: () => _openPracticePrompt(lesson),
               icon: const Icon(Icons.auto_awesome),
-              label: const Text('Generate Practice Prompt'),
+              label: const Text('\u751f\u6210\u7ec3\u4e60\u63d0\u793a\u8bcd'),
             ),
           ],
         ),
@@ -607,11 +631,11 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Mastery Evaluation',
+              '\u638c\u63e1\u5ea6\u8bc4\u4f30',
               style: TextStyle(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
-            Text('Score: $scoreText / 100'),
+            Text('\u8bc4\u5206\uff1a$scoreText / 100'),
             Slider(
               value: _masteryScore,
               min: 0,
@@ -624,7 +648,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
               controller: _masteryNoteController,
               maxLines: 2,
               decoration: const InputDecoration(
-                labelText: 'Lesson note (optional)',
+                labelText: '\u8bfe\u5802\u5907\u6ce8\uff08\u53ef\u9009\uff09',
                 border: OutlineInputBorder(),
               ),
             ),
@@ -641,7 +665,9 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
                       )
                     : const Icon(Icons.save_outlined),
                 label: Text(
-                  _savingMastery ? 'Saving...' : 'Save to Review Plan',
+                  _savingMastery
+                      ? '\u4fdd\u5b58\u4e2d...'
+                      : '\u4fdd\u5b58\u5230\u590d\u4e60\u8ba1\u5212',
                 ),
               ),
             ),
@@ -659,7 +685,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Mastery History',
+              '\u638c\u63e1\u5ea6\u5386\u53f2',
               style: TextStyle(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
@@ -670,7 +696,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
                     padding: const EdgeInsets.only(bottom: 6),
                     child: Text(
                       '${_dateLabel(record.createdAt)}  |  ${record.lessonLabel}  |  '
-                      'score ${record.score}  |  plan ${record.planTitle}',
+                      '\u5f97\u5206 ${record.score}  |  \u8ba1\u5212 ${record.planTitle}',
                     ),
                   ),
                 ),
@@ -695,13 +721,15 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
           .where((agent) => agent.enabled)
           .toList(growable: false);
       if (enabledAgents.isEmpty) {
-        throw StateError('No enabled AI agent found.');
+        throw StateError(
+          '\u672a\u627e\u5230\u53ef\u7528\u7684 AI \u52a9\u6559\u3002',
+        );
       }
 
       final selectedAgent = _selectLessonAgent(enabledAgents);
       await agentProvider.selectAgent(selectedAgent.id);
       await agentProvider.createSession(
-        title: 'Lesson ${lesson.subject} ${_dateLabel(lesson.date)}',
+        title: '\u8bfe\u7a0b ${lesson.subject} ${_dateLabel(lesson.date)}',
       );
       final sessionId = agentProvider.selectedSessionIdOf(selectedAgent.id);
       if (sessionId.isNotEmpty) {
@@ -726,7 +754,8 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
         return;
       }
       final message =
-          agentProvider.errorMessage ?? 'Failed to start lesson session.';
+          agentProvider.errorMessage ??
+          '\u542f\u52a8\u8bfe\u7a0b\u4f1a\u8bdd\u5931\u8d25\u3002';
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(message)));
@@ -748,7 +777,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
     final targetDate = _nextReviewDate(score, lesson.date);
     final note = _masteryNoteController.text.trim();
     final planTitle =
-        'Review ${lesson.subject} (${targetDate.year}-${targetDate.month.toString().padLeft(2, '0')}-${targetDate.day.toString().padLeft(2, '0')})';
+        '\u590d\u4e60 ${lesson.subject} (${targetDate.year}-${targetDate.month.toString().padLeft(2, '0')}-${targetDate.day.toString().padLeft(2, '0')})';
 
     try {
       await appProvider.createPlan({
@@ -772,7 +801,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
         _masteryRecords.insert(
           0,
           _MasteryRecord(
-            lessonLabel: '${lesson.subject} P${lesson.period}',
+            lessonLabel: '${lesson.subject} \u7b2c${lesson.period}\u8282',
             score: score,
             createdAt: DateTime.now(),
             planTitle: planTitle,
@@ -783,7 +812,9 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Saved mastery and created review plan: $planTitle'),
+          content: Text(
+            '\u5df2\u4fdd\u5b58\u638c\u63e1\u5ea6\u5e76\u521b\u5efa\u590d\u4e60\u8ba1\u5212\uff1a$planTitle',
+          ),
         ),
       );
     } catch (_) {
@@ -791,7 +822,8 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
         return;
       }
       final message =
-          appProvider.errorMessage ?? 'Failed to save mastery plan.';
+          appProvider.errorMessage ??
+          '\u4fdd\u5b58\u638c\u63e1\u5ea6\u8ba1\u5212\u5931\u8d25\u3002';
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(message)));
@@ -804,8 +836,8 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
 
   void _openPracticePrompt(_CourseLesson lesson) {
     final message =
-        'Practice prompt prepared: ${lesson.subject} - ${lesson.topic}. '
-        'Use Start Lesson to send this context to AI tutor.';
+        '\u5df2\u751f\u6210\u7ec3\u4e60\u63d0\u793a\u8bcd\uff1a${lesson.subject} - ${lesson.topic}\u3002'
+        '\u53ef\u4f7f\u7528\u201c\u5f00\u59cb\u4e0a\u8bfe\u201d\u5c06\u4e0a\u4e0b\u6587\u53d1\u9001\u7ed9AI\u52a9\u6559\u3002';
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
@@ -816,7 +848,10 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
       final name = agent.name.toLowerCase();
       return name.contains('tutor') ||
           name.contains('lesson') ||
-          name.contains('teacher');
+          name.contains('teacher') ||
+          name.contains('\u52a9\u6559') ||
+          name.contains('\u8001\u5e08') ||
+          name.contains('\u8bb2\u5e08');
     });
     if (preferred.isNotEmpty) {
       return preferred.first;
@@ -835,17 +870,17 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
   String _buildLessonKickoffPrompt(_CourseLesson lesson) {
     final date = _dateLabel(lesson.date);
     return [
-      'Start a lesson tutoring session.',
-      'Date: $date',
-      'Subject: ${lesson.subject}',
-      'Topic: ${lesson.topic}',
-      'Period: ${lesson.period}',
-      'Please follow this sequence:',
-      '1) Explain key concepts briefly.',
-      '2) Give one worked example.',
-      '3) Ask the student one check question.',
-      '4) Evaluate the answer and explain mistakes.',
-      '5) Provide next-step review suggestions.',
+      '\u8bf7\u5f00\u59cb\u4e00\u8282\u8bfe\u7a0b\u8f85\u5bfc\u4f1a\u8bdd\u3002',
+      '\u65e5\u671f\uff1a$date',
+      '\u5b66\u79d1\uff1a${lesson.subject}',
+      '\u4e3b\u9898\uff1a${lesson.topic}',
+      '\u8bfe\u65f6\uff1a${lesson.period}',
+      '\u8bf7\u6309\u4ee5\u4e0b\u987a\u5e8f\u8fdb\u884c\uff1a',
+      '1) \u7b80\u8981\u8bb2\u89e3\u5173\u952e\u6982\u5ff5\u3002',
+      '2) \u63d0\u4f9b1\u9053\u4f8b\u9898\u5e76\u8bb2\u89e3\u3002',
+      '3) \u5411\u5b66\u751f\u63d01\u4e2a\u68c0\u67e5\u95ee\u9898\u3002',
+      '4) \u8bc4\u4f30\u5b66\u751f\u56de\u7b54\u5e76\u89e3\u91ca\u9519\u8bef\u539f\u56e0\u3002',
+      '5) \u7ed9\u51fa\u4e0b\u4e00\u6b65\u590d\u4e60\u5efa\u8bae\u3002',
     ].join('\n');
   }
 
@@ -856,12 +891,12 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
   }) {
     final recommendation = _recommendationForScore(score);
     return [
-      'Course: ${lesson.subject}',
-      'Topic: ${lesson.topic}',
-      'Date: ${_dateLabel(lesson.date)}',
-      'Mastery score: $score/100',
-      'Recommendation: $recommendation',
-      'Class note: ${note.isEmpty ? '-' : note}',
+      '\u5b66\u79d1\uff1a${lesson.subject}',
+      '\u4e3b\u9898\uff1a${lesson.topic}',
+      '\u65e5\u671f\uff1a${_dateLabel(lesson.date)}',
+      '\u638c\u63e1\u5ea6\uff1a$score/100',
+      '\u5efa\u8bae\uff1a$recommendation',
+      '\u8bfe\u5802\u5907\u6ce8\uff1a${note.isEmpty ? '-' : note}',
     ].join('\n');
   }
 
@@ -887,12 +922,12 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
 
   String _recommendationForScore(int score) {
     if (score < 60) {
-      return 'Re-study immediately and do 3 extra exercises.';
+      return '\u5efa\u8bae\u7acb\u5373\u91cd\u5b66\uff0c\u5e76\u52a0\u7ec33\u9898\u3002';
     }
     if (score < 80) {
-      return 'Review within 48h and finish a short quiz.';
+      return '\u5efa\u8bae48\u5c0f\u65f6\u5185\u590d\u4e60\uff0c\u5e76\u5b8c\u6210\u4e00\u6b21\u5c0f\u6d4b\u3002';
     }
-    return 'Schedule a spaced review in 3-4 days.';
+    return '\u5efa\u8bae\u57283-4\u5929\u540e\u5b89\u6392\u95f4\u9694\u590d\u4e60\u3002';
   }
 
   List<_CourseLesson> _lessonsInMonth(int year, int month) {
@@ -993,13 +1028,13 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
   String _viewLabel(CourseScheduleView view) {
     switch (view) {
       case CourseScheduleView.year:
-        return 'Year';
+        return '\u5e74\u89c6\u56fe';
       case CourseScheduleView.month:
-        return 'Month';
+        return '\u6708\u89c6\u56fe';
       case CourseScheduleView.day:
-        return 'Day';
+        return '\u65e5\u89c6\u56fe';
       case CourseScheduleView.lesson:
-        return 'Lesson';
+        return '\u8bfe\u89c6\u56fe';
     }
   }
 
