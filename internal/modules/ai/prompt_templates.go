@@ -368,7 +368,19 @@ var promptTemplatePresetByKey = func() map[string]promptTemplatePreset {
 	return out
 }()
 
-var promptPresetFileByKey = map[string]string{
+var promptPresetDirByKey = map[string]string{
+	PromptKeyGenerateQuestions: filepath.Join("prompts", "ai", "generate_questions"),
+	PromptKeyGradeAnswer:       filepath.Join("prompts", "ai", "grade_answer"),
+	PromptKeyBuildLearningPlan: filepath.Join("prompts", "ai", "build_learning_plan"),
+	PromptKeyOptimizeLearning:  filepath.Join("prompts", "ai", "optimize_learning_plan"),
+	PromptKeyEvaluateLearning:  filepath.Join("prompts", "ai", "evaluate_learning"),
+	PromptKeyScoreLearning:     filepath.Join("prompts", "ai", "score_learning"),
+	PromptKeyDetectIntent:      filepath.Join("prompts", "ai", "detect_intent"),
+	PromptKeyAgentChat:         filepath.Join("prompts", "ai", "agent_chat"),
+	PromptKeyCompressSession:   filepath.Join("prompts", "ai", "compress_session"),
+}
+
+var promptPresetLegacyTaskFileByKey = map[string]string{
 	PromptKeyGenerateQuestions: filepath.Join("prompts", "ai", "generate_questions.md"),
 	PromptKeyGradeAnswer:       filepath.Join("prompts", "ai", "grade_answer.md"),
 	PromptKeyBuildLearningPlan: filepath.Join("prompts", "ai", "build_learning_plan.md"),
@@ -378,6 +390,17 @@ var promptPresetFileByKey = map[string]string{
 	PromptKeyDetectIntent:      filepath.Join("prompts", "ai", "detect_intent.md"),
 	PromptKeyAgentChat:         filepath.Join("prompts", "ai", "agent_chat.md"),
 	PromptKeyCompressSession:   filepath.Join("prompts", "ai", "compress_session.md"),
+}
+
+type promptPresetFileCacheEntry struct {
+	Exists  bool
+	Content string
+}
+
+type promptPresetBundle struct {
+	SegmentValues          map[string]string
+	HasOutputFormatPrompt  bool
+	OutputFormatPromptText string
 }
 
 var promptPresetTextCache sync.Map
@@ -601,28 +624,66 @@ func defaultPromptSegmentsForPreset(preset promptTemplatePreset) map[string]stri
 	return out
 }
 
-func resolvePresetPromptText(key, fallback string) string {
-	path := strings.TrimSpace(promptPresetFileByKey[normalizePromptKey(key)])
-	if path == "" {
-		return strings.TrimSpace(fallback)
+func loadPromptPresetFile(path string) (string, bool) {
+	trimmedPath := strings.TrimSpace(path)
+	if trimmedPath == "" {
+		return "", false
 	}
-	if cached, ok := promptPresetTextCache.Load(path); ok {
-		if text, okCast := cached.(string); okCast {
-			return text
+	if cached, ok := promptPresetTextCache.Load(trimmedPath); ok {
+		if entry, okCast := cached.(promptPresetFileCacheEntry); okCast {
+			return entry.Content, entry.Exists
 		}
 	}
-	bytes, err := os.ReadFile(path)
+	bytes, err := os.ReadFile(trimmedPath)
 	if err != nil {
-		text := strings.TrimSpace(fallback)
-		promptPresetTextCache.Store(path, text)
-		return text
+		entry := promptPresetFileCacheEntry{Exists: false}
+		promptPresetTextCache.Store(trimmedPath, entry)
+		return "", false
 	}
-	loaded := strings.TrimSpace(string(bytes))
-	if loaded == "" {
-		loaded = strings.TrimSpace(fallback)
+	entry := promptPresetFileCacheEntry{
+		Exists:  true,
+		Content: strings.TrimSpace(string(bytes)),
 	}
-	promptPresetTextCache.Store(path, loaded)
-	return loaded
+	promptPresetTextCache.Store(trimmedPath, entry)
+	return entry.Content, true
+}
+
+func loadPromptPresetBundle(key string) promptPresetBundle {
+	normalized := normalizePromptKey(key)
+	bundle := promptPresetBundle{
+		SegmentValues: map[string]string{},
+	}
+	dir := strings.TrimSpace(promptPresetDirByKey[normalized])
+	if dir != "" {
+		for _, segmentKey := range promptSegmentOrder {
+			content, exists := loadPromptPresetFile(filepath.Join(dir, segmentKey+".md"))
+			if !exists {
+				continue
+			}
+			if segmentKey == promptSegmentTaskPrompt && strings.TrimSpace(content) == "" {
+				continue
+			}
+			bundle.SegmentValues[segmentKey] = strings.TrimSpace(content)
+		}
+		if outputText, exists := loadPromptPresetFile(filepath.Join(dir, promptSegmentOutputFormat+".md")); exists {
+			trimmedOutput := strings.TrimSpace(outputText)
+			if trimmedOutput != "" {
+				bundle.HasOutputFormatPrompt = true
+				bundle.OutputFormatPromptText = trimmedOutput
+			}
+		}
+	}
+	if _, ok := bundle.SegmentValues[promptSegmentTaskPrompt]; !ok {
+		if legacyPath := strings.TrimSpace(promptPresetLegacyTaskFileByKey[normalized]); legacyPath != "" {
+			if legacyText, exists := loadPromptPresetFile(legacyPath); exists {
+				trimmedLegacy := strings.TrimSpace(legacyText)
+				if trimmedLegacy != "" {
+					bundle.SegmentValues[promptSegmentTaskPrompt] = trimmedLegacy
+				}
+			}
+		}
+	}
+	return bundle
 }
 
 func parsePromptSegmentOverridesJSON(raw string) map[string]string {
@@ -738,13 +799,32 @@ func normalizePromptTemplateOverride(in promptTemplateOverride) promptTemplateOv
 }
 
 func buildPromptConfig(preset promptTemplatePreset, override promptTemplateOverride) PromptTemplateConfig {
-	resolvedPresetPrompt := resolvePresetPromptText(preset.Key, preset.PresetPrompt)
+	presetBundle := loadPromptPresetBundle(preset.Key)
+	resolvedPresetPrompt := strings.TrimSpace(preset.PresetPrompt)
+	if taskPrompt, ok := presetBundle.SegmentValues[promptSegmentTaskPrompt]; ok {
+		if trimmedTaskPrompt := strings.TrimSpace(taskPrompt); trimmedTaskPrompt != "" {
+			resolvedPresetPrompt = trimmedTaskPrompt
+		}
+	}
+	resolvedPresetOutputPrompt := strings.TrimSpace(preset.PresetOutputFormatPrompt)
+	if presetBundle.HasOutputFormatPrompt {
+		resolvedPresetOutputPrompt = strings.TrimSpace(presetBundle.OutputFormatPromptText)
+	}
 	resolvedPreset := preset
 	resolvedPreset.PresetPrompt = resolvedPresetPrompt
 
 	customPrompt := strings.TrimSpace(override.CustomPrompt)
 	outputPrompt := strings.TrimSpace(override.OutputFormatPrompt)
 	presetSegments := defaultPromptSegmentsForPreset(resolvedPreset)
+	for segmentKey, text := range presetBundle.SegmentValues {
+		normalizedSegmentKey := normalizePromptSegmentKey(segmentKey)
+		if normalizedSegmentKey == "" ||
+			normalizedSegmentKey == promptSegmentUserInput ||
+			normalizedSegmentKey == promptSegmentOutputFormat {
+			continue
+		}
+		presetSegments[normalizedSegmentKey] = strings.TrimSpace(text)
+	}
 	segmentOverrides := normalizePromptSegmentMap(override.SegmentOverrides)
 	effectiveSegments := clonePromptSegmentMap(presetSegments)
 	for key, value := range segmentOverrides {
@@ -763,7 +843,7 @@ func buildPromptConfig(preset promptTemplatePreset, override promptTemplateOverr
 		effectiveSegments[promptSegmentTaskPrompt] = customPrompt
 		segmentOverrides[promptSegmentTaskPrompt] = customPrompt
 	}
-	effectiveOutputPrompt := preset.PresetOutputFormatPrompt
+	effectiveOutputPrompt := resolvedPresetOutputPrompt
 	if outputPrompt != "" {
 		effectiveOutputPrompt = outputPrompt
 	}
@@ -772,7 +852,7 @@ func buildPromptConfig(preset promptTemplatePreset, override promptTemplateOverr
 		Key:                         preset.Key,
 		Name:                        preset.Name,
 		PresetPrompt:                resolvedPresetPrompt,
-		PresetOutputFormatPrompt:    preset.PresetOutputFormatPrompt,
+		PresetOutputFormatPrompt:    resolvedPresetOutputPrompt,
 		PresetSegments:              clonePromptSegmentMap(presetSegments),
 		CustomPrompt:                customPrompt,
 		OutputFormatPrompt:          outputPrompt,
