@@ -787,6 +787,28 @@ class ApiService {
     return _asMap(data);
   }
 
+  Future<Map<String, dynamic>> computeMathWithAI(
+    Map<String, dynamic> input,
+  ) async {
+    final data = await _requestAIStreamData(
+      path: '/ai/math/compute',
+      jsonBody: input,
+      timeout: _aiRequestTimeout,
+    );
+    return _asMap(data);
+  }
+
+  Future<Map<String, dynamic>> verifyMathWithAI(
+    Map<String, dynamic> input,
+  ) async {
+    final data = await _requestAIStreamData(
+      path: '/ai/math/verify',
+      jsonBody: input,
+      timeout: _aiRequestTimeout,
+    );
+    return _asMap(data);
+  }
+
   Future<dynamic> _requestAIStreamData({
     required String path,
     required Map<String, dynamic> jsonBody,

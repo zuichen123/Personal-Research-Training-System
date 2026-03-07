@@ -53,6 +53,8 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 		r.Post("/learning/optimize", h.optimizeLearning)
 		r.Post("/evaluate", h.evaluate)
 		r.Post("/score", h.score)
+		r.Post("/math/compute", h.mathCompute)
+		r.Post("/math/verify", h.mathVerify)
 	})
 }
 
@@ -282,6 +284,46 @@ func (h *Handler) score(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := h.service.Score(r.Context(), req)
+	if err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, result)
+}
+
+func (h *Handler) mathCompute(w http.ResponseWriter, r *http.Request) {
+	var req MathComputeRequest
+	if err := httpx.DecodeJSON(r, &req); err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+
+	if h.maybeStreamOperation(w, r, "math_compute", func() (any, error) {
+		return h.service.ComputeMath(r.Context(), req)
+	}) {
+		return
+	}
+	result, err := h.service.ComputeMath(r.Context(), req)
+	if err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, result)
+}
+
+func (h *Handler) mathVerify(w http.ResponseWriter, r *http.Request) {
+	var req MathVerifyRequest
+	if err := httpx.DecodeJSON(r, &req); err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+
+	if h.maybeStreamOperation(w, r, "math_verify", func() (any, error) {
+		return h.service.VerifyMathAnswer(r.Context(), req)
+	}) {
+		return
+	}
+	result, err := h.service.VerifyMathAnswer(r.Context(), req)
 	if err != nil {
 		httpx.WriteError(w, err)
 		return

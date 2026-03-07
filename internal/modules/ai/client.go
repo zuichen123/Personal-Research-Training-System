@@ -39,21 +39,21 @@ type GradeResult struct {
 }
 
 type LearnRequest struct {
-	Mode           string               `json:"mode"`
-	Subject        string               `json:"subject"`
-	Unit           string               `json:"unit"`
-	CurrentStage   string               `json:"current_stage"`
-	Goals          []string             `json:"goals"`
-	FinalGoal      string               `json:"final_goal"`
-	TotalHours     int                  `json:"total_hours"`
-	StartDate      string               `json:"start_date"`
-	EndDate        string               `json:"end_date"`
-	CurrentStatus  string               `json:"current_status"`
-	Themes         []string             `json:"themes"`
-	Supplement     string               `json:"supplement"`
-	UserID         string               `json:"user_id"`
-	Profile        LearnProfileSnapshot `json:"profile"`
-	ProfileSummary string               `json:"profile_summary"`
+	Mode            string               `json:"mode"`
+	Subject         string               `json:"subject"`
+	Unit            string               `json:"unit"`
+	CurrentStage    string               `json:"current_stage"`
+	Goals           []string             `json:"goals"`
+	FinalGoal       string               `json:"final_goal"`
+	TotalHours      int                  `json:"total_hours"`
+	StartDate       string               `json:"start_date"`
+	EndDate         string               `json:"end_date"`
+	CurrentStatus   string               `json:"current_status"`
+	Themes          []string             `json:"themes"`
+	Supplement      string               `json:"supplement"`
+	UserID          string               `json:"user_id"`
+	Profile         LearnProfileSnapshot `json:"profile"`
+	ProfileSummary  string               `json:"profile_summary"`
 	ScheduleBinding *ScheduleBinding     `json:"schedule_binding,omitempty"`
 	PromptPatch     PromptRuntimePatch   `json:"prompt_patch,omitempty"`
 }
@@ -112,13 +112,13 @@ type LearnPlanItemNote struct {
 }
 
 type OptimizeLearnRequest struct {
-	Plan            LearnResult         `json:"plan"`
-	Action          string              `json:"action"`
-	Days            int                 `json:"days"`
-	Reason          string              `json:"reason"`
-	Supplement      string              `json:"supplement"`
-	ScheduleBinding *ScheduleBinding    `json:"schedule_binding,omitempty"`
-	PromptPatch     PromptRuntimePatch  `json:"prompt_patch,omitempty"`
+	Plan            LearnResult        `json:"plan"`
+	Action          string             `json:"action"`
+	Days            int                `json:"days"`
+	Reason          string             `json:"reason"`
+	Supplement      string             `json:"supplement"`
+	ScheduleBinding *ScheduleBinding   `json:"schedule_binding,omitempty"`
+	PromptPatch     PromptRuntimePatch `json:"prompt_patch,omitempty"`
 }
 
 type OptimizeLearnResult struct {
@@ -155,6 +155,37 @@ type ScoreResult struct {
 	Score  float64  `json:"score"`
 	Grade  string   `json:"grade"`
 	Advice []string `json:"advice"`
+}
+
+type MathComputeRequest struct {
+	Expression string             `json:"expression"`
+	Variables  map[string]float64 `json:"variables,omitempty"`
+	Precision  int                `json:"precision,omitempty"`
+}
+
+type MathComputeResult struct {
+	Expression string             `json:"expression"`
+	Variables  map[string]float64 `json:"variables,omitempty"`
+	Value      float64            `json:"value"`
+	Formatted  string             `json:"formatted"`
+	Precision  int                `json:"precision"`
+}
+
+type MathVerifyRequest struct {
+	Question        string `json:"question"`
+	CandidateAnswer string `json:"candidate_answer"`
+	ReferenceAnswer string `json:"reference_answer"`
+	SolutionProcess string `json:"solution_process"`
+}
+
+type MathVerifyResult struct {
+	Correct       bool    `json:"correct"`
+	Difficulty    int     `json:"difficulty"`
+	UniqueAnswer  bool    `json:"unique_answer"`
+	ProcessValid  bool    `json:"process_valid"`
+	Confidence    float64 `json:"confidence"`
+	Summary       string  `json:"summary"`
+	NormalizedRef string  `json:"normalized_reference,omitempty"`
 }
 
 type ProviderStatus struct {
@@ -244,9 +275,9 @@ type AgentArtifact struct {
 }
 
 type ChatRequest struct {
-	SystemPrompt string        `json:"system_prompt,omitempty"`
-	Messages     []ChatMessage `json:"messages"`
-	Mode         string        `json:"mode,omitempty"`
+	SystemPrompt string             `json:"system_prompt,omitempty"`
+	Messages     []ChatMessage      `json:"messages"`
+	Mode         string             `json:"mode,omitempty"`
 	PromptPatch  PromptRuntimePatch `json:"prompt_patch,omitempty"`
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"self-study-tool/internal/modules/ai"
@@ -79,6 +80,8 @@ func (c *aiAppControl) Execute(ctx context.Context, req ai.AppControlRequest) (a
 		return c.executeSession(ctx, operation, params)
 	case "provider", "ai_provider":
 		return c.executeProvider(ctx, operation, params)
+	case "math", "calculator", "math_tool":
+		return c.executeMath(ctx, operation, params)
 	case "prompt", "prompts":
 		return c.executePrompt(ctx, operation, params)
 	default:
@@ -1022,6 +1025,50 @@ func (c *aiAppControl) executeProvider(ctx context.Context, operation string, pa
 	}
 }
 
+func (c *aiAppControl) executeMath(ctx context.Context, operation string, params map[string]any) (ai.AppControlResult, error) {
+	switch operation {
+	case "compute", "calculate", "eval":
+		req := ai.MathComputeRequest{
+			Expression: firstNonEmpty(asString(params["expression"]), asString(params["formula"])),
+			Variables:  asFloatMap(firstNonNil(params["variables"], params["vars"])),
+			Precision:  asInt(params["precision"], 6),
+		}
+		item, err := c.aiService.ComputeMath(ctx, req)
+		if err != nil {
+			return ai.AppControlResult{}, err
+		}
+		return ai.AppControlResult{
+			Summary: fmt.Sprintf("数学计算完成，结果=%s。", item.Formatted),
+			Data: map[string]any{
+				"result": item,
+			},
+		}, nil
+	case "verify", "check":
+		req := ai.MathVerifyRequest{
+			Question:        asString(params["question"]),
+			CandidateAnswer: firstNonEmpty(asString(params["candidate_answer"]), asString(params["answer"])),
+			ReferenceAnswer: firstNonEmpty(asString(params["reference_answer"]), asString(params["answer_key"])),
+			SolutionProcess: firstNonEmpty(asString(params["solution_process"]), asString(params["process"])),
+		}
+		item, err := c.aiService.VerifyMathAnswer(ctx, req)
+		if err != nil {
+			return ai.AppControlResult{}, err
+		}
+		state := "不通过"
+		if item.Correct {
+			state = "通过"
+		}
+		return ai.AppControlResult{
+			Summary: fmt.Sprintf("答案校验%s，难度=%d。", state, item.Difficulty),
+			Data: map[string]any{
+				"result": item,
+			},
+		}, nil
+	default:
+		return ai.AppControlResult{}, errs.BadRequest("unsupported math operation")
+	}
+}
+
 func (c *aiAppControl) executePrompt(ctx context.Context, operation string, params map[string]any) (ai.AppControlResult, error) {
 	switch operation {
 	case "list":
@@ -1555,6 +1602,26 @@ func asStringMap(v any) map[string]string {
 	return out
 }
 
+func asFloatMap(v any) map[string]float64 {
+	raw := asMap(v)
+	if len(raw) == 0 {
+		return map[string]float64{}
+	}
+	out := make(map[string]float64, len(raw))
+	for key, value := range raw {
+		name := strings.TrimSpace(key)
+		if name == "" {
+			continue
+		}
+		parsed, ok := asFloat(value)
+		if !ok {
+			continue
+		}
+		out[name] = parsed
+	}
+	return out
+}
+
 func asString(v any) string {
 	if v == nil {
 		return ""
@@ -1590,6 +1657,33 @@ func asInt(v any, def int) int {
 		return out
 	default:
 		return def
+	}
+}
+
+func asFloat(v any) (float64, bool) {
+	switch x := v.(type) {
+	case float64:
+		return x, true
+	case float32:
+		return float64(x), true
+	case int:
+		return float64(x), true
+	case int32:
+		return float64(x), true
+	case int64:
+		return float64(x), true
+	case string:
+		text := strings.TrimSpace(x)
+		if text == "" {
+			return 0, false
+		}
+		out, err := strconv.ParseFloat(text, 64)
+		if err != nil {
+			return 0, false
+		}
+		return out, true
+	default:
+		return 0, false
 	}
 }
 
