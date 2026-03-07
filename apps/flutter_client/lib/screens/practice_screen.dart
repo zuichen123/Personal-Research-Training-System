@@ -20,7 +20,7 @@ class PracticeScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Practice'),
+        title: const Text('练习'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -34,7 +34,7 @@ class PracticeScreen extends StatelessWidget {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openPracticeSession(context),
-        label: const Text('Start Session'),
+        label: const Text('开始练习'),
         icon: const Icon(Icons.play_arrow),
       ),
     );
@@ -57,7 +57,7 @@ class PracticeScreen extends StatelessWidget {
       return ListView(
         children: [
           const SizedBox(height: 96),
-          Center(child: Text('Load failed: ${provider.errorMessage}')),
+          Center(child: Text('加载失败：${provider.errorMessage}')),
         ],
       );
     }
@@ -72,12 +72,12 @@ class PracticeScreen extends StatelessWidget {
                 Icon(Icons.edit_note_outlined, size: 64, color: Colors.grey),
                 SizedBox(height: 16),
                 Text(
-                  'No practice history yet',
+                  '暂无练习记录',
                   style: TextStyle(fontSize: 16, color: Colors.grey),
                 ),
                 SizedBox(height: 8),
                 Text(
-                  'Tap "Start Session" to begin',
+                  '点击“开始练习”开始答题',
                   style: TextStyle(fontSize: 13, color: Colors.grey),
                 ),
               ],
@@ -152,7 +152,7 @@ class PracticeScreen extends StatelessWidget {
               children: [
                 Expanded(
                   child: AIFormulaText(
-                    stem.isEmpty ? 'Question not found' : stem,
+                    stem.isEmpty ? '题目不存在' : stem,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -160,7 +160,7 @@ class PracticeScreen extends StatelessWidget {
                 const SizedBox(width: 8),
                 Chip(
                   label: Text(
-                    'Attempts $count',
+                    '作答$count次',
                     style: const TextStyle(fontSize: 11),
                   ),
                   visualDensity: VisualDensity.compact,
@@ -175,7 +175,7 @@ class PracticeScreen extends StatelessWidget {
               ],
             ),
             subtitle: Text(
-              'Subject: ${subject.isEmpty ? '-' : subject}  Type: $type\nDuration: ${_formatDuration(a.elapsedSeconds)}  Feedback: ${a.feedback}',
+              '学科：${subject.isEmpty ? '-' : subject}  题型：$type\n用时：${_formatDuration(a.elapsedSeconds)}  反馈：${a.feedback}',
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
             ),
@@ -188,7 +188,7 @@ class PracticeScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 IconButton(
-                  tooltip: 'Delete',
+                  tooltip: '删除',
                   onPressed: () async {
                     await _deleteAttempt(context, a.id);
                   },
@@ -266,11 +266,11 @@ class PracticeScreen extends StatelessWidget {
   String _questionTypeLabel(String type) {
     switch (type) {
       case 'single_choice':
-        return 'Single Choice';
+        return '单选题';
       case 'multi_choice':
-        return 'Multiple Choice';
+        return '多选题';
       case 'short_answer':
-        return 'Short Answer';
+        return '简答题';
       default:
         return type.trim().isEmpty ? '-' : type;
     }
@@ -296,16 +296,16 @@ class PracticeScreen extends StatelessWidget {
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          title: const Text('Delete practice attempt'),
-          content: const Text('Are you sure you want to delete this attempt?'),
+          title: const Text('删除练习记录'),
+          content: const Text('确认删除这条作答记录吗？'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Cancel'),
+              child: const Text('取消'),
             ),
             FilledButton(
               onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('Delete'),
+              child: const Text('删除'),
             ),
           ],
         );
@@ -321,13 +321,12 @@ class PracticeScreen extends StatelessWidget {
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Attempt deleted')));
+      ).showSnackBar(const SnackBar(content: Text('已删除练习记录')));
     } catch (_) {
       if (!context.mounted) {
         return;
       }
-      final message =
-          context.read<AppProvider>().errorMessage ?? 'Delete failed';
+      final message = context.read<AppProvider>().errorMessage ?? '删除失败';
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(message)));

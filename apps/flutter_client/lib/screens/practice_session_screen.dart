@@ -62,12 +62,12 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
     final question = _currentQuestion;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Practice Session'),
+        title: const Text('练习会话'),
         actions: [
           IconButton(
             onPressed: _loading ? null : _bootstrap,
             icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh available questions',
+            tooltip: '刷新可练习题目',
           ),
         ],
       ),
@@ -89,19 +89,19 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
             const Icon(Icons.emoji_events_outlined, size: 64),
             const SizedBox(height: 12),
             const Text(
-              'No unattempted questions left',
+              '没有未作答题目了',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
             Text(
-              'Answered in this session: $_answeredCount',
+              '本次会话已作答：$_answeredCount',
               style: const TextStyle(color: Colors.grey),
             ),
             const SizedBox(height: 20),
             FilledButton.icon(
               onPressed: () => Navigator.of(context).pop(),
               icon: const Icon(Icons.check),
-              label: const Text('Back to Practice'),
+              label: const Text('返回练习'),
             ),
           ],
         ),
@@ -120,13 +120,13 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Remaining ${_pendingQuestions.length}  Answered $_answeredCount',
+                  '剩余 ${_pendingQuestions.length}  已作答 $_answeredCount',
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    const Text('Mode:'),
+                    const Text('出题顺序：'),
                     const SizedBox(width: 8),
                     DropdownButton<PracticeOrderMode>(
                       value: _orderMode,
@@ -139,11 +139,11 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
                       items: const [
                         DropdownMenuItem(
                           value: PracticeOrderMode.sequential,
-                          child: Text('Sequential'),
+                          child: Text('顺序'),
                         ),
                         DropdownMenuItem(
                           value: PracticeOrderMode.random,
-                          child: Text('Random'),
+                          child: Text('随机'),
                         ),
                       ],
                     ),
@@ -156,7 +156,7 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
                         });
                       },
                     ),
-                    const Text('Auto Next'),
+                    const Text('自动下一题'),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -185,7 +185,7 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 AIFormulaText(
-                  question.title.trim().isEmpty ? 'Question' : question.title,
+                  question.title.trim().isEmpty ? '题目' : question.title,
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -213,8 +213,8 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
           maxLines: 6,
           enabled: !_submitting && !_currentSubmitted,
           decoration: const InputDecoration(
-            labelText: 'Your answer',
-            hintText: 'Use comma or newline for multiple answers',
+            labelText: '你的答案',
+            hintText: '多答案可用逗号或换行分隔',
             border: OutlineInputBorder(),
           ),
         ),
@@ -233,7 +233,7 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.send),
-                label: Text(_autoNextEnabled ? 'Submit & Next' : 'Submit'),
+                label: Text(_autoNextEnabled ? '提交并下一题' : '提交'),
               ),
             ),
             if (!_autoNextEnabled) ...[
@@ -241,7 +241,7 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
               OutlinedButton.icon(
                 onPressed: _currentSubmitted ? _moveToNextQuestion : null,
                 icon: const Icon(Icons.skip_next),
-                label: const Text('Next'),
+                label: const Text('下一题'),
               ),
             ],
           ],
@@ -347,7 +347,7 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
 
     final answers = _parseAnswers(_answerController.text);
     if (answers.isEmpty) {
-      _showSnack('Please enter answer first');
+      _showSnack('请先输入答案');
       return;
     }
 
@@ -369,13 +369,13 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
       if (_autoNextEnabled) {
         _moveToNextQuestion();
       } else {
-        _showSnack('Submitted. Tap Next to continue.');
+        _showSnack('已提交，请点击“下一题”继续。');
       }
     } catch (_) {
       if (!mounted) {
         return;
       }
-      _showSnack(provider.errorMessage ?? 'Submit failed');
+      _showSnack(provider.errorMessage ?? '提交失败');
     } finally {
       if (mounted) {
         setState(() {
