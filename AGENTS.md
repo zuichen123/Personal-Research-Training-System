@@ -8,6 +8,9 @@
 
 ## 2) 默认工作流
 - 开始前先执行 `git status --short`，确认当前基线。
+- 开始实现前，先在 Notion 查阅 API 清单页，确认接口是否已存在并优先复用，避免重复造轮子：
+  - `https://www.notion.so/31cba63208ec810ebdebd78d08036fe3`
+- 若 Notion 清单与代码不一致，先更新 Notion 再改代码，并在回执中说明差异。
 - 实施完成后做最小可行验证（按变更范围选择）：
   - 后端改动：至少执行相关 `go test` 或 `go test ./...`。
   - Flutter 改动：至少执行相关 `flutter analyze`。
