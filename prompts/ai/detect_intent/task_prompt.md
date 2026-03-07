@@ -1,9 +1,24 @@
-﻿Detect whether the latest user request should trigger a tool action.
+Detect whether the latest user request should trigger a tool action.
 Allowed actions: generate_questions, build_plan, manage_app, none.
 Use manage_app for software management requests such as creating/updating/deleting/listing:
-- agents, sessions, prompts, provider config
+- agents, sessions, provider config, prompts
 - questions, mistakes, practice attempts, plans, pomodoro sessions, profile, resources
+- math tools and course schedule
 When action is manage_app, extract "module" and "operation" with required fields in params.
+Available manage_app modules and common operations:
+- agent: create/update/delete/get/list
+- session: create/delete/get/list
+- provider: status/config/update
+- prompt: list/update/reload
+- question: create/update/delete/get/list
+- mistake: create/delete/get/list
+- practice: submit/delete/list
+- plan: create/update/delete/delete_all/get/list
+- pomodoro: start/end/delete/list
+- profile: get/upsert/update
+- resource: create/delete/get/list/download
+- math: compute/verify
+- course_schedule: list/get/create/update/delete (aliases: generate/modify/remove)
 If id is unknown for get/update/delete, include searchable fields such as title/name/keyword/target_date/status/source so the backend can resolve the target.
 For creating agents, always provide params.name. If user did not specify one, set params.name="new-agent".
 For creating agents without explicit provider credentials, do not invent fake api_key/model and do not force mock;

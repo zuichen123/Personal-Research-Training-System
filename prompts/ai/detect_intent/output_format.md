@@ -1,0 +1,31 @@
+Return ONLY JSON:
+{
+  "content":"",
+  "intent":{
+    "action":"generate_questions|build_plan|manage_app|none",
+    "confidence":0.0,
+    "reason":"string",
+    "params":{
+      "module":"agent|session|provider|prompt|question|mistake|practice|plan|pomodoro|profile|resource|math|course_schedule",
+      "operation":"create|update|delete|delete_all|get|list|submit|start|end|reload|upsert|clear|purge|status|config|compute|verify|generate|modify|remove",
+      "all":true,
+      "id":"string",
+      "agentId":"string",
+      "session_id":"string",
+      "sessionId":"string",
+      "name":"string",
+      "title":"string",
+      "keyword":"string",
+      "target_date":"YYYY-MM-DD",
+      "status":"string",
+      "source":"string",
+      "topic":"string",
+      "subject":"string",
+      "count":3,
+      "difficulty":3,
+      "segment_updates":{"task_prompt":"string","rules":"string"},
+      "segment_deletes":["ai_memo"],
+      "replace_segments":false
+    }
+  }
+}

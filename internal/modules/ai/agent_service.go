@@ -1952,10 +1952,30 @@ func buildToolInstructionsForCapabilities(capabilities []string) string {
 			lines = append(lines, "- build_plan: generate learning-plan artifacts; params should include subject/unit/goals/final_goal/date range when available.")
 		case "manage_app":
 			lines = append(lines, "- manage_app: execute app management operations; params must include module + operation and required target fields.")
+			lines = append(lines, manageAppModuleReferenceLines()...)
 		}
 	}
 	lines = append(lines, "For mutating operations, verify target identity fields before execution.")
 	return strings.TrimSpace(strings.Join(lines, "\n"))
+}
+
+func manageAppModuleReferenceLines() []string {
+	return []string{
+		"manage_app module quick reference:",
+		"- module=agent: operations create/update/delete/get/list",
+		"- module=session: operations create/delete/get/list",
+		"- module=provider: operations status/config/update",
+		"- module=prompt: operations list/update/reload",
+		"- module=question: operations create/update/delete/get/list",
+		"- module=mistake: operations create/delete/get/list",
+		"- module=practice: operations submit/delete/list",
+		"- module=plan: operations create/update/delete/delete_all/get/list",
+		"- module=pomodoro: operations start/end/delete/list",
+		"- module=profile: operations get/upsert/update",
+		"- module=resource: operations create/delete/get/list/download",
+		"- module=math: operations compute/verify",
+		"- module=course_schedule: operations list/get/create/update/delete (aliases: generate/modify/remove)",
+	}
 }
 
 func supportedToolActionsFromCapabilities(capabilities []string) []string {
