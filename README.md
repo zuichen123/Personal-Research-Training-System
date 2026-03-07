@@ -1,4 +1,6 @@
-# Self-Study-Tool
+# Personal Research & Training System (PRTS)
+
+License: AGPL-3.0-or-later
 
 基于 Go + Flutter 的智能化自学管理器。
 
