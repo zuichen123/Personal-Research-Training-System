@@ -809,6 +809,57 @@ class ApiService {
     return _asMap(data);
   }
 
+  Future<List<Map<String, dynamic>>> listAICourseScheduleLessons({
+    String date = '',
+  }) async {
+    final query = <String, String>{};
+    final normalizedDate = date.trim();
+    if (normalizedDate.isNotEmpty) {
+      query['date'] = normalizedDate;
+    }
+    final response = await _request(
+      method: 'GET',
+      path: '/ai/course-schedule/lessons',
+      query: query.isEmpty ? null : query,
+      timeout: _aiRequestTimeout,
+    );
+    return _extractDataList(response).map(_asMap).toList(growable: false);
+  }
+
+  Future<Map<String, dynamic>> createAICourseScheduleLesson(
+    Map<String, dynamic> input,
+  ) async {
+    final response = await _request(
+      method: 'POST',
+      path: '/ai/course-schedule/lessons',
+      jsonBody: input,
+      timeout: _aiRequestTimeout,
+    );
+    return _extractDataMap(response);
+  }
+
+  Future<Map<String, dynamic>> updateAICourseScheduleLesson(
+    String id,
+    Map<String, dynamic> input,
+  ) async {
+    final response = await _request(
+      method: 'PUT',
+      path: '/ai/course-schedule/lessons/$id',
+      jsonBody: input,
+      timeout: _aiRequestTimeout,
+    );
+    return _extractDataMap(response);
+  }
+
+  Future<Map<String, dynamic>> deleteAICourseScheduleLesson(String id) async {
+    final response = await _request(
+      method: 'DELETE',
+      path: '/ai/course-schedule/lessons/$id',
+      timeout: _aiRequestTimeout,
+    );
+    return _extractDataMap(response);
+  }
+
   Future<dynamic> _requestAIStreamData({
     required String path,
     required Map<String, dynamic> jsonBody,

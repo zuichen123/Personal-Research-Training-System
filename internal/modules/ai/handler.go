@@ -55,6 +55,10 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 		r.Post("/score", h.score)
 		r.Post("/math/compute", h.mathCompute)
 		r.Post("/math/verify", h.mathVerify)
+		r.Get("/course-schedule/lessons", h.listCourseScheduleLessons)
+		r.Post("/course-schedule/lessons", h.createCourseScheduleLesson)
+		r.Put("/course-schedule/lessons/{id}", h.updateCourseScheduleLesson)
+		r.Delete("/course-schedule/lessons/{id}", h.deleteCourseScheduleLesson)
 	})
 }
 
@@ -329,6 +333,58 @@ func (h *Handler) mathVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, result)
+}
+
+func (h *Handler) listCourseScheduleLessons(w http.ResponseWriter, r *http.Request) {
+	items, err := h.service.ListCourseScheduleLessons(
+		r.Context(),
+		strings.TrimSpace(r.URL.Query().Get("date")),
+	)
+	if err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, items)
+}
+
+func (h *Handler) createCourseScheduleLesson(w http.ResponseWriter, r *http.Request) {
+	var req CourseScheduleLessonRequest
+	if err := httpx.DecodeJSON(r, &req); err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	item, err := h.service.CreateCourseScheduleLesson(r.Context(), req)
+	if err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusCreated, item)
+}
+
+func (h *Handler) updateCourseScheduleLesson(w http.ResponseWriter, r *http.Request) {
+	var req CourseScheduleLessonUpdateRequest
+	if err := httpx.DecodeJSON(r, &req); err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	item, err := h.service.UpdateCourseScheduleLesson(
+		r.Context(),
+		chi.URLParam(r, "id"),
+		req,
+	)
+	if err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, item)
+}
+
+func (h *Handler) deleteCourseScheduleLesson(w http.ResponseWriter, r *http.Request) {
+	if err := h.service.DeleteCourseScheduleLesson(r.Context(), chi.URLParam(r, "id")); err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
 func (h *Handler) providerStatus(w http.ResponseWriter, _ *http.Request) {

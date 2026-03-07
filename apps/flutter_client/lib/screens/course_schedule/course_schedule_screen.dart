@@ -6,8 +6,8 @@ import 'package:provider/provider.dart';
 import '../../models/ai_agent_chat.dart';
 import '../../providers/ai_agent_provider.dart';
 import '../../providers/app_provider.dart';
-import '../agent_chat_hub_screen.dart';
 import '../plans_screen.dart';
+import 'course_lesson_session_screen.dart';
 
 enum CourseScheduleView { year, month, day, lesson }
 
@@ -27,6 +27,8 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
   double _masteryScore = 75;
   final TextEditingController _masteryNoteController = TextEditingController();
   final List<_MasteryRecord> _masteryRecords = [];
+  final Map<String, _LessonSessionBinding> _lessonSessions =
+      <String, _LessonSessionBinding>{};
 
   static const List<_CourseTemplateLesson> _weeklyTemplates = [
     _CourseTemplateLesson(
@@ -511,6 +513,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
   }
 
   Widget _currentLessonCard(BuildContext context, _CourseLesson lesson) {
+    final hasSession = _lessonSessions.containsKey(lesson.id);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -557,7 +560,9 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
                 label: Text(
                   _startingLesson
                       ? '\u542f\u52a8\u4e2d...'
-                      : '\u5f00\u59cb\u4e0a\u8bfe',
+                      : hasSession
+                      ? '\u8fdb\u5165\u4e0a\u8bfe\u4f1a\u8bdd'
+                      : '\u521b\u5efa\u4e0a\u8bfe\u4f1a\u8bdd',
                 ),
               ),
             ),
@@ -714,6 +719,12 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
 
     final agentProvider = context.read<AIAgentProvider>();
     try {
+      final existing = _lessonSessions[lesson.id];
+      if (existing != null && existing.sessionId.trim().isNotEmpty) {
+        await _openLessonSession(lesson, existing);
+        return;
+      }
+
       if (agentProvider.agents.isEmpty) {
         await agentProvider.refreshAgents();
       }
@@ -727,28 +738,34 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
       }
 
       final selectedAgent = _selectLessonAgent(enabledAgents);
+      final sessionTitle =
+          '\u8bfe\u7a0b\u4f1a\u8bdd ${lesson.subject} ${_dateLabel(lesson.date)} \u7b2c${lesson.period}\u8282';
       await agentProvider.selectAgent(selectedAgent.id);
-      await agentProvider.createSession(
-        title: '\u8bfe\u7a0b ${lesson.subject} ${_dateLabel(lesson.date)}',
-      );
+      await agentProvider.createSession(title: sessionTitle);
       final sessionId = agentProvider.selectedSessionIdOf(selectedAgent.id);
-      if (sessionId.isNotEmpty) {
-        await agentProvider.updateSessionScheduleBinding(
-          sessionId: sessionId,
-          mode: 'manual',
-          theme: '${lesson.subject}: ${lesson.topic}',
-          autoEnabled: true,
-          manualPlanIds: const <String>[],
+      if (sessionId.isEmpty) {
+        throw StateError(
+          '\u4e0a\u8bfe\u4f1a\u8bdd\u521b\u5efa\u5931\u8d25\u3002',
         );
       }
+      await agentProvider.updateSessionScheduleBinding(
+        sessionId: sessionId,
+        mode: 'manual',
+        theme: '${lesson.subject}: ${lesson.topic}',
+        autoEnabled: true,
+        manualPlanIds: const <String>[],
+      );
+      final binding = _LessonSessionBinding(
+        agentId: selectedAgent.id,
+        sessionId: sessionId,
+        sessionTitle: sessionTitle,
+        createdAt: DateTime.now(),
+      );
+      setState(() {
+        _lessonSessions[lesson.id] = binding;
+      });
 
-      await agentProvider.sendMessage(_buildLessonKickoffPrompt(lesson));
-      if (!mounted) {
-        return;
-      }
-      await Navigator.of(
-        context,
-      ).push(MaterialPageRoute(builder: (_) => const AgentChatHubScreen()));
+      await _openLessonSession(lesson, binding);
     } catch (_) {
       if (!mounted) {
         return;
@@ -764,6 +781,26 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
         setState(() => _startingLesson = false);
       }
     }
+  }
+
+  Future<void> _openLessonSession(
+    _CourseLesson lesson,
+    _LessonSessionBinding binding,
+  ) async {
+    if (!mounted) {
+      return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CourseLessonSessionScreen(
+          lessonTitle: '${lesson.subject} 第${lesson.period}节',
+          lessonTopic: lesson.topic,
+          agentId: binding.agentId,
+          sessionId: binding.sessionId,
+          sessionTitle: binding.sessionTitle,
+        ),
+      ),
+    );
   }
 
   Future<void> _saveMastery(_CourseLesson lesson) async {
@@ -865,23 +902,6 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
       return withChatIntent.first;
     }
     return agents.first;
-  }
-
-  String _buildLessonKickoffPrompt(_CourseLesson lesson) {
-    final date = _dateLabel(lesson.date);
-    return [
-      '\u8bf7\u5f00\u59cb\u4e00\u8282\u8bfe\u7a0b\u8f85\u5bfc\u4f1a\u8bdd\u3002',
-      '\u65e5\u671f\uff1a$date',
-      '\u5b66\u79d1\uff1a${lesson.subject}',
-      '\u4e3b\u9898\uff1a${lesson.topic}',
-      '\u8bfe\u65f6\uff1a${lesson.period}',
-      '\u8bf7\u6309\u4ee5\u4e0b\u987a\u5e8f\u8fdb\u884c\uff1a',
-      '1) \u7b80\u8981\u8bb2\u89e3\u5173\u952e\u6982\u5ff5\u3002',
-      '2) \u63d0\u4f9b1\u9053\u4f8b\u9898\u5e76\u8bb2\u89e3\u3002',
-      '3) \u5411\u5b66\u751f\u63d01\u4e2a\u68c0\u67e5\u95ee\u9898\u3002',
-      '4) \u8bc4\u4f30\u5b66\u751f\u56de\u7b54\u5e76\u89e3\u91ca\u9519\u8bef\u539f\u56e0\u3002',
-      '5) \u7ed9\u51fa\u4e0b\u4e00\u6b65\u590d\u4e60\u5efa\u8bae\u3002',
-    ].join('\n');
   }
 
   String _buildMasteryPlanContent({
@@ -1113,6 +1133,20 @@ class _MasteryRecord {
   final int score;
   final DateTime createdAt;
   final String planTitle;
+}
+
+class _LessonSessionBinding {
+  const _LessonSessionBinding({
+    required this.agentId,
+    required this.sessionId,
+    required this.sessionTitle,
+    required this.createdAt,
+  });
+
+  final String agentId;
+  final String sessionId;
+  final String sessionTitle;
+  final DateTime createdAt;
 }
 
 extension _FirstOrNullExt<T> on List<T> {

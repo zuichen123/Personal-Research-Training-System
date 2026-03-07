@@ -188,6 +188,51 @@ type MathVerifyResult struct {
 	NormalizedRef string  `json:"normalized_reference,omitempty"`
 }
 
+type CourseScheduleLessonRequest struct {
+	Title     string `json:"title,omitempty"`
+	Date      string `json:"date"`
+	Period    int    `json:"period,omitempty"`
+	Subject   string `json:"subject"`
+	Topic     string `json:"topic"`
+	Classroom string `json:"classroom,omitempty"`
+	StartTime string `json:"start_time,omitempty"`
+	EndTime   string `json:"end_time,omitempty"`
+	Status    string `json:"status,omitempty"`
+	Priority  int    `json:"priority,omitempty"`
+	Notes     string `json:"notes,omitempty"`
+}
+
+type CourseScheduleLessonUpdateRequest struct {
+	Title     string `json:"title,omitempty"`
+	Date      string `json:"date,omitempty"`
+	Period    int    `json:"period,omitempty"`
+	Subject   string `json:"subject,omitempty"`
+	Topic     string `json:"topic,omitempty"`
+	Classroom string `json:"classroom,omitempty"`
+	StartTime string `json:"start_time,omitempty"`
+	EndTime   string `json:"end_time,omitempty"`
+	Status    string `json:"status,omitempty"`
+	Priority  int    `json:"priority,omitempty"`
+	Notes     string `json:"notes,omitempty"`
+}
+
+type CourseScheduleLesson struct {
+	ID        string    `json:"id"`
+	Title     string    `json:"title"`
+	Date      string    `json:"date"`
+	Period    int       `json:"period"`
+	Subject   string    `json:"subject"`
+	Topic     string    `json:"topic"`
+	Classroom string    `json:"classroom"`
+	StartTime string    `json:"start_time"`
+	EndTime   string    `json:"end_time"`
+	Status    string    `json:"status"`
+	Priority  int       `json:"priority"`
+	Notes     string    `json:"notes,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 type ProviderStatus struct {
 	Provider           string `json:"provider"`
 	ConfiguredProvider string `json:"configured_provider,omitempty"`

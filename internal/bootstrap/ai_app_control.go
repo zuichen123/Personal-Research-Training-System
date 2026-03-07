@@ -82,6 +82,8 @@ func (c *aiAppControl) Execute(ctx context.Context, req ai.AppControlRequest) (a
 		return c.executeProvider(ctx, operation, params)
 	case "math", "calculator", "math_tool":
 		return c.executeMath(ctx, operation, params)
+	case "course_schedule", "schedule":
+		return c.executeCourseSchedule(ctx, operation, params)
 	case "prompt", "prompts":
 		return c.executePrompt(ctx, operation, params)
 	default:
@@ -1066,6 +1068,82 @@ func (c *aiAppControl) executeMath(ctx context.Context, operation string, params
 		}, nil
 	default:
 		return ai.AppControlResult{}, errs.BadRequest("unsupported math operation")
+	}
+}
+
+func (c *aiAppControl) executeCourseSchedule(ctx context.Context, operation string, params map[string]any) (ai.AppControlResult, error) {
+	switch operation {
+	case "list", "get":
+		items, err := c.aiService.ListCourseScheduleLessons(
+			ctx,
+			firstNonEmpty(asString(params["date"]), asString(params["target_date"])),
+		)
+		if err != nil {
+			return ai.AppControlResult{}, err
+		}
+		return ai.AppControlResult{
+			Summary: fmt.Sprintf("已获取 %d 条课程表课时。", len(items)),
+			Data: map[string]any{
+				"items": items,
+				"count": len(items),
+			},
+		}, nil
+	case "generate", "create", "add":
+		req := ai.CourseScheduleLessonRequest{
+			Title:     asString(params["title"]),
+			Date:      firstNonEmpty(asString(params["date"]), asString(params["target_date"])),
+			Period:    asInt(params["period"], 1),
+			Subject:   asString(params["subject"]),
+			Topic:     asString(params["topic"]),
+			Classroom: asString(params["classroom"]),
+			StartTime: firstNonEmpty(asString(params["start_time"]), asString(params["start"])),
+			EndTime:   firstNonEmpty(asString(params["end_time"]), asString(params["end"])),
+			Status:    asString(params["status"]),
+			Priority:  asInt(params["priority"], 3),
+			Notes:     asString(params["notes"]),
+		}
+		item, err := c.aiService.CreateCourseScheduleLesson(ctx, req)
+		if err != nil {
+			return ai.AppControlResult{}, err
+		}
+		return ai.AppControlResult{
+			Summary: fmt.Sprintf("已生成课程表课时：%s。", item.Title),
+			Data: map[string]any{
+				"item": item,
+			},
+		}, nil
+	case "update", "modify", "edit":
+		id := firstNonEmpty(asString(params["id"]), asString(params["lesson_id"]))
+		item, err := c.aiService.UpdateCourseScheduleLesson(ctx, id, ai.CourseScheduleLessonUpdateRequest{
+			Title:     asString(params["title"]),
+			Date:      firstNonEmpty(asString(params["date"]), asString(params["target_date"])),
+			Period:    asInt(params["period"], 0),
+			Subject:   asString(params["subject"]),
+			Topic:     asString(params["topic"]),
+			Classroom: asString(params["classroom"]),
+			StartTime: firstNonEmpty(asString(params["start_time"]), asString(params["start"])),
+			EndTime:   firstNonEmpty(asString(params["end_time"]), asString(params["end"])),
+			Status:    asString(params["status"]),
+			Priority:  asInt(params["priority"], 0),
+			Notes:     asString(params["notes"]),
+		})
+		if err != nil {
+			return ai.AppControlResult{}, err
+		}
+		return ai.AppControlResult{
+			Summary: fmt.Sprintf("已更新课程表课时：%s。", item.Title),
+			Data: map[string]any{
+				"item": item,
+			},
+		}, nil
+	case "delete", "remove":
+		id := firstNonEmpty(asString(params["id"]), asString(params["lesson_id"]))
+		if err := c.aiService.DeleteCourseScheduleLesson(ctx, id); err != nil {
+			return ai.AppControlResult{}, err
+		}
+		return ai.AppControlResult{Summary: fmt.Sprintf("已删除课程表课时：%s。", id)}, nil
+	default:
+		return ai.AppControlResult{}, errs.BadRequest("unsupported course_schedule operation")
 	}
 }
 
