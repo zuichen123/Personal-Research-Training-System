@@ -1074,10 +1074,31 @@ func (c *aiAppControl) executeMath(ctx context.Context, operation string, params
 func (c *aiAppControl) executeCourseSchedule(ctx context.Context, operation string, params map[string]any) (ai.AppControlResult, error) {
 	switch operation {
 	case "list", "get":
-		items, err := c.aiService.ListCourseScheduleLessons(
-			ctx,
-			firstNonEmpty(asString(params["date"]), asString(params["target_date"])),
-		)
+		query := ai.CourseScheduleLessonListQuery{
+			Date: firstNonEmpty(asString(params["date"]), asString(params["target_date"])),
+			DateFrom: firstNonEmpty(
+				asString(params["date_from"]),
+				asString(params["start_date"]),
+			),
+			DateTo: firstNonEmpty(
+				asString(params["date_to"]),
+				asString(params["end_date"]),
+			),
+			Subject: firstNonEmpty(
+				asString(params["subject"]),
+				asString(params["course"]),
+			),
+			Topic: firstNonEmpty(
+				asString(params["topic"]),
+				asString(params["keyword"]),
+			),
+			Granularity: firstNonEmpty(
+				asString(params["granularity"]),
+				asString(params["view"]),
+				asString(params["scope"]),
+			),
+		}
+		items, err := c.aiService.ListCourseScheduleLessonsWithQuery(ctx, query)
 		if err != nil {
 			return ai.AppControlResult{}, err
 		}

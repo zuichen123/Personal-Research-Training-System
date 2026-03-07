@@ -336,10 +336,15 @@ func (h *Handler) mathVerify(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) listCourseScheduleLessons(w http.ResponseWriter, r *http.Request) {
-	items, err := h.service.ListCourseScheduleLessons(
-		r.Context(),
-		strings.TrimSpace(r.URL.Query().Get("date")),
-	)
+	query := CourseScheduleLessonListQuery{
+		Date:        strings.TrimSpace(r.URL.Query().Get("date")),
+		DateFrom:    strings.TrimSpace(r.URL.Query().Get("date_from")),
+		DateTo:      strings.TrimSpace(r.URL.Query().Get("date_to")),
+		Subject:     strings.TrimSpace(r.URL.Query().Get("subject")),
+		Topic:       strings.TrimSpace(r.URL.Query().Get("topic")),
+		Granularity: strings.TrimSpace(r.URL.Query().Get("granularity")),
+	}
+	items, err := h.service.ListCourseScheduleLessonsWithQuery(r.Context(), query)
 	if err != nil {
 		httpx.WriteError(w, err)
 		return

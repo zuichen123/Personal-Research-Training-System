@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"self-study-tool/internal/modules/plan"
 	"self-study-tool/internal/shared/errs"
@@ -94,10 +95,49 @@ func (s *Service) ListCourseScheduleLessons(
 	ctx context.Context,
 	targetDate string,
 ) ([]CourseScheduleLesson, error) {
+	return s.ListCourseScheduleLessonsWithQuery(ctx, CourseScheduleLessonListQuery{
+		Date: targetDate,
+	})
+}
+
+func (s *Service) ListCourseScheduleLessonsWithQuery(
+	ctx context.Context,
+	query CourseScheduleLessonListQuery,
+) ([]CourseScheduleLesson, error) {
 	if s.planService == nil {
 		return nil, errs.BadRequest("course schedule is not enabled")
 	}
-	date := strings.TrimSpace(targetDate)
+	date := strings.TrimSpace(query.Date)
+	dateFrom := strings.TrimSpace(query.DateFrom)
+	dateTo := strings.TrimSpace(query.DateTo)
+	subject := strings.ToLower(strings.TrimSpace(query.Subject))
+	topic := strings.ToLower(strings.TrimSpace(query.Topic))
+	granularity := strings.ToLower(strings.TrimSpace(query.Granularity))
+	if date != "" && (dateFrom == "" && dateTo == "") {
+		switch granularity {
+		case "week":
+			if parsed, ok := parseDateOnly(date); ok {
+				weekdayOffset := int(parsed.Weekday()) - int(time.Monday)
+				if weekdayOffset < 0 {
+					weekdayOffset += 7
+				}
+				start := parsed.AddDate(0, 0, -weekdayOffset)
+				end := start.AddDate(0, 0, 6)
+				dateFrom = formatDateOnly(start)
+				dateTo = formatDateOnly(end)
+			}
+		case "month":
+			if parsed, ok := parseDateOnly(date); ok {
+				start := time.Date(parsed.Year(), parsed.Month(), 1, 0, 0, 0, 0, time.UTC)
+				end := start.AddDate(0, 1, -1)
+				dateFrom = formatDateOnly(start)
+				dateTo = formatDateOnly(end)
+			}
+		default:
+			dateFrom = date
+			dateTo = date
+		}
+	}
 	items, err := s.planService.List(ctx, string(plan.DayPlan))
 	if err != nil {
 		return nil, err
@@ -107,10 +147,26 @@ func (s *Service) ListCourseScheduleLessons(
 		if !isCourseSchedulePlan(item) {
 			continue
 		}
-		if date != "" && item.TargetDate != date {
+		lesson := mapCourseScheduleLesson(item)
+		if dateFrom != "" && lesson.Date < dateFrom {
 			continue
 		}
-		out = append(out, mapCourseScheduleLesson(item))
+		if dateTo != "" && lesson.Date > dateTo {
+			continue
+		}
+		if subject != "" {
+			candidate := strings.ToLower(strings.TrimSpace(lesson.Subject))
+			if !strings.Contains(candidate, subject) {
+				continue
+			}
+		}
+		if topic != "" {
+			candidate := strings.ToLower(strings.TrimSpace(lesson.Topic))
+			if !strings.Contains(candidate, topic) {
+				continue
+			}
+		}
+		out = append(out, lesson)
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].Date == out[j].Date {
@@ -122,6 +178,18 @@ func (s *Service) ListCourseScheduleLessons(
 		return out[i].Date < out[j].Date
 	})
 	return out, nil
+}
+
+func parseDateOnly(raw string) (time.Time, bool) {
+	parsed, err := time.Parse("2006-01-02", strings.TrimSpace(raw))
+	if err != nil {
+		return time.Time{}, false
+	}
+	return parsed, true
+}
+
+func formatDateOnly(date time.Time) string {
+	return date.Format("2006-01-02")
 }
 
 func (s *Service) UpdateCourseScheduleLesson(

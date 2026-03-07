@@ -202,6 +202,15 @@ type CourseScheduleLessonRequest struct {
 	Notes     string `json:"notes,omitempty"`
 }
 
+type CourseScheduleLessonListQuery struct {
+	Date        string `json:"date,omitempty"`
+	DateFrom    string `json:"date_from,omitempty"`
+	DateTo      string `json:"date_to,omitempty"`
+	Subject     string `json:"subject,omitempty"`
+	Topic       string `json:"topic,omitempty"`
+	Granularity string `json:"granularity,omitempty"` // day/week/month
+}
+
 type CourseScheduleLessonUpdateRequest struct {
 	Title     string `json:"title,omitempty"`
 	Date      string `json:"date,omitempty"`

@@ -27,10 +27,14 @@ class CourseLessonSessionScreen extends StatefulWidget {
 }
 
 class _CourseLessonSessionScreenState extends State<CourseLessonSessionScreen> {
+  static const String _autoOpeningPrompt =
+      '请作为本节课智能助教先发起课堂开场白，先说明本节课主题、学习目标和上课流程，然后邀请学生开始。';
+
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   bool _preparing = true;
   bool _sending = false;
+  bool _autoOpeningTriggered = false;
 
   @override
   void initState() {
@@ -52,6 +56,7 @@ class _CourseLessonSessionScreenState extends State<CourseLessonSessionScreen> {
     try {
       await provider.selectAgent(widget.agentId);
       await provider.selectSession(widget.sessionId);
+      await _ensureAutoOpeningMessage(provider);
     } catch (_) {
       // keep provider error state
     } finally {
@@ -59,6 +64,32 @@ class _CourseLessonSessionScreenState extends State<CourseLessonSessionScreen> {
         setState(() => _preparing = false);
       }
     }
+  }
+
+  Future<void> _ensureAutoOpeningMessage(AIAgentProvider provider) async {
+    if (_autoOpeningTriggered) {
+      return;
+    }
+    final messages = provider.messagesOf(widget.sessionId);
+    final hasAssistant = messages.any(
+      (item) => item.role.trim().toLowerCase() == 'assistant',
+    );
+    if (hasAssistant) {
+      _autoOpeningTriggered = true;
+      return;
+    }
+    final hasKickoffUser = messages.any(
+      (item) =>
+          item.role.trim().toLowerCase() == 'user' &&
+          item.content.trim() == _autoOpeningPrompt,
+    );
+    if (hasKickoffUser) {
+      _autoOpeningTriggered = true;
+      return;
+    }
+    _autoOpeningTriggered = true;
+    await provider.sendMessage(_autoOpeningPrompt);
+    _scrollToBottom();
   }
 
   Future<void> _send() async {
@@ -97,7 +128,14 @@ class _CourseLessonSessionScreenState extends State<CourseLessonSessionScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AIAgentProvider>();
-    final messages = provider.messagesOf(widget.sessionId);
+    final messages = provider
+        .messagesOf(widget.sessionId)
+        .where(
+          (item) =>
+              !(item.role.trim().toLowerCase() == 'user' &&
+                  item.content.trim() == _autoOpeningPrompt),
+        )
+        .toList(growable: false);
     return Scaffold(
       appBar: AppBar(
         title: Text('${widget.lessonTitle} · 上课会话'),

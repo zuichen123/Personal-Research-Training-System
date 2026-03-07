@@ -811,11 +811,36 @@ class ApiService {
 
   Future<List<Map<String, dynamic>>> listAICourseScheduleLessons({
     String date = '',
+    String dateFrom = '',
+    String dateTo = '',
+    String subject = '',
+    String topic = '',
+    String granularity = '',
   }) async {
     final query = <String, String>{};
     final normalizedDate = date.trim();
+    final normalizedDateFrom = dateFrom.trim();
+    final normalizedDateTo = dateTo.trim();
+    final normalizedSubject = subject.trim();
+    final normalizedTopic = topic.trim();
+    final normalizedGranularity = granularity.trim();
     if (normalizedDate.isNotEmpty) {
       query['date'] = normalizedDate;
+    }
+    if (normalizedDateFrom.isNotEmpty) {
+      query['date_from'] = normalizedDateFrom;
+    }
+    if (normalizedDateTo.isNotEmpty) {
+      query['date_to'] = normalizedDateTo;
+    }
+    if (normalizedSubject.isNotEmpty) {
+      query['subject'] = normalizedSubject;
+    }
+    if (normalizedTopic.isNotEmpty) {
+      query['topic'] = normalizedTopic;
+    }
+    if (normalizedGranularity.isNotEmpty) {
+      query['granularity'] = normalizedGranularity;
     }
     final response = await _request(
       method: 'GET',
