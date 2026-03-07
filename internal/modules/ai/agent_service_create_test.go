@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -50,6 +51,9 @@ func TestService_CreateAgent_ManualCreateUsesConfiguredProviderDefaults(t *testi
 	if stored.Primary.Model != "gpt-4.1-mini" {
 		t.Fatalf("expected stored model from configured provider, got %q", stored.Primary.Model)
 	}
+	if !containsCapability(stored.IntentCapabilities, "manage_app") {
+		t.Fatalf("expected default capabilities to include manage_app, got %v", stored.IntentCapabilities)
+	}
 }
 
 func newCreateAgentTestService(t *testing.T, runtime RuntimeConfig) (*Service, *SQLiteAgentRepository) {
@@ -77,4 +81,13 @@ func newCreateAgentTestService(t *testing.T, runtime RuntimeConfig) (*Service, *
 		repo,
 	)
 	return svc, repo
+}
+
+func containsCapability(items []string, target string) bool {
+	for _, item := range items {
+		if strings.EqualFold(strings.TrimSpace(item), strings.TrimSpace(target)) {
+			return true
+		}
+	}
+	return false
 }

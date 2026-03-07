@@ -1549,10 +1549,7 @@ func normalizeAgentRequest(req UpsertAgentRequest, id string) (Agent, error) {
 		return Agent{}, errs.BadRequest("primary model/api_key are required")
 	}
 	fallback := normalizeProviderConfig(req.Fallback)
-	caps := normalizeStringSlice(req.IntentCapabilities)
-	if len(caps) == 0 {
-		caps = []string{"chat", "generate_questions", "build_plan"}
-	}
+	caps := withDefaultManageAppCapability(normalizeStringSlice(req.IntentCapabilities))
 	enabled := true
 	if req.Enabled != nil {
 		enabled = *req.Enabled
@@ -1640,6 +1637,18 @@ func normalizeStringSlice(items []string) []string {
 		out = append(out, trimmed)
 	}
 	return out
+}
+
+func withDefaultManageAppCapability(caps []string) []string {
+	if len(caps) == 0 {
+		return []string{"chat", "generate_questions", "build_plan", "manage_app"}
+	}
+	for _, cap := range caps {
+		if strings.EqualFold(strings.TrimSpace(cap), "manage_app") {
+			return caps
+		}
+	}
+	return append(caps, "manage_app")
 }
 
 func reverseAgentMessages(items []AgentMessage) {

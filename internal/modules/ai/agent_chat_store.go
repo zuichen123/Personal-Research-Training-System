@@ -734,9 +734,7 @@ func scanAgent(s agentScanner) (Agent, error) {
 	_ = json.Unmarshal([]byte(primaryJSON), &item.Primary)
 	_ = json.Unmarshal([]byte(fallbackJSON), &item.Fallback)
 	_ = json.Unmarshal([]byte(capabilityJSON), &item.IntentCapabilities)
-	if len(item.IntentCapabilities) == 0 {
-		item.IntentCapabilities = []string{"chat", "generate_questions", "build_plan"}
-	}
+	item.IntentCapabilities = withDefaultManageAppCapability(item.IntentCapabilities)
 	item.Enabled = enabledInt > 0
 	return item, nil
 }

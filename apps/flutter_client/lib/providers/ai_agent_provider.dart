@@ -103,6 +103,7 @@ class AIAgentProvider with ChangeNotifier {
       'chat',
       'generate_questions',
       'build_plan',
+      'manage_app',
     ],
   }) async {
     _cacheCreateAgentDraft(
@@ -155,6 +156,7 @@ class AIAgentProvider with ChangeNotifier {
       'chat',
       'generate_questions',
       'build_plan',
+      'manage_app',
     ],
   }) async {
     _cacheCreateAgentDraft(

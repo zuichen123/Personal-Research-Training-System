@@ -149,6 +149,36 @@ func TestSQLiteAgentRepository_ListMessages_NullJSONDoesNotCreatePending(t *test
 	}
 }
 
+func TestSQLiteAgentRepository_GetAgentByID_AppendsManageAppCapability(t *testing.T) {
+	ctx := context.Background()
+	repo := newAgentRepoForTest(t)
+
+	agentID := uuid.NewString()
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	_, err := repo.CreateAgent(ctx, Agent{
+		ID:                 agentID,
+		Name:               "legacy-cap-agent",
+		Protocol:           AgentProtocolMock,
+		Primary:            AgentProviderConfig{Model: "mock"},
+		Fallback:           AgentProviderConfig{},
+		IntentCapabilities: []string{"chat", "generate_questions", "build_plan"},
+		Enabled:            true,
+		CreatedAt:          now,
+		UpdatedAt:          now,
+	})
+	if err != nil {
+		t.Fatalf("CreateAgent() error = %v", err)
+	}
+
+	item, err := repo.GetAgentByID(ctx, agentID)
+	if err != nil {
+		t.Fatalf("GetAgentByID() error = %v", err)
+	}
+	if !containsCapability(item.IntentCapabilities, "manage_app") {
+		t.Fatalf("expected capabilities to include manage_app, got %v", item.IntentCapabilities)
+	}
+}
+
 func newAgentRepoForTest(t *testing.T) *SQLiteAgentRepository {
 	t.Helper()
 
