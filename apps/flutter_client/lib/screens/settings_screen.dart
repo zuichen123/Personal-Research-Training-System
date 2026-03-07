@@ -48,6 +48,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   String? _selectedPromptKey;
   bool _promptDirty = false;
   bool _syncingPromptForm = false;
+  bool _promptAdvancedExpanded = false;
 
   bool? _backendHealthy;
   bool _checkingHealth = false;
@@ -85,6 +86,12 @@ class _SettingsScreenState extends State<SettingsScreen>
     'reserved_slot_4',
     'reserved_slot_5',
     'task_prompt',
+  ];
+
+  static const List<String> _primaryPromptSegmentKeys = [
+    'task_prompt',
+    'tool_instructions',
+    'rules',
   ];
 
   static const Set<String> _optionalPromptSegments = {
@@ -563,13 +570,32 @@ class _SettingsScreenState extends State<SettingsScreen>
                     style: TextStyle(fontSize: 12, color: Colors.grey),
                   ),
                 ),
-                ..._buildPromptSegmentInputs(),
+                ..._buildPromptSegmentInputs(keys: _primaryPromptSegmentKeys),
                 _input(
                   _outputPromptController,
                   '输出格式 (output_format，留空则使用预置)',
                   focusNode: _outputPromptFocusNode,
                   maxLines: 6,
                   minLines: 4,
+                ),
+                ExpansionTile(
+                  key: ValueKey('prompt-advanced-${_selectedPromptKey ?? ''}'),
+                  initiallyExpanded: _promptAdvancedExpanded,
+                  onExpansionChanged: (expanded) {
+                    setState(() {
+                      _promptAdvancedExpanded = expanded;
+                    });
+                  },
+                  title: const Text('高级分段编辑（可选）'),
+                  subtitle: const Text('展开后可编辑其余分段'),
+                  childrenPadding: const EdgeInsets.only(top: 8),
+                  children: [
+                    ..._buildPromptSegmentInputs(
+                      keys: _editablePromptSegmentKeys
+                          .where((key) => !_primaryPromptSegmentKeys.contains(key))
+                          .toList(growable: false),
+                    ),
+                  ],
                 ),
                 _readonlyMultiline(
                   label: '用户输入 (user_input)',
@@ -1156,9 +1182,10 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
   }
 
-  List<Widget> _buildPromptSegmentInputs() {
+  List<Widget> _buildPromptSegmentInputs({List<String>? keys}) {
+    final targetKeys = keys ?? _editablePromptSegmentKeys;
     final widgets = <Widget>[];
-    for (final key in _editablePromptSegmentKeys) {
+    for (final key in targetKeys) {
       final controller = _segmentPromptControllers[key];
       if (controller == null) {
         continue;
