@@ -3,6 +3,8 @@ package ai
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 )
@@ -366,6 +368,20 @@ var promptTemplatePresetByKey = func() map[string]promptTemplatePreset {
 	return out
 }()
 
+var promptPresetFileByKey = map[string]string{
+	PromptKeyGenerateQuestions: filepath.Join("prompts", "ai", "generate_questions.md"),
+	PromptKeyGradeAnswer:       filepath.Join("prompts", "ai", "grade_answer.md"),
+	PromptKeyBuildLearningPlan: filepath.Join("prompts", "ai", "build_learning_plan.md"),
+	PromptKeyOptimizeLearning:  filepath.Join("prompts", "ai", "optimize_learning_plan.md"),
+	PromptKeyEvaluateLearning:  filepath.Join("prompts", "ai", "evaluate_learning.md"),
+	PromptKeyScoreLearning:     filepath.Join("prompts", "ai", "score_learning.md"),
+	PromptKeyDetectIntent:      filepath.Join("prompts", "ai", "detect_intent.md"),
+	PromptKeyAgentChat:         filepath.Join("prompts", "ai", "agent_chat.md"),
+	PromptKeyCompressSession:   filepath.Join("prompts", "ai", "compress_session.md"),
+}
+
+var promptPresetTextCache sync.Map
+
 type promptTemplateOverride struct {
 	CustomPrompt       string
 	OutputFormatPrompt string
@@ -585,6 +601,30 @@ func defaultPromptSegmentsForPreset(preset promptTemplatePreset) map[string]stri
 	return out
 }
 
+func resolvePresetPromptText(key, fallback string) string {
+	path := strings.TrimSpace(promptPresetFileByKey[normalizePromptKey(key)])
+	if path == "" {
+		return strings.TrimSpace(fallback)
+	}
+	if cached, ok := promptPresetTextCache.Load(path); ok {
+		if text, okCast := cached.(string); okCast {
+			return text
+		}
+	}
+	bytes, err := os.ReadFile(path)
+	if err != nil {
+		text := strings.TrimSpace(fallback)
+		promptPresetTextCache.Store(path, text)
+		return text
+	}
+	loaded := strings.TrimSpace(string(bytes))
+	if loaded == "" {
+		loaded = strings.TrimSpace(fallback)
+	}
+	promptPresetTextCache.Store(path, loaded)
+	return loaded
+}
+
 func parsePromptSegmentOverridesJSON(raw string) map[string]string {
 	text := strings.TrimSpace(raw)
 	if text == "" {
@@ -698,9 +738,13 @@ func normalizePromptTemplateOverride(in promptTemplateOverride) promptTemplateOv
 }
 
 func buildPromptConfig(preset promptTemplatePreset, override promptTemplateOverride) PromptTemplateConfig {
+	resolvedPresetPrompt := resolvePresetPromptText(preset.Key, preset.PresetPrompt)
+	resolvedPreset := preset
+	resolvedPreset.PresetPrompt = resolvedPresetPrompt
+
 	customPrompt := strings.TrimSpace(override.CustomPrompt)
 	outputPrompt := strings.TrimSpace(override.OutputFormatPrompt)
-	presetSegments := defaultPromptSegmentsForPreset(preset)
+	presetSegments := defaultPromptSegmentsForPreset(resolvedPreset)
 	segmentOverrides := normalizePromptSegmentMap(override.SegmentOverrides)
 	effectiveSegments := clonePromptSegmentMap(presetSegments)
 	for key, value := range segmentOverrides {
@@ -727,7 +771,7 @@ func buildPromptConfig(preset promptTemplatePreset, override promptTemplateOverr
 	return PromptTemplateConfig{
 		Key:                         preset.Key,
 		Name:                        preset.Name,
-		PresetPrompt:                preset.PresetPrompt,
+		PresetPrompt:                resolvedPresetPrompt,
 		PresetOutputFormatPrompt:    preset.PresetOutputFormatPrompt,
 		PresetSegments:              clonePromptSegmentMap(presetSegments),
 		CustomPrompt:                customPrompt,
