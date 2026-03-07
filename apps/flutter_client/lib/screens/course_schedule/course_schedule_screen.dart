@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/ai_agent_chat.dart';
+import '../../models/plan.dart';
 import '../../providers/ai_agent_provider.dart';
 import '../../providers/app_provider.dart';
 import '../plans_screen.dart';
@@ -97,6 +98,12 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
   void initState() {
     super.initState();
     _refreshSelectedLesson();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      context.read<AppProvider>().fetchPlans();
+    });
   }
 
   @override
@@ -107,6 +114,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final appProvider = context.watch<AppProvider>();
     return Scaffold(
       appBar: AppBar(
         title: const Text('\u667a\u80fd\u8bfe\u7a0b\u8868'),
@@ -129,7 +137,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
           const SizedBox(height: 12),
           _buildViewSwitcher(),
           const SizedBox(height: 12),
-          _buildCurrentView(context),
+          _buildCurrentView(context, appProvider),
         ],
       ),
     );
@@ -208,7 +216,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
     );
   }
 
-  Widget _buildCurrentView(BuildContext context) {
+  Widget _buildCurrentView(BuildContext context, AppProvider appProvider) {
     switch (_view) {
       case CourseScheduleView.year:
         return _buildYearView(context);
@@ -217,7 +225,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
       case CourseScheduleView.day:
         return _buildDayView();
       case CourseScheduleView.lesson:
-        return _buildLessonView(context);
+        return _buildLessonView(context, appProvider);
     }
   }
 
@@ -471,7 +479,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
     );
   }
 
-  Widget _buildLessonView(BuildContext context) {
+  Widget _buildLessonView(BuildContext context, AppProvider appProvider) {
     final lesson = _selectedLesson ?? _lessonsForDate(_focusDate).firstOrNull;
     if (lesson == null) {
       return Card(
@@ -504,6 +512,8 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
         _afterClassPracticeCard(lesson),
         const SizedBox(height: 12),
         _masteryCard(context, lesson),
+        const SizedBox(height: 12),
+        _linkedPlanCard(context, appProvider, lesson),
         if (_masteryRecords.isNotEmpty) ...[
           const SizedBox(height: 12),
           _masteryHistoryCard(),
@@ -709,6 +719,144 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
         ),
       ),
     );
+  }
+
+  Widget _linkedPlanCard(
+    BuildContext context,
+    AppProvider appProvider,
+    _CourseLesson lesson,
+  ) {
+    final plans = _relatedPlansForLesson(appProvider.plans, lesson);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Text(
+                  '关联计划',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const Spacer(),
+                TextButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const PlansScreen()),
+                    );
+                  },
+                  icon: const Icon(Icons.open_in_new, size: 16),
+                  label: const Text('打开计划管理'),
+                ),
+              ],
+            ),
+            if (plans.isEmpty) ...[
+              const SizedBox(height: 6),
+              const Text('当前课程暂无关联计划，可先保存掌握度自动生成复习计划。'),
+            ] else ...[
+              const SizedBox(height: 6),
+              ...plans.take(4).map((item) {
+                final completed = item.status == 'completed';
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '状态: ${_planStatusLabel(item.status)}  |  截止: ${item.targetDate.isEmpty ? '-' : item.targetDate}',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      OutlinedButton(
+                        onPressed: completed
+                            ? null
+                            : () => _markPlanCompleted(
+                                  context,
+                                  appProvider,
+                                  item.id,
+                                ),
+                        child: Text(completed ? '已完成' : '标记完成'),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<PlanItem> _relatedPlansForLesson(
+    List<PlanItem> plans,
+    _CourseLesson lesson,
+  ) {
+    final subject = lesson.subject.toLowerCase();
+    final topic = lesson.topic.toLowerCase();
+    final related = plans.where((item) {
+      final title = item.title.toLowerCase();
+      final content = item.content.toLowerCase();
+      if (item.source == 'ai_agent' && item.targetDate == _dateLabel(lesson.date)) {
+        return true;
+      }
+      return title.contains(subject) ||
+          title.contains(topic) ||
+          content.contains(subject) ||
+          content.contains(topic);
+    }).toList(growable: false);
+    related.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    return related;
+  }
+
+  String _planStatusLabel(String status) {
+    switch (status) {
+      case 'pending':
+        return '待开始';
+      case 'in_progress':
+        return '进行中';
+      case 'completed':
+        return '已完成';
+      case 'archived':
+        return '已归档';
+      default:
+        return status;
+    }
+  }
+
+  Future<void> _markPlanCompleted(
+    BuildContext context,
+    AppProvider appProvider,
+    String id,
+  ) async {
+    try {
+      await appProvider.updatePlan(id, {'status': 'completed'});
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已标记计划完成')),
+      );
+    } catch (_) {
+      if (!context.mounted) {
+        return;
+      }
+      final message = appProvider.errorMessage ?? '更新计划状态失败';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    }
   }
 
   Future<void> _startLesson(_CourseLesson lesson) async {
