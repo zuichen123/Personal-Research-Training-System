@@ -19,7 +19,6 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Route("/mistakes", func(r chi.Router) {
 		r.Post("/", h.create)
 		r.Get("/", h.list)
-		r.Get("/{id}", h.getByID)
 		r.Delete("/{id}", h.delete)
 	})
 }
@@ -46,15 +45,6 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, items)
-}
-
-func (h *Handler) getByID(w http.ResponseWriter, r *http.Request) {
-	item, err := h.service.GetByID(r.Context(), chi.URLParam(r, "id"))
-	if err != nil {
-		httpx.WriteError(w, err)
-		return
-	}
-	httpx.WriteJSON(w, http.StatusOK, item)
 }
 
 func (h *Handler) delete(w http.ResponseWriter, r *http.Request) {

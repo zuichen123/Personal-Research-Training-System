@@ -59,6 +59,10 @@ class ApiService {
   final AppLogger _logger = AppLogger.instance;
 
   static String _defaultBaseUrl() {
+    const configured = String.fromEnvironment('API_BASE_URL', defaultValue: '');
+    if (configured.trim().isNotEmpty) {
+      return _normalizeBaseUrl(configured);
+    }
     if (kIsWeb) {
       return 'http://127.0.0.1:8080/api/v1';
     }
@@ -66,6 +70,14 @@ class ApiService {
       return 'http://10.0.2.2:8080/api/v1';
     }
     return 'http://127.0.0.1:8080/api/v1';
+  }
+
+  static String _normalizeBaseUrl(String raw) {
+    var normalized = raw.trim();
+    for (; normalized.endsWith('/');) {
+      normalized = normalized.substring(0, normalized.length - 1);
+    }
+    return normalized;
   }
 
   Future<bool> checkHealth() async {
@@ -95,11 +107,6 @@ class ApiService {
       query: query,
     );
     return _extractDataList(response).map(Question.fromJson).toList();
-  }
-
-  Future<Question> getQuestionById(String id) async {
-    final response = await _request(method: 'GET', path: '/questions/$id');
-    return Question.fromJson(_extractDataMap(response));
   }
 
   Future<Question> createQuestion(Map<String, dynamic> input) async {
@@ -173,11 +180,6 @@ class ApiService {
     return _extractDataList(response).map(MistakeRecord.fromJson).toList();
   }
 
-  Future<MistakeRecord> getMistakeById(String id) async {
-    final response = await _request(method: 'GET', path: '/mistakes/$id');
-    return MistakeRecord.fromJson(_extractDataMap(response));
-  }
-
   Future<MistakeRecord> createMistake(Map<String, dynamic> input) async {
     final response = await _request(
       method: 'POST',
@@ -202,11 +204,6 @@ class ApiService {
       query: query,
     );
     return _extractDataList(response).map(ResourceMaterial.fromJson).toList();
-  }
-
-  Future<ResourceMaterial> getResourceById(String id) async {
-    final response = await _request(method: 'GET', path: '/resources/$id');
-    return ResourceMaterial.fromJson(_extractDataMap(response));
   }
 
   Future<ResourceMaterial> uploadResource({
@@ -303,11 +300,6 @@ class ApiService {
       query: query,
     );
     return _extractDataList(response).map(PlanItem.fromJson).toList();
-  }
-
-  Future<PlanItem> getPlanById(String id) async {
-    final response = await _request(method: 'GET', path: '/plans/$id');
-    return PlanItem.fromJson(_extractDataMap(response));
   }
 
   Future<PlanItem> createPlan(Map<String, dynamic> input) async {

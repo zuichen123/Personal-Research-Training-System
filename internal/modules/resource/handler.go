@@ -25,7 +25,6 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Route("/resources", func(r chi.Router) {
 		r.Post("/", h.upload)
 		r.Get("/", h.list)
-		r.Get("/{id}", h.getMeta)
 		r.Get("/{id}/download", h.download)
 		r.Delete("/{id}", h.delete)
 	})
@@ -84,16 +83,6 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		items[i].Data = nil
 	}
 	httpx.WriteJSON(w, http.StatusOK, items)
-}
-
-func (h *Handler) getMeta(w http.ResponseWriter, r *http.Request) {
-	item, err := h.service.GetByID(r.Context(), chi.URLParam(r, "id"))
-	if err != nil {
-		httpx.WriteError(w, err)
-		return
-	}
-	item.Data = nil
-	httpx.WriteJSON(w, http.StatusOK, item)
 }
 
 func (h *Handler) download(w http.ResponseWriter, r *http.Request) {

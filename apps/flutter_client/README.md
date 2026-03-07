@@ -25,6 +25,12 @@ flutter run
 - Android 模拟器：`http://10.0.2.2:8080/api/v1`
 - 其他平台：`http://127.0.0.1:8080/api/v1`
 
+也支持运行时覆盖（推荐在后端端口非 `8080` 时使用）：
+
+```bash
+flutter run --dart-define=API_BASE_URL=http://127.0.0.1:8080/api/v1
+```
+
 请先启动后端：
 
 ```bash
