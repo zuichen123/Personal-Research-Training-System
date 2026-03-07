@@ -35,7 +35,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
       period: 1,
       subject: '\u6570\u5b66',
       topic: '\u4e8c\u6b21\u51fd\u6570',
-      classroom: 'A-301',
+      classroom: '\u6559\u5ba4301',
       startTime: '08:00',
       endTime: '08:45',
     ),
@@ -45,7 +45,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
       period: 2,
       subject: '\u82f1\u8bed',
       topic: '\u9605\u8bfb\u7406\u89e3',
-      classroom: 'B-204',
+      classroom: '\u6559\u5ba4204',
       startTime: '09:00',
       endTime: '09:45',
     ),
@@ -55,7 +55,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
       period: 3,
       subject: '\u7269\u7406',
       topic: '\u725b\u987f\u5b9a\u5f8b',
-      classroom: 'Lab-2',
+      classroom: '\u5b9e\u9a8c\u5ba42',
       startTime: '10:00',
       endTime: '10:45',
     ),
@@ -65,7 +65,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
       period: 4,
       subject: '\u5316\u5b66',
       topic: '\u7269\u8d28\u7684\u91cf',
-      classroom: 'Lab-1',
+      classroom: '\u5b9e\u9a8c\u5ba41',
       startTime: '11:00',
       endTime: '11:45',
     ),
@@ -75,7 +75,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
       period: 5,
       subject: '\u751f\u7269',
       topic: '\u7ec6\u80de\u7ed3\u6784',
-      classroom: 'A-202',
+      classroom: '\u6559\u5ba4202',
       startTime: '14:00',
       endTime: '14:45',
     ),
@@ -85,7 +85,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
       period: 6,
       subject: '\u5386\u53f2',
       topic: '\u5de5\u4e1a\u9769\u547d',
-      classroom: 'C-101',
+      classroom: '\u6559\u5ba4101',
       startTime: '15:00',
       endTime: '15:45',
     ),
@@ -584,7 +584,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
               '- \u6838\u5fc3\u6982\u5ff5\uff1a${lesson.subject}\u57fa\u7840\u77e5\u8bc6',
             ),
             const Text(
-              '- AI\u751f\u6210\u603b\u7ed3\uff08\u5f85\u8865\u5145\uff09',
+              '- \u667a\u80fd\u52a9\u6559\u751f\u6210\u603b\u7ed3\uff08\u5f85\u8865\u5145\uff09',
             ),
           ],
         ),
@@ -605,7 +605,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              '- AI\u51fa\u9898\u5185\u5bb9\uff08\u5f85\u8865\u5145\uff09',
+              '- \u667a\u80fd\u52a9\u6559\u51fa\u9898\u5185\u5bb9\uff08\u5f85\u8865\u5145\uff09',
             ),
             const Text(
               '- \u4f5c\u4e1a\u6e05\u5355\u4e0e\u5b8c\u6210\u72b6\u6001\uff08\u5f85\u8865\u5145\uff09',
@@ -722,7 +722,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
           .toList(growable: false);
       if (enabledAgents.isEmpty) {
         throw StateError(
-          '\u672a\u627e\u5230\u53ef\u7528\u7684 AI \u52a9\u6559\u3002',
+          '\u672a\u627e\u5230\u53ef\u7528\u7684\u667a\u80fd\u52a9\u6559\u3002',
         );
       }
 
@@ -837,7 +837,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
   void _openPracticePrompt(_CourseLesson lesson) {
     final message =
         '\u5df2\u751f\u6210\u7ec3\u4e60\u63d0\u793a\u8bcd\uff1a${lesson.subject} - ${lesson.topic}\u3002'
-        '\u53ef\u4f7f\u7528\u201c\u5f00\u59cb\u4e0a\u8bfe\u201d\u5c06\u4e0a\u4e0b\u6587\u53d1\u9001\u7ed9AI\u52a9\u6559\u3002';
+        '\u53ef\u4f7f\u7528\u201c\u5f00\u59cb\u4e0a\u8bfe\u201d\u5c06\u4e0a\u4e0b\u6587\u53d1\u9001\u7ed9\u667a\u80fd\u52a9\u6559\u3002';
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
