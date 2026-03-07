@@ -7,6 +7,7 @@ import 'core/logging/app_logger.dart';
 import 'providers/ai_agent_provider.dart';
 import 'providers/app_provider.dart';
 import 'screens/agent_chat_hub_screen.dart';
+import 'screens/course_schedule/course_schedule_screen.dart';
 import 'screens/mistakes_screen.dart';
 import 'screens/plans_screen.dart';
 import 'screens/pomodoro_screen.dart';
@@ -180,6 +181,11 @@ class _MainScreenState extends State<MainScreen> {
       label: '计划管理',
     ),
     _NavItem(
+      icon: Icons.calendar_month_outlined,
+      selectedIcon: Icons.calendar_month,
+      label: 'Course Schedule',
+    ),
+    _NavItem(
       icon: Icons.settings_outlined,
       selectedIcon: Icons.settings,
       label: '设置',
@@ -216,6 +222,9 @@ class _MainScreenState extends State<MainScreen> {
         screen = const PlansScreen();
         break;
       case 2:
+        screen = const CourseScheduleScreen();
+        break;
+      case 3:
         provider.ensureAILoaded();
         provider.ensureProfileLoaded();
         screen = const SettingsScreen();

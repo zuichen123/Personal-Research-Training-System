@@ -1,5 +1,16 @@
 ﻿# TODO（迁移到 Linux 继续开发）
 
+## 当前迭代（Notion：智能课程表）
+- [x] Step 0：从未开始领取任务并设为 TODO
+- [x] Step 0.5：拆解为可执行小步并同步到 Notion
+- [x] Step 1：主界面入口 + 课程表页面骨架（年/月/日/课）Completed
+- [ ] Step 2：月/日视图数据结构与 mock 数据接入
+- [ ] Step 3：课程增删改查交互（前端）
+- [ ] Step 4：后端课程表 API 对齐与联调
+- [ ] Step 5：课程冲突检查与提示
+- [ ] Step 6：测试与回归（flutter analyze / 关键接口测试）
+- [x] Step 7：任务状态已更新为 Review，等待验收
+
 ## 0. 当前工作区快照（先确认）
 - [ ] 执行：`git status --short`
 - [ ] 确认当前改动文件主要是：
