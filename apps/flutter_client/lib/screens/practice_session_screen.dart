@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../models/question.dart';
 import '../providers/app_provider.dart';
+import '../widgets/ai_formula_text.dart';
 
 enum PracticeOrderMode { sequential, random }
 
@@ -183,7 +184,7 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
+                AIFormulaText(
                   question.title.trim().isEmpty ? 'Question' : question.title,
                   style: const TextStyle(
                     fontSize: 16,
@@ -191,13 +192,13 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text(question.stem),
+                AIFormulaText(question.stem),
                 if (question.options.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   ...question.options.map((option) {
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 4),
-                      child: Text('${option.key}. ${option.text}'),
+                      child: AIFormulaText('${option.key}. ${option.text}'),
                     );
                   }),
                 ],

@@ -3,13 +3,20 @@
 ## 当前迭代（Notion：智能课程表）
 - [x] Step 0：从未开始领取任务并设为 TODO
 - [x] Step 0.5：拆解为可执行小步并同步到 Notion
-- [x] Step 1：主界面入口 + 课程表页面骨架（年/月/日/课）Completed
-- [ ] Step 2：月/日视图数据结构与 mock 数据接入
-- [ ] Step 3：课程增删改查交互（前端）
-- [ ] Step 4：后端课程表 API 对齐与联调
-- [ ] Step 5：课程冲突检查与提示
-- [ ] Step 6：测试与回归（flutter analyze / 关键接口测试）
-- [x] Step 7：任务状态已更新为 Review，等待验收
+- [x] Step 1：主界面入口 + 课程表页面骨架（年/月/日/课）
+- [x] Step 2：课视图“当前课程卡片”与“开始上课”主按钮
+- [x] Step 3：打通“开始上课 -> 专用上课Agent会话”启动链路
+- [x] Step 4：补充“知识点总结/课后练习/掌握程度”三区块
+- [x] Step 5：掌握程度记录入库（复用 plans 表，source=ai_agent）
+- [x] Step 6：掌握程度写入后续复习计划（按分数生成复习计划项）
+- [x] Step 7：联调与回归（flutter analyze 针对本次改动通过）
+
+## 当前迭代（Notion：化学公式显示）
+- [x] Step 1：定位题目渲染与AI输出渲染入口
+- [x] Step 2：题库列表/练习会话/练习历史统一切到 `AIFormulaText`
+- [x] Step 3：增强 `AIFormulaText`（下标、上标、电荷显示）
+- [x] Step 4：联调与回归（flutter analyze 针对改动文件通过）
+- [x] Step 5：同步 Notion 状态至 `Review`
 
 ## 0. 当前工作区快照（先确认）
 - [ ] 执行：`git status --short`

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../models/question.dart';
 import '../providers/app_provider.dart';
+import '../widgets/ai_formula_text.dart';
 import 'question_detail_screen.dart';
 
 const String _unknownUnit = '未分单元';
@@ -423,7 +424,7 @@ class _UnitQuestionsScreen extends StatelessWidget {
                 ),
               ),
             ),
-            title: Text(
+            title: AIFormulaText(
               q.title.isNotEmpty ? q.title : q.stem,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,

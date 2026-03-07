@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/practice.dart';
 import '../models/question.dart';
 import '../providers/app_provider.dart';
+import '../widgets/ai_formula_text.dart';
 import 'practice_attempt_detail_screen.dart';
 import 'practice_session_screen.dart';
 
@@ -150,7 +151,7 @@ class PracticeScreen extends StatelessWidget {
             title: Row(
               children: [
                 Expanded(
-                  child: Text(
+                  child: AIFormulaText(
                     stem.isEmpty ? 'Question not found' : stem,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,

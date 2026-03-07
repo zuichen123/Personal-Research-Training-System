@@ -24,6 +24,10 @@ class AIFormulaText extends StatelessWidget {
     dotAll: true,
   );
   static final RegExp _caretSupPattern = RegExp(r'\^([+\-]?\d+|[+\-])');
+  static final RegExp _subscriptPattern = RegExp(r'(?<=[A-Za-z\)])(\d+)');
+  static final RegExp _tailChargePattern = RegExp(
+    r'(?<=[A-Za-z\)\]\d])([+\-])(?=\b)',
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -58,10 +62,7 @@ class AIFormulaText extends StatelessWidget {
       maxLines: maxLines,
       overflow: overflow,
       softWrap: true,
-      text: TextSpan(
-        style: effectiveStyle,
-        children: spans,
-      ),
+      text: TextSpan(style: effectiveStyle, children: spans),
     );
 
     if (!selectable) {
@@ -95,14 +96,14 @@ class AIFormulaText extends StatelessWidget {
       final token = match.group(0) ?? '';
       final parsed = _parseFormulaToken(token);
       if (parsed == null || parsed.expression.trim().isEmpty) {
-        spans.add(TextSpan(text: token));
+        spans.add(TextSpan(text: _decoratePlainText(token)));
       } else {
         final math = Math.tex(
           parsed.expression.trim(),
           mathStyle: parsed.display ? MathStyle.display : MathStyle.text,
           textStyle: baseStyle,
           onErrorFallback: (error) => Text(
-            token,
+            _decoratePlainText(token),
             style: baseStyle.copyWith(
               color: Theme.of(context).colorScheme.error,
             ),
@@ -122,10 +123,7 @@ class AIFormulaText extends StatelessWidget {
           spans.add(const TextSpan(text: '\n'));
         } else {
           spans.add(
-            WidgetSpan(
-              alignment: PlaceholderAlignment.middle,
-              child: math,
-            ),
+            WidgetSpan(alignment: PlaceholderAlignment.middle, child: math),
           );
         }
       }
@@ -147,15 +145,23 @@ class AIFormulaText extends StatelessWidget {
   }
 
   String _decoratePlainText(String raw) {
-    final unescaped = _unescapePlain(raw);
-    return unescaped.replaceAllMapped(_caretSupPattern, (match) {
-      final body = match.group(1) ?? '';
-      final superscript = _toSuperscript(body);
-      if (superscript.isEmpty) {
-        return match.group(0) ?? '';
-      }
-      return superscript;
+    var out = _unescapePlain(raw);
+    out = out.replaceAllMapped(_subscriptPattern, (match) {
+      final source = match.group(1) ?? '';
+      final converted = _toSubscript(source);
+      return converted.isEmpty ? source : converted;
     });
+    out = out.replaceAllMapped(_caretSupPattern, (match) {
+      final source = match.group(1) ?? '';
+      final converted = _toSuperscript(source);
+      return converted.isEmpty ? (match.group(0) ?? source) : converted;
+    });
+    out = out.replaceAllMapped(_tailChargePattern, (match) {
+      final source = match.group(1) ?? '';
+      final converted = _toSuperscript(source);
+      return converted.isEmpty ? source : converted;
+    });
+    return out;
   }
 
   String _unescapePlain(String raw) {
@@ -169,28 +175,54 @@ class AIFormulaText extends StatelessWidget {
 
   String _toSuperscript(String raw) {
     const map = <String, String>{
-      '0': '⁰',
-      '1': '¹',
-      '2': '²',
-      '3': '³',
-      '4': '⁴',
-      '5': '⁵',
-      '6': '⁶',
-      '7': '⁷',
-      '8': '⁸',
-      '9': '⁹',
-      '+': '⁺',
-      '-': '⁻',
+      '0': '\u2070',
+      '1': '\u00B9',
+      '2': '\u00B2',
+      '3': '\u00B3',
+      '4': '\u2074',
+      '5': '\u2075',
+      '6': '\u2076',
+      '7': '\u2077',
+      '8': '\u2078',
+      '9': '\u2079',
+      '+': '\u207A',
+      '-': '\u207B',
     };
 
     final out = StringBuffer();
     for (var i = 0; i < raw.length; i++) {
-      final ch = raw[i];
-      final sup = map[ch];
-      if (sup == null) {
+      final mapped = map[raw[i]];
+      if (mapped == null) {
         return '';
       }
-      out.write(sup);
+      out.write(mapped);
+    }
+    return out.toString();
+  }
+
+  String _toSubscript(String raw) {
+    const map = <String, String>{
+      '0': '\u2080',
+      '1': '\u2081',
+      '2': '\u2082',
+      '3': '\u2083',
+      '4': '\u2084',
+      '5': '\u2085',
+      '6': '\u2086',
+      '7': '\u2087',
+      '8': '\u2088',
+      '9': '\u2089',
+      '+': '\u208A',
+      '-': '\u208B',
+    };
+
+    final out = StringBuffer();
+    for (var i = 0; i < raw.length; i++) {
+      final mapped = map[raw[i]];
+      if (mapped == null) {
+        return '';
+      }
+      out.write(mapped);
     }
     return out.toString();
   }
@@ -225,10 +257,7 @@ class AIFormulaText extends StatelessWidget {
 }
 
 class _FormulaToken {
-  const _FormulaToken({
-    required this.expression,
-    required this.display,
-  });
+  const _FormulaToken({required this.expression, required this.display});
 
   final String expression;
   final bool display;
