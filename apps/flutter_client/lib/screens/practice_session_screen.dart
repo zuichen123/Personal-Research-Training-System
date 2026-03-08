@@ -4,6 +4,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/gestures.dart' show kPrimaryButton;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -11,6 +12,7 @@ import 'package:signature/signature.dart';
 
 import '../models/question.dart';
 import '../providers/app_provider.dart';
+import '../utils/signature_canvas_utils.dart';
 import '../widgets/ai_formula_text.dart';
 import '../widgets/ai_multimodal_message_input.dart'
     show AIChatAttachmentPayload;
@@ -29,7 +31,8 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
   final Random _random = Random();
   final Map<String, int> _sourceOrder = <String, int>{};
   final ImagePicker _imagePicker = ImagePicker();
-  SignatureController _boardController = SignatureController(
+  final SignatureController _boardController = SignatureController(
+    disabled: true,
     penColor: Colors.black,
     penStrokeWidth: 2.4,
     exportBackgroundColor: Colors.white,
@@ -44,6 +47,7 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
   bool _boardMode = false;
   bool _boardFullScreen = false;
   bool _boardEraserMode = false;
+  int? _boardPointerId;
   Offset _boardOffset = const Offset(24, 120);
   String _boardReferenceKey = 'question';
   PracticeOrderMode _orderMode = PracticeOrderMode.sequential;
@@ -277,9 +281,16 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
                   height: 1600,
                   child: ColoredBox(
                     color: Colors.white,
-                    child: Signature(
-                      controller: _boardController,
-                      backgroundColor: Colors.white,
+                    child: Listener(
+                      behavior: HitTestBehavior.opaque,
+                      onPointerDown: _handleBoardPointerDown,
+                      onPointerMove: _handleBoardPointerMove,
+                      onPointerUp: _handleBoardPointerEnd,
+                      onPointerCancel: _handleBoardPointerEnd,
+                      child: Signature(
+                        controller: _boardController,
+                        backgroundColor: Colors.white,
+                      ),
                     ),
                   ),
                 ),
@@ -526,9 +537,16 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
                         height: 1600,
                         child: ColoredBox(
                           color: Colors.white,
-                          child: Signature(
-                            controller: _boardController,
-                            backgroundColor: Colors.white,
+                          child: Listener(
+                            behavior: HitTestBehavior.opaque,
+                            onPointerDown: _handleBoardPointerDown,
+                            onPointerMove: _handleBoardPointerMove,
+                            onPointerUp: _handleBoardPointerEnd,
+                            onPointerCancel: _handleBoardPointerEnd,
+                            child: Signature(
+                              controller: _boardController,
+                              backgroundColor: Colors.white,
+                            ),
                           ),
                         ),
                       ),
@@ -1277,19 +1295,54 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
     if (_boardEraserMode == eraserMode) {
       return;
     }
-    final previous = _boardController;
-    final recreated = SignatureController(
-      points: List<Point>.from(previous.points),
-      penColor: eraserMode ? Colors.white : Colors.black,
-      penStrokeWidth: eraserMode ? 14 : 2.4,
-      exportBackgroundColor: Colors.white,
-    );
     setState(() {
       _boardEraserMode = eraserMode;
-      _boardController = recreated;
     });
-    previous.dispose();
   }
+
+  void _handleBoardPointerDown(PointerDownEvent event) {
+    if (_submitting || _currentSubmitted || !_isPrimaryButtonPressed(event.buttons)) {
+      _boardPointerId = null;
+      return;
+    }
+    _boardPointerId = event.pointer;
+    if (_boardEraserMode) {
+      SignatureCanvasUtils.eraseAt(_boardController, event.localPosition);
+      return;
+    }
+    SignatureCanvasUtils.addPoint(
+      _boardController,
+      event.localPosition,
+      PointType.tap,
+      pressure: _normalizedPressure(event.pressure),
+    );
+  }
+
+  void _handleBoardPointerMove(PointerMoveEvent event) {
+    if (_boardPointerId != event.pointer || !_isPrimaryButtonPressed(event.buttons)) {
+      return;
+    }
+    if (_boardEraserMode) {
+      SignatureCanvasUtils.eraseAt(_boardController, event.localPosition);
+      return;
+    }
+    SignatureCanvasUtils.addPoint(
+      _boardController,
+      event.localPosition,
+      PointType.move,
+      pressure: _normalizedPressure(event.pressure),
+    );
+  }
+
+  void _handleBoardPointerEnd(PointerEvent event) {
+    if (_boardPointerId == event.pointer) {
+      _boardPointerId = null;
+    }
+  }
+
+  bool _isPrimaryButtonPressed(int buttons) => (buttons & kPrimaryButton) != 0;
+
+  double _normalizedPressure(double pressure) => pressure > 0 ? pressure : 1.0;
 
   void _clearBoard() {
     _boardController.clear();

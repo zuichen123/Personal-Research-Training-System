@@ -2,9 +2,12 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/gestures.dart' show kPrimaryButton;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:signature/signature.dart';
+
+import '../utils/signature_canvas_utils.dart';
 
 class AIChatAttachmentPayload {
   AIChatAttachmentPayload({
@@ -53,7 +56,8 @@ class AIMultimodalMessageInput extends StatefulWidget {
 class _AIMultimodalMessageInputState extends State<AIMultimodalMessageInput> {
   final TextEditingController _inputController = TextEditingController();
   final ImagePicker _imagePicker = ImagePicker();
-  SignatureController _signatureController = SignatureController(
+  final SignatureController _signatureController = SignatureController(
+    disabled: true,
     penColor: Colors.black,
     penStrokeWidth: 2.4,
     exportBackgroundColor: Colors.white,
@@ -63,6 +67,7 @@ class _AIMultimodalMessageInputState extends State<AIMultimodalMessageInput> {
       <AIChatAttachmentPayload>[];
   bool _localSending = false;
   bool _eraserMode = false;
+  int? _signaturePointerId;
   bool _toolsExpanded = false;
   bool _showHandwritingPanel = false;
 
@@ -247,9 +252,16 @@ class _AIMultimodalMessageInputState extends State<AIMultimodalMessageInput> {
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Signature(
-                controller: _signatureController,
-                backgroundColor: Colors.white,
+              child: Listener(
+                behavior: HitTestBehavior.opaque,
+                onPointerDown: _handleSignaturePointerDown,
+                onPointerMove: _handleSignaturePointerMove,
+                onPointerUp: _handleSignaturePointerEnd,
+                onPointerCancel: _handleSignaturePointerEnd,
+                child: Signature(
+                  controller: _signatureController,
+                  backgroundColor: Colors.white,
+                ),
               ),
             ),
           ),
@@ -397,19 +409,54 @@ class _AIMultimodalMessageInputState extends State<AIMultimodalMessageInput> {
     if (_eraserMode == eraserMode) {
       return;
     }
-    final previous = _signatureController;
-    final recreated = SignatureController(
-      points: List.from(previous.points),
-      penColor: eraserMode ? Colors.white : Colors.black,
-      penStrokeWidth: eraserMode ? 14 : 2.4,
-      exportBackgroundColor: Colors.white,
-    );
     setState(() {
       _eraserMode = eraserMode;
-      _signatureController = recreated;
     });
-    previous.dispose();
   }
+
+  void _handleSignaturePointerDown(PointerDownEvent event) {
+    if (_busy || !_isPrimaryButtonPressed(event.buttons)) {
+      _signaturePointerId = null;
+      return;
+    }
+    _signaturePointerId = event.pointer;
+    if (_eraserMode) {
+      SignatureCanvasUtils.eraseAt(_signatureController, event.localPosition);
+      return;
+    }
+    SignatureCanvasUtils.addPoint(
+      _signatureController,
+      event.localPosition,
+      PointType.tap,
+      pressure: _normalizedPressure(event.pressure),
+    );
+  }
+
+  void _handleSignaturePointerMove(PointerMoveEvent event) {
+    if (_signaturePointerId != event.pointer || !_isPrimaryButtonPressed(event.buttons)) {
+      return;
+    }
+    if (_eraserMode) {
+      SignatureCanvasUtils.eraseAt(_signatureController, event.localPosition);
+      return;
+    }
+    SignatureCanvasUtils.addPoint(
+      _signatureController,
+      event.localPosition,
+      PointType.move,
+      pressure: _normalizedPressure(event.pressure),
+    );
+  }
+
+  void _handleSignaturePointerEnd(PointerEvent event) {
+    if (_signaturePointerId == event.pointer) {
+      _signaturePointerId = null;
+    }
+  }
+
+  bool _isPrimaryButtonPressed(int buttons) => (buttons & kPrimaryButton) != 0;
+
+  double _normalizedPressure(double pressure) => pressure > 0 ? pressure : 1.0;
 
   void _clearSignature() {
     _signatureController.clear();
