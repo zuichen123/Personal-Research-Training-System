@@ -425,3 +425,51 @@ func TestResolveAgentIDFromItems_AmbiguousKeyword(t *testing.T) {
 		t.Fatalf("expected 2 candidates, got %d", len(candidates))
 	}
 }
+
+func TestExecutePlanCreate_InferDayPlanTypeWhenMissing(t *testing.T) {
+	repo := newTestPlanRepo(nil)
+	control := &aiAppControl{planService: plan.NewService(repo)}
+
+	result, err := control.executePlan(context.Background(), "create", map[string]any{
+		"title":       "复习函数",
+		"content":     "完成 5 道题",
+		"target_date": "2026-03-08",
+		"status":      "pending",
+	})
+	if err != nil {
+		t.Fatalf("executePlan(create) error = %v", err)
+	}
+	itemAny, ok := result.Data["item"]
+	if !ok {
+		t.Fatalf("expected item in result data, got: %+v", result.Data)
+	}
+	item, ok := itemAny.(plan.Item)
+	if !ok {
+		t.Fatalf("expected plan.Item, got %T", itemAny)
+	}
+	if item.PlanType != plan.DayPlan {
+		t.Fatalf("expected inferred plan_type=%s, got %s", plan.DayPlan, item.PlanType)
+	}
+}
+
+func TestNormalizePlanTypeAlias(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want plan.PlanType
+	}{
+		{name: "empty", in: "", want: ""},
+		{name: "week alias", in: "weekly", want: plan.WeekPlan},
+		{name: "day alias", in: "day", want: plan.DayPlan},
+		{name: "month goal", in: "month_goal", want: plan.MonthGoal},
+		{name: "unknown passthrough", in: "custom_type", want: plan.PlanType("custom_type")},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := normalizePlanTypeAlias(tc.in)
+			if got != tc.want {
+				t.Fatalf("normalizePlanTypeAlias(%q)=%q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}

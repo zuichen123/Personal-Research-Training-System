@@ -280,7 +280,16 @@ func (c *aiAppControl) executePractice(ctx context.Context, operation string, pa
 func (c *aiAppControl) executePlan(ctx context.Context, operation string, params map[string]any) (ai.AppControlResult, error) {
 	switch operation {
 	case "list":
-		planType := firstNonEmpty(asString(params["plan_type"]), asString(params["type"]))
+		planType := string(
+			normalizePlanTypeAlias(
+				firstNonEmpty(
+					asString(params["plan_type"]),
+					asString(params["type"]),
+					asString(params["planType"]),
+					asString(params["scope"]),
+				),
+			),
+		)
 		items, err := c.planService.List(ctx, planType)
 		if err != nil {
 			return ai.AppControlResult{}, err
@@ -326,8 +335,19 @@ func (c *aiAppControl) executePlan(ctx context.Context, operation string, params
 		}
 		return ai.AppControlResult{Summary: fmt.Sprintf("Plan %s loaded.", item.ID), Data: map[string]any{"item": item}}, nil
 	case "create":
+		resolvedPlanType := normalizePlanTypeAlias(
+			firstNonEmpty(
+				asString(params["plan_type"]),
+				asString(params["type"]),
+				asString(params["planType"]),
+				asString(params["scope"]),
+			),
+		)
+		if resolvedPlanType == "" {
+			resolvedPlanType = inferPlanTypeFromParams(params)
+		}
 		in := plan.CreateInput{
-			PlanType:   plan.PlanType(asString(params["plan_type"])),
+			PlanType:   resolvedPlanType,
 			Title:      asString(params["title"]),
 			Content:    asString(params["content"]),
 			TargetDate: asString(params["target_date"]),
@@ -353,7 +373,13 @@ func (c *aiAppControl) executePlan(ctx context.Context, operation string, params
 			return ai.AppControlResult{}, err
 		}
 		in := plan.UpdateInput{
-			PlanType:   plan.PlanType(firstNonEmpty(asString(params["plan_type"]), string(oldItem.PlanType))),
+			PlanType: plan.PlanType(
+				firstNonEmpty(
+					string(normalizePlanTypeAlias(asString(params["plan_type"]))),
+					string(normalizePlanTypeAlias(asString(params["type"]))),
+					string(oldItem.PlanType),
+				),
+			),
 			Title:      firstNonEmpty(asString(params["title"]), oldItem.Title),
 			Content:    firstNonEmpty(asString(params["content"]), oldItem.Content),
 			TargetDate: firstNonEmpty(asString(params["target_date"]), oldItem.TargetDate),
@@ -456,6 +482,55 @@ func shouldDeleteAllPlans(operation string, params map[string]any) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func normalizePlanTypeAlias(raw string) plan.PlanType {
+	normalized := strings.ToLower(strings.TrimSpace(raw))
+	switch normalized {
+	case "", "all", "plans":
+		return ""
+	case "year", "year_plan", "year-goal", "year_goal":
+		return plan.YearPlan
+	case "month", "month_plan", "monthly", "month-goal":
+		return plan.MonthPlan
+	case "week", "week_plan", "weekly":
+		return plan.WeekPlan
+	case "day", "day_plan", "daily":
+		return plan.DayPlan
+	case "day_goal":
+		return plan.DayGoal
+	case "month_goal":
+		return plan.MonthGoal
+	case "current_phase", "phase":
+		return plan.CurrentPhase
+	default:
+		return plan.PlanType(strings.TrimSpace(raw))
+	}
+}
+
+func inferPlanTypeFromParams(params map[string]any) plan.PlanType {
+	if strings.TrimSpace(asString(params["target_date"])) != "" ||
+		strings.TrimSpace(asString(params["date"])) != "" {
+		return plan.DayPlan
+	}
+	keywords := strings.ToLower(
+		firstNonEmpty(
+			asString(params["title"]),
+			asString(params["name"]),
+			asString(params["content"]),
+			asString(params["keyword"]),
+		),
+	)
+	switch {
+	case strings.Contains(keywords, "year"), strings.Contains(keywords, "annual"), strings.Contains(keywords, "全年"), strings.Contains(keywords, "年度"):
+		return plan.YearPlan
+	case strings.Contains(keywords, "month"), strings.Contains(keywords, "monthly"), strings.Contains(keywords, "每月"), strings.Contains(keywords, "月"):
+		return plan.MonthPlan
+	case strings.Contains(keywords, "week"), strings.Contains(keywords, "weekly"), strings.Contains(keywords, "每周"), strings.Contains(keywords, "周"):
+		return plan.WeekPlan
+	default:
+		return plan.DayPlan
 	}
 }
 

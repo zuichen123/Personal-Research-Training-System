@@ -919,23 +919,9 @@ func (s *Service) recoverManageAppIntentAfterError(
 	prevIntent IntentResult,
 	execErr error,
 ) (IntentResult, bool) {
-	req := buildAppControlRequest(prevIntent.Params)
 	retryMessages := append([]ChatMessage{}, baseMessages...)
-	retryMessages = append(retryMessages, ChatMessage{
-		Role: "assistant",
-		Content: fmt.Sprintf(
-			"[tool_error] module=%s operation=%s error=%s",
-			req.Module,
-			req.Operation,
-			strings.TrimSpace(execErr.Error()),
-		),
-	})
-	retryMessages = append(retryMessages, ChatMessage{
-		Role: "system",
-		Content: "The previous manage_app tool call failed. " +
-			"If the request is still actionable, return a corrected next manage_app intent. " +
-			"If no safe correction exists, return action=none.",
-	})
+	retryMessages = append(retryMessages, buildToolErrorChatMessage(0, prevIntent, execErr))
+	retryMessages = append(retryMessages, buildToolErrorRecoveryHintChatMessage())
 	resp, _, err := s.chatWithFallback(ctx, agent, ChatRequest{
 		SystemPrompt: agent.SystemPrompt,
 		Messages:     retryMessages,
@@ -992,7 +978,28 @@ func (s *Service) executeManageAppActionLoop(
 			nextIntent.Params,
 		)
 		if execErr != nil {
-			return actionExecutionResult{}, nextIntent, execErr
+			recoveredIntent, ok := s.recoverManageAppIntentAfterError(
+				ctx,
+				agent,
+				loopMessages,
+				nextIntent,
+				execErr,
+			)
+			if ok {
+				nextIntent = recoveredIntent
+				nextResult, execErr = s.executeAgentAction(
+					ctx,
+					session,
+					agent,
+					nextIntent.Action,
+					nextIntent.Params,
+				)
+			}
+		}
+		if execErr != nil {
+			loopMessages = append(loopMessages, buildToolErrorChatMessage(step+1, nextIntent, execErr))
+			loopMessages = append(loopMessages, buildToolErrorRecoveryHintChatMessage())
+			continue
 		}
 		if text := strings.TrimSpace(nextResult.Content); text != "" {
 			summaries = append(summaries, text)
@@ -1104,6 +1111,33 @@ func buildToolResultChatMessage(
 			truncateText(summary, 360),
 			dataPreview,
 		),
+	}
+}
+
+func buildToolErrorChatMessage(step int, intent IntentResult, execErr error) ChatMessage {
+	req := buildAppControlRequest(intent.Params)
+	message := "unknown tool error"
+	if execErr != nil {
+		message = strings.TrimSpace(execErr.Error())
+	}
+	return ChatMessage{
+		Role: "assistant",
+		Content: fmt.Sprintf(
+			"[tool_error #%d] module=%s operation=%s error=%s",
+			step,
+			req.Module,
+			req.Operation,
+			truncateText(message, 360),
+		),
+	}
+}
+
+func buildToolErrorRecoveryHintChatMessage() ChatMessage {
+	return ChatMessage{
+		Role: "system",
+		Content: "The previous manage_app tool call failed. " +
+			"If the request is still actionable, return a corrected next manage_app intent. " +
+			"If no safe correction exists, return action=none.",
 	}
 }
 
