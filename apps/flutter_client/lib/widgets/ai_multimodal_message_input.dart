@@ -288,6 +288,8 @@ class _AIMultimodalMessageInputState extends State<AIMultimodalMessageInput> {
         _inputController.clear();
         _attachments.clear();
         _signatureController.clear();
+        _toolsExpanded = false;
+        _showHandwritingPanel = false;
       });
     } finally {
       if (mounted) {

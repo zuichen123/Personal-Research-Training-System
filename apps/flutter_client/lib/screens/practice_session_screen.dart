@@ -42,7 +42,10 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
   bool _currentSubmitted = false;
   bool _toolsExpanded = false;
   bool _boardMode = false;
+  bool _boardFullScreen = false;
   bool _boardEraserMode = false;
+  Offset _boardOffset = const Offset(24, 120);
+  String _boardReferenceKey = 'question';
   PracticeOrderMode _orderMode = PracticeOrderMode.sequential;
 
   List<Question> _pendingQuestions = <Question>[];
@@ -88,7 +91,10 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
             IconButton(
               onPressed: _submitting || _currentSubmitted
                   ? null
-                  : () => setState(() => _boardMode = true),
+                  : () => setState(() {
+                      _boardMode = true;
+                      _boardFullScreen = false;
+                    }),
               icon: const Icon(Icons.draw_outlined),
               tooltip: '进入画板模式',
             ),
@@ -103,9 +109,37 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
           ? const Center(child: CircularProgressIndicator())
           : question == null
           ? _buildCompletedView()
-          : _boardMode
-          ? _buildBoardModeView(question)
-          : _buildSessionView(question),
+          : _buildSessionBody(question),
+    );
+  }
+
+  Widget _buildSessionBody(Question question) {
+    if (!_boardMode) {
+      return _buildSessionView(question);
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final boardSize = _boardPanelSize(constraints, _boardFullScreen);
+        final boardOffset = _clampBoardOffset(
+          _boardOffset,
+          constraints,
+          boardSize,
+        );
+        if (boardOffset != _boardOffset) {
+          _boardOffset = boardOffset;
+        }
+        return Stack(
+          children: [
+            _buildSessionView(question),
+            _buildBoardOverlay(
+              question,
+              constraints,
+              boardSize: boardSize,
+              boardOffset: boardOffset,
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -162,6 +196,11 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
           minLines: 3,
           maxLines: 6,
           enabled: !_submitting && !_currentSubmitted,
+          onChanged: (_) {
+            if (_boardMode && _boardReferenceKey == 'typed') {
+              setState(() {});
+            }
+          },
           decoration: const InputDecoration(
             labelText: '你的答案',
             hintText: '多答案可用逗号或换行分隔（选择题可直接点选后提交）',
@@ -200,6 +239,7 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
     );
   }
 
+  // ignore: unused_element
   Widget _buildBoardModeView(Question question) {
     return Column(
       children: [
@@ -302,6 +342,355 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildBoardOverlay(
+    Question question,
+    BoxConstraints constraints, {
+    required Size boardSize,
+    required Offset boardOffset,
+  }) {
+    final panel = _buildBoardPanel(
+      question,
+      constraints,
+      boardSize: boardSize,
+      boardOffset: boardOffset,
+    );
+    if (_boardFullScreen) {
+      return Positioned.fill(
+        child: ColoredBox(
+          color: Colors.black26,
+          child: SafeArea(
+            child: Padding(padding: const EdgeInsets.all(8), child: panel),
+          ),
+        ),
+      );
+    }
+    return Positioned(
+      left: boardOffset.dx,
+      top: boardOffset.dy,
+      child: SizedBox(
+        width: boardSize.width,
+        height: boardSize.height,
+        child: panel,
+      ),
+    );
+  }
+
+  Widget _buildBoardPanel(
+    Question question,
+    BoxConstraints constraints, {
+    required Size boardSize,
+    required Offset boardOffset,
+  }) {
+    final referenceText = _resolveBoardReferenceText(
+      question,
+      _boardReferenceKey,
+    );
+    final borderRadius = BorderRadius.circular(_boardFullScreen ? 12 : 16);
+    final draggableEnabled =
+        !_boardFullScreen && !_submitting && !_currentSubmitted;
+    return Material(
+      elevation: _boardFullScreen ? 0 : 12,
+      borderRadius: borderRadius,
+      clipBehavior: Clip.antiAlias,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: borderRadius,
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outlineVariant,
+          ),
+        ),
+        child: Column(
+          children: [
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onPanUpdate: draggableEnabled
+                  ? (details) {
+                      setState(() {
+                        _boardOffset = _clampBoardOffset(
+                          _boardOffset + details.delta,
+                          constraints,
+                          boardSize,
+                        );
+                      });
+                    }
+                  : null,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+                child: Row(
+                  children: [
+                    Icon(
+                      draggableEnabled
+                          ? Icons.drag_indicator
+                          : Icons.fullscreen,
+                      size: 18,
+                      color: Theme.of(context).colorScheme.outline,
+                    ),
+                    const SizedBox(width: 6),
+                    const Text(
+                      '画板模式',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(child: _buildBoardReferencePicker()),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      tooltip: _boardFullScreen ? '退出全屏' : '全屏',
+                      onPressed: _submitting || _currentSubmitted
+                          ? null
+                          : () {
+                              setState(() {
+                                final nextFullScreen = !_boardFullScreen;
+                                _boardFullScreen = nextFullScreen;
+                                if (nextFullScreen) {
+                                  _boardOffset = const Offset(0, 0);
+                                } else {
+                                  final floatingSize = _boardPanelSize(
+                                    constraints,
+                                    false,
+                                  );
+                                  _boardOffset = _clampBoardOffset(
+                                    boardOffset,
+                                    constraints,
+                                    floatingSize,
+                                  );
+                                }
+                              });
+                            },
+                      icon: Icon(
+                        _boardFullScreen
+                            ? Icons.fullscreen_exit
+                            : Icons.fullscreen,
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: '关闭画板',
+                      onPressed: _submitting || _currentSubmitted
+                          ? null
+                          : () => setState(() {
+                              _boardMode = false;
+                              _boardFullScreen = false;
+                            }),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (referenceText.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 110),
+                      child: SingleChildScrollView(
+                        child: SelectableText(
+                          referenceText,
+                          style: const TextStyle(fontSize: 12, height: 1.35),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.outlineVariant,
+                    ),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: InteractiveViewer(
+                      constrained: false,
+                      minScale: 0.5,
+                      maxScale: 6,
+                      child: SizedBox(
+                        width: 2400,
+                        height: 1600,
+                        child: ColoredBox(
+                          color: Colors.white,
+                          child: Signature(
+                            controller: _boardController,
+                            backgroundColor: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _submitting || _currentSubmitted
+                        ? null
+                        : () => _setBoardEraserMode(false),
+                    icon: Icon(
+                      Icons.edit,
+                      color: _boardEraserMode
+                          ? Colors.grey
+                          : Theme.of(context).colorScheme.primary,
+                    ),
+                    label: const Text('画笔'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _submitting || _currentSubmitted
+                        ? null
+                        : () => _setBoardEraserMode(true),
+                    icon: Icon(
+                      Icons.auto_fix_normal,
+                      color: _boardEraserMode
+                          ? Theme.of(context).colorScheme.primary
+                          : Colors.grey,
+                    ),
+                    label: const Text('橡皮'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _submitting || _currentSubmitted
+                        ? null
+                        : _clearBoard,
+                    icon: const Icon(Icons.layers_clear_outlined),
+                    label: const Text('清空画板'),
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed: _submitting || _currentSubmitted
+                        ? null
+                        : _captureBoardAttachment,
+                    icon: const Icon(Icons.add_photo_alternate_outlined),
+                    label: const Text('加入附件'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBoardReferencePicker() {
+    return DropdownButtonHideUnderline(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          color: Theme.of(context).colorScheme.surfaceContainerLowest,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: DropdownButton<String>(
+            isExpanded: true,
+            value: _boardReferenceKey,
+            onChanged: _submitting || _currentSubmitted
+                ? null
+                : (value) {
+                    if (value == null) {
+                      return;
+                    }
+                    setState(() => _boardReferenceKey = value);
+                  },
+            items: _boardReferenceItems(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<DropdownMenuItem<String>> _boardReferenceItems() {
+    const labels = <String, String>{
+      'question': '参考：题干',
+      'options': '参考：选项',
+      'typed': '参考：输入内容',
+      'selected': '参考：已选答案',
+      'attachments': '参考：附件摘要',
+    };
+    return labels.entries
+        .map(
+          (entry) => DropdownMenuItem<String>(
+            value: entry.key,
+            child: Text(entry.value, overflow: TextOverflow.ellipsis),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  String _resolveBoardReferenceText(Question question, String key) {
+    switch (key) {
+      case 'question':
+        final title = question.title.trim();
+        final stem = question.stem.trim();
+        return [
+          if (title.isNotEmpty) title,
+          stem,
+        ].where((item) => item.isNotEmpty).join('\n');
+      case 'options':
+        if (question.options.isEmpty) {
+          return '';
+        }
+        return question.options
+            .map((item) => '${item.key}. ${item.text}')
+            .join('\n');
+      case 'typed':
+        return _answerController.text.trim();
+      case 'selected':
+        if (_selectedOptions.isEmpty) {
+          return '';
+        }
+        return _selectedOptions.toList(growable: false).join(', ');
+      case 'attachments':
+        if (_attachments.isEmpty) {
+          return '';
+        }
+        return _attachments
+            .map((item) => '[${item.source}] ${item.name}')
+            .join('\n');
+      default:
+        return '';
+    }
+  }
+
+  Size _boardPanelSize(BoxConstraints constraints, bool fullScreen) {
+    if (fullScreen) {
+      return Size(constraints.maxWidth, constraints.maxHeight);
+    }
+    final width = (constraints.maxWidth * 0.88).clamp(340.0, 980.0).toDouble();
+    final height = (constraints.maxHeight * 0.78)
+        .clamp(380.0, 860.0)
+        .toDouble();
+    return Size(width, height);
+  }
+
+  Offset _clampBoardOffset(
+    Offset candidate,
+    BoxConstraints constraints,
+    Size boardSize,
+  ) {
+    final maxX = max(0.0, constraints.maxWidth - boardSize.width);
+    final maxY = max(0.0, constraints.maxHeight - boardSize.height);
+    return Offset(
+      candidate.dx.clamp(0.0, maxX).toDouble(),
+      candidate.dy.clamp(0.0, maxY).toDouble(),
     );
   }
 
@@ -500,7 +889,10 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
         FilledButton.tonalIcon(
           onPressed: _submitting || _currentSubmitted
               ? null
-              : () => setState(() => _boardMode = true),
+              : () => setState(() {
+                  _boardMode = true;
+                  _boardFullScreen = false;
+                }),
           icon: const Icon(Icons.draw_outlined),
           label: const Text('打开画板模式'),
         ),
@@ -626,12 +1018,7 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
       return;
     }
 
-    var answers = _collectAnswers(question);
-    if (answers.isEmpty && _attachments.isNotEmpty) {
-      answers = _attachments
-          .map((item) => '[${item.source}] ${item.name}')
-          .toList(growable: false);
-    }
+    final answers = _collectAnswers(question);
     if (answers.isEmpty) {
       _showSnack('请先输入答案、选择选项或添加附件');
       return;
@@ -672,18 +1059,35 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
   }
 
   List<String> _collectAnswers(Question question) {
-    if (_isChoiceQuestion(question) && _selectedOptions.isNotEmpty) {
+    final combined = <String>[];
+    if (_isChoiceQuestion(question)) {
       final optionOrder = question.options
           .map((item) => item.key)
           .where(_selectedOptions.contains)
           .toList(growable: false);
       if (optionOrder.isNotEmpty) {
-        return optionOrder;
+        _appendAnswersUnique(combined, optionOrder);
+      } else if (_selectedOptions.isNotEmpty) {
+        final fallback = _selectedOptions.toList(growable: true)..sort();
+        _appendAnswersUnique(combined, fallback);
       }
-      final fallback = _selectedOptions.toList(growable: true)..sort();
-      return fallback;
     }
-    return _parseAnswers(_answerController.text);
+    _appendAnswersUnique(combined, _parseAnswers(_answerController.text));
+    _appendAnswersUnique(
+      combined,
+      _attachments.map((item) => '[${item.source}] ${item.name}'),
+    );
+    return combined;
+  }
+
+  void _appendAnswersUnique(List<String> out, Iterable<String> source) {
+    for (final item in source) {
+      final normalized = item.trim();
+      if (normalized.isEmpty || out.contains(normalized)) {
+        continue;
+      }
+      out.add(normalized);
+    }
   }
 
   List<String> _parseAnswers(String raw) {
@@ -745,11 +1149,26 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
   }
 
   bool _isSingleChoice(Question question) {
-    return question.type == 'single_choice';
+    final raw = question.type.trim();
+    final normalized = _normalizeQuestionType(raw);
+    return normalized == 'singlechoice' ||
+        normalized == 'single' ||
+        normalized == 'radio' ||
+        raw.contains('单选');
   }
 
   bool _isMultiChoice(Question question) {
-    return question.type == 'multi_choice';
+    final raw = question.type.trim();
+    final normalized = _normalizeQuestionType(raw);
+    return normalized == 'multichoice' ||
+        normalized == 'multiplechoice' ||
+        normalized == 'multiple' ||
+        normalized == 'multi' ||
+        raw.contains('多选');
+  }
+
+  String _normalizeQuestionType(String value) {
+    return value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
   }
 
   Future<void> _pickImageAttachment() async {
@@ -882,7 +1301,9 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
     _attachments.clear();
     _toolsExpanded = false;
     _boardMode = false;
+    _boardFullScreen = false;
     _boardEraserMode = false;
+    _boardReferenceKey = 'question';
     _clearBoard();
   }
 
