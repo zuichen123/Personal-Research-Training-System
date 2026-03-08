@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"math"
 	"strings"
 	"time"
 
@@ -67,34 +66,25 @@ func (c *remoteLLMClient) buildOperationPrompt(operation, userInput string, patc
 	return c.promptRuntime.ComposeWithPatch(operation, userInput, patch)
 }
 
-func (c *remoteLLMClient) GenerateQuestions(ctx context.Context, req GenerateRequest) ([]question.CreateInput, error) {
-	if !c.ready {
-		return nil, errs.BadRequest("ai provider is not ready")
+func (c *remoteLLMClient) ensureReady() error {
+	if c.ready {
+		return nil
 	}
-	if req.Count <= 0 {
-		req.Count = 3
-	}
-	if req.Count > 20 {
-		req.Count = 20
-	}
-	if req.Difficulty < 1 {
-		req.Difficulty = 2
-	}
-	if strings.TrimSpace(req.Subject) == "" {
-		req.Subject = "general"
-	}
+	return errs.BadRequest("ai provider is not ready")
+}
 
-	userInput := fmt.Sprintf(
-		`Generate %d items.
-topic=%s
-subject=%s
-scope=%s
-difficulty=%d`,
-		req.Count,
-		req.Topic,
-		req.Subject,
-		req.Scope,
-		req.Difficulty,
+func (c *remoteLLMClient) GenerateQuestions(ctx context.Context, req GenerateRequest) ([]question.CreateInput, error) {
+	if err := c.ensureReady(); err != nil {
+		return nil, err
+	}
+	req = normalizeGenerateRequest(req)
+
+	userInput := buildPromptKeyValueInput(
+		promptField{key: "instruction", value: fmt.Sprintf("Generate %d items.", req.Count)},
+		promptField{key: "topic", value: req.Topic},
+		promptField{key: "subject", value: req.Subject},
+		promptField{key: "scope", value: req.Scope},
+		promptField{key: "difficulty", value: req.Difficulty},
 	)
 	prompt := c.buildOperationPrompt(PromptKeyGenerateQuestions, userInput, PromptRuntimePatch{})
 
@@ -126,57 +116,43 @@ difficulty=%d`,
 }
 
 func (c *remoteLLMClient) GradeAnswer(ctx context.Context, req GradeRequest) (GradeResult, error) {
-	if !c.ready {
-		return GradeResult{}, errs.BadRequest("ai provider is not ready")
+	if err := c.ensureReady(); err != nil {
+		return GradeResult{}, err
 	}
-	userInput := fmt.Sprintf(
-		`question_title=%s
-question_stem=%s
-answer_key=%v
-user_answer=%v
-attachment_files=%d`,
-		req.Question.Title,
-		req.Question.Stem,
-		req.Question.AnswerKey,
-		req.UserAnswer,
-		len(req.Attachments),
+	userInput := buildPromptKeyValueInput(
+		promptField{key: "question_title", value: req.Question.Title},
+		promptField{key: "question_stem", value: req.Question.Stem},
+		promptField{key: "answer_key", value: req.Question.AnswerKey},
+		promptField{key: "user_answer", value: req.UserAnswer},
+		promptField{key: "attachment_files", value: len(req.Attachments)},
 	)
 	prompt := c.buildOperationPrompt(PromptKeyGradeAnswer, userInput, PromptRuntimePatch{})
 	var out GradeResult
 	if err := c.invokeJSON(ctx, "grade_answer", prompt, req.Attachments, &out); err != nil {
 		return GradeResult{}, err
 	}
-	if out.Score < 0 {
-		out.Score = 0
-	}
-	if out.Score > 100 {
-		out.Score = 100
-	}
-	out.Score = math.Round(out.Score*10) / 10
+	out.Score = normalizePercentageScore(out.Score)
 	return out, nil
 }
 
 func (c *remoteLLMClient) BuildLearningPlan(ctx context.Context, req LearnRequest) (LearnResult, error) {
-	if !c.ready {
-		return LearnResult{}, errs.BadRequest("ai provider is not ready")
+	if err := c.ensureReady(); err != nil {
+		return LearnResult{}, err
 	}
-	userInput := fmt.Sprintf(
-		`mode=%s
-subject=%s
-unit=%s
-current_stage=%s
-goals=%v
-final_goal=%s
-total_hours=%d
-start_date=%s
-end_date=%s
-current_status=%s
-themes=%v
-supplement=%s
-profile_summary=%s`,
-		req.Mode, req.Subject, req.Unit, req.CurrentStage, req.Goals,
-		req.FinalGoal, req.TotalHours, req.StartDate, req.EndDate, req.CurrentStatus,
-		req.Themes, req.Supplement, req.ProfileSummary,
+	userInput := buildPromptKeyValueInput(
+		promptField{key: "mode", value: req.Mode},
+		promptField{key: "subject", value: req.Subject},
+		promptField{key: "unit", value: req.Unit},
+		promptField{key: "current_stage", value: req.CurrentStage},
+		promptField{key: "goals", value: req.Goals},
+		promptField{key: "final_goal", value: req.FinalGoal},
+		promptField{key: "total_hours", value: req.TotalHours},
+		promptField{key: "start_date", value: req.StartDate},
+		promptField{key: "end_date", value: req.EndDate},
+		promptField{key: "current_status", value: req.CurrentStatus},
+		promptField{key: "themes", value: req.Themes},
+		promptField{key: "supplement", value: req.Supplement},
+		promptField{key: "profile_summary", value: req.ProfileSummary},
 	)
 	prompt := c.buildOperationPrompt(PromptKeyBuildLearningPlan, userInput, req.PromptPatch)
 	var out LearnResult
@@ -187,21 +163,15 @@ profile_summary=%s`,
 }
 
 func (c *remoteLLMClient) OptimizeLearningPlan(ctx context.Context, req OptimizeLearnRequest) (OptimizeLearnResult, error) {
-	if !c.ready {
-		return OptimizeLearnResult{}, errs.BadRequest("ai provider is not ready")
+	if err := c.ensureReady(); err != nil {
+		return OptimizeLearnResult{}, err
 	}
-	planJSON, _ := json.Marshal(req.Plan)
-	userInput := fmt.Sprintf(
-		`action=%s
-days=%d
-reason=%s
-supplement=%s
-plan=%s`,
-		req.Action,
-		req.Days,
-		req.Reason,
-		req.Supplement,
-		string(planJSON),
+	userInput := buildPromptKeyValueInput(
+		promptField{key: "action", value: req.Action},
+		promptField{key: "days", value: req.Days},
+		promptField{key: "reason", value: req.Reason},
+		promptField{key: "supplement", value: req.Supplement},
+		promptField{key: "plan", value: jsonPromptValue(req.Plan)},
 	)
 	prompt := c.buildOperationPrompt(PromptKeyOptimizeLearning, userInput, req.PromptPatch)
 	var out OptimizeLearnResult
@@ -212,102 +182,56 @@ plan=%s`,
 }
 
 func (c *remoteLLMClient) EvaluateLearning(ctx context.Context, req EvaluateRequest) (EvaluateResult, error) {
-	if !c.ready {
-		return EvaluateResult{}, errs.BadRequest("ai provider is not ready")
+	if err := c.ensureReady(); err != nil {
+		return EvaluateResult{}, err
 	}
-	userInput := fmt.Sprintf(
-		`mode=%s
-question=%s
-answer_key=%v
-user_answer=%v
-context=%s`,
-		req.Mode,
-		req.Question.Stem,
-		req.Question.AnswerKey,
-		req.UserAnswer,
-		req.Context,
+	userInput := buildPromptKeyValueInput(
+		promptField{key: "mode", value: req.Mode},
+		promptField{key: "question", value: req.Question.Stem},
+		promptField{key: "answer_key", value: req.Question.AnswerKey},
+		promptField{key: "user_answer", value: req.UserAnswer},
+		promptField{key: "context", value: req.Context},
 	)
 	prompt := c.buildOperationPrompt(PromptKeyEvaluateLearning, userInput, PromptRuntimePatch{})
 	var out EvaluateResult
 	if err := c.invokeJSON(ctx, "evaluate_learning", prompt, nil, &out); err != nil {
 		return EvaluateResult{}, err
 	}
-	if out.Score < 0 {
-		out.Score = 0
-	}
-	if out.Score > 100 {
-		out.Score = 100
-	}
-	out.Score = math.Round(out.Score*10) / 10
+	out.Score = normalizePercentageScore(out.Score)
 	return out, nil
 }
 
 func (c *remoteLLMClient) ScoreLearning(ctx context.Context, req ScoreRequest) (ScoreResult, error) {
-	if !c.ready {
-		return ScoreResult{}, errs.BadRequest("ai provider is not ready")
+	if err := c.ensureReady(); err != nil {
+		return ScoreResult{}, err
 	}
-	userInput := fmt.Sprintf(
-		`topic=%s
-accuracy=%.1f
-stability=%.1f
-speed=%.1f`,
-		req.Topic, req.Accuracy, req.Stability, req.Speed,
+	userInput := buildPromptKeyValueInput(
+		promptField{key: "topic", value: req.Topic},
+		promptField{key: "accuracy", value: fmt.Sprintf("%.1f", req.Accuracy)},
+		promptField{key: "stability", value: fmt.Sprintf("%.1f", req.Stability)},
+		promptField{key: "speed", value: fmt.Sprintf("%.1f", req.Speed)},
 	)
 	prompt := c.buildOperationPrompt(PromptKeyScoreLearning, userInput, PromptRuntimePatch{})
 	var out ScoreResult
 	if err := c.invokeJSON(ctx, "score_learning", prompt, nil, &out); err != nil {
 		return ScoreResult{}, err
 	}
-	if out.Score < 0 {
-		out.Score = 0
-	}
-	if out.Score > 100 {
-		out.Score = 100
-	}
-	out.Score = math.Round(out.Score*10) / 10
+	out.Score = normalizePercentageScore(out.Score)
 	return out, nil
 }
 
 func (c *remoteLLMClient) Chat(ctx context.Context, req ChatRequest) (ChatResponse, error) {
-	if !c.ready {
-		return ChatResponse{}, errs.BadRequest("ai provider is not ready")
-	}
-	lines := make([]string, 0, len(req.Messages)+2)
-	if strings.TrimSpace(req.SystemPrompt) != "" {
-		lines = append(lines, "system: "+strings.TrimSpace(req.SystemPrompt))
-	}
-	for _, message := range req.Messages {
-		role := strings.TrimSpace(message.Role)
-		if role == "" {
-			role = "user"
-		}
-		content := strings.TrimSpace(message.Content)
-		if content == "" {
-			continue
-		}
-		lines = append(lines, fmt.Sprintf("%s: %s", role, content))
-	}
-	userInput := strings.Join(lines, "\n")
-	if userInput == "" {
-		userInput = "user: hello"
-	}
-
-	mode := strings.ToLower(strings.TrimSpace(req.Mode))
-	key := PromptKeyAgentChat
-	operation := "agent_chat"
-	if mode == "detect_intent" {
-		key = PromptKeyDetectIntent
-		operation = "detect_intent"
-	} else if mode == "compress_session" {
-		key = PromptKeyCompressSession
-		operation = "compress_session"
-	}
-	prompt := c.buildOperationPrompt(key, userInput, req.PromptPatch)
-	var out ChatResponse
-	if err := c.invokeJSON(ctx, operation, prompt, req.Attachments, &out); err != nil {
+	if err := c.ensureReady(); err != nil {
 		return ChatResponse{}, err
 	}
-	if strings.TrimSpace(out.Content) == "" && mode != "detect_intent" {
+	userInput := buildChatUserInput(req)
+	modeConfig := resolveChatModeConfig(req.Mode)
+	prompt := c.buildOperationPrompt(modeConfig.promptKey, userInput, req.PromptPatch)
+	var out ChatResponse
+	if err := c.invokeJSON(ctx, modeConfig.operation, prompt, req.Attachments, &out); err != nil {
+		return ChatResponse{}, err
+	}
+	if strings.TrimSpace(out.Content) == "" && modeConfig.mode != PromptKeyDetectIntent {
 		out.Content = "I have processed your message."
 	}
 	if out.Intent.Params == nil {
@@ -331,38 +255,29 @@ func (c *remoteLLMClient) invokeJSON(
 	logger := logx.LoggerFromContext(ctx)
 
 	if err != nil {
-		logger.Error("ai call failed",
-			slog.String("event", "ai.call.summary"),
-			slog.String("ai_provider", c.provider),
-			slog.String("ai_model", c.model),
-			slog.String("ai_op", operation),
-			slog.Int64("latency_ms", latency),
+		logger.Error("ai call failed", c.aiCallSummaryArgs(
+			operation,
+			latency,
 			slog.String("error", err.Error()),
-		)
+		)...)
 		return errs.Internal(fmt.Sprintf("ai %s failed: %v", operation, err))
 	}
 	jsonText := extractJSONText(raw)
 	if err := json.Unmarshal([]byte(jsonText), out); err != nil {
-		logger.Error("ai response parse failed",
-			slog.String("event", "ai.call.summary"),
-			slog.String("ai_provider", c.provider),
-			slog.String("ai_model", c.model),
-			slog.String("ai_op", operation),
-			slog.Int64("latency_ms", latency),
+		logger.Error("ai response parse failed", c.aiCallSummaryArgs(
+			operation,
+			latency,
 			slog.String("error", err.Error()),
 			slog.String("response_preview", truncate(raw, 500)),
-		)
+		)...)
 		return errs.Internal("ai response format invalid")
 	}
-	logger.Info("ai call success",
-		slog.String("event", "ai.call.summary"),
-		slog.String("ai_provider", c.provider),
-		slog.String("ai_model", c.model),
-		slog.String("ai_op", operation),
-		slog.Int64("latency_ms", latency),
+	logger.Info("ai call success", c.aiCallSummaryArgs(
+		operation,
+		latency,
 		slog.Int("attachment_files", len(attachments)),
 		slog.Int("response_chars", len(raw)),
-	)
+	)...)
 	return nil
 }
 
@@ -379,6 +294,77 @@ func extractJSONText(raw string) string {
 		return trimmed[start : end+1]
 	}
 	return trimmed
+}
+
+func normalizePercentageScore(score float64) float64 {
+	if score < 0 {
+		score = 0
+	}
+	if score > 100 {
+		score = 100
+	}
+	return roundOneDecimal(score)
+}
+
+type chatModeConfig struct {
+	mode      string
+	promptKey string
+	operation string
+}
+
+func buildChatUserInput(req ChatRequest) string {
+	lines := make([]string, 0, len(req.Messages)+2)
+	if strings.TrimSpace(req.SystemPrompt) != "" {
+		lines = append(lines, "system: "+strings.TrimSpace(req.SystemPrompt))
+	}
+	for _, message := range req.Messages {
+		role := strings.TrimSpace(message.Role)
+		if role == "" {
+			role = "user"
+		}
+		content := strings.TrimSpace(message.Content)
+		if content == "" {
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("%s: %s", role, content))
+	}
+	userInput := strings.Join(lines, "\n")
+	if userInput == "" {
+		return "user: hello"
+	}
+	return userInput
+}
+
+func resolveChatModeConfig(mode string) chatModeConfig {
+	normalized := strings.ToLower(strings.TrimSpace(mode))
+	config := chatModeConfig{
+		mode:      normalized,
+		promptKey: PromptKeyAgentChat,
+		operation: "agent_chat",
+	}
+	switch normalized {
+	case PromptKeyDetectIntent:
+		config.promptKey = PromptKeyDetectIntent
+		config.operation = "detect_intent"
+	case PromptKeyCompressSession:
+		config.promptKey = PromptKeyCompressSession
+		config.operation = "compress_session"
+	}
+	return config
+}
+
+func (c *remoteLLMClient) aiCallSummaryArgs(operation string, latency int64, extra ...slog.Attr) []any {
+	args := []any{
+		slog.String("event", "ai.call.summary"),
+		slog.String("ai_provider", c.provider),
+		slog.String("ai_model", c.model),
+		slog.String("ai_op", operation),
+		slog.Int64("latency_ms", latency),
+	}
+	for _, attr := range extra {
+		args = append(args, attr)
+	}
+	return args
 }
 
 func truncate(s string, n int) string {

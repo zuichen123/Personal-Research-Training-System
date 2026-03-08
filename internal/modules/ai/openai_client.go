@@ -1,12 +1,9 @@
 package ai
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 	"time"
 
@@ -21,7 +18,7 @@ type OpenAIConfig struct {
 }
 
 func NewOpenAIClient(cfg OpenAIConfig) Client {
-	ready := strings.TrimSpace(cfg.APIKey) != "" && strings.TrimSpace(cfg.Model) != ""
+	ready := providerConfigReady(cfg.APIKey, cfg.Model)
 	if !ready {
 		return newRemoteLLMClient("openai", cfg.Model, false, nil)
 	}
@@ -29,10 +26,7 @@ func NewOpenAIClient(cfg OpenAIConfig) Client {
 	if baseURL == "" {
 		baseURL = "https://api.openai.com/v1"
 	}
-	httpClient := &http.Client{Timeout: cfg.Timeout}
-	if cfg.Timeout <= 0 {
-		httpClient.Timeout = 20 * time.Second
-	}
+	httpClient := newProviderHTTPClient(cfg.Timeout)
 	endpoint := baseURL + "/chat/completions"
 
 	invoker := func(ctx context.Context, input promptInvokeInput) (string, error) {
@@ -43,21 +37,17 @@ func NewOpenAIClient(cfg OpenAIConfig) Client {
 			},
 		}
 		skippedAudio := 0
-		for _, attachment := range input.Attachments {
-			mimeType, base64Data, err := parseBase64DataURL(attachment.DataURL)
-			if err != nil {
-				continue
-			}
-			switch {
-			case strings.HasPrefix(mimeType, "image/"):
+		for _, attachment := range decodeAndCategorizeMediaAttachments(input.Attachments) {
+			switch attachment.Category {
+			case mediaAttachmentImage:
 				userContent = append(userContent, map[string]any{
 					"type": "image_url",
 					"image_url": map[string]any{
-						"url": attachment.DataURL,
+						"url": attachment.Raw.DataURL,
 					},
 				})
-			case strings.HasPrefix(mimeType, "audio/"):
-				format := openAIAudioFormat(mimeType)
+			case mediaAttachmentAudio:
+				format := openAIAudioFormat(attachment.MimeType)
 				if format == "" {
 					skippedAudio++
 					continue
@@ -66,7 +56,7 @@ func NewOpenAIClient(cfg OpenAIConfig) Client {
 					"type": "input_audio",
 					"input_audio": map[string]any{
 						"format": format,
-						"data":   base64Data,
+						"data":   attachment.Base64Data,
 					},
 				})
 			}
@@ -82,7 +72,7 @@ func NewOpenAIClient(cfg OpenAIConfig) Client {
 			"messages": []map[string]any{
 				{
 					"role":    "system",
-					"content": "You are a JSON API backend. Return strictly valid JSON and nothing else.",
+					"content": jsonBackendSystemPrompt,
 				},
 				{
 					"role":    "user",
@@ -91,22 +81,15 @@ func NewOpenAIClient(cfg OpenAIConfig) Client {
 			},
 			"temperature": 0.2,
 		}
-		body, _ := json.Marshal(payload)
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+		req, err := newProviderJSONRequest(ctx, endpoint, payload)
 		if err != nil {
 			return "", err
 		}
-		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
 
-		resp, err := httpClient.Do(req)
+		respBody, err := doProviderJSONRequest(httpClient, req, "openai")
 		if err != nil {
 			return "", err
-		}
-		defer resp.Body.Close()
-		respBody, _ := io.ReadAll(resp.Body)
-		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			return "", errs.Internal(fmt.Sprintf("openai status %d: %s", resp.StatusCode, string(respBody)))
 		}
 
 		var parsed struct {

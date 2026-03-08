@@ -5,6 +5,9 @@ import '../models/ai_agent_chat.dart';
 import '../models/user_profile.dart';
 import '../providers/ai_agent_provider.dart';
 import '../providers/app_provider.dart';
+import '../utils/agent_form_initial_data.dart';
+import '../utils/agent_form_utils.dart';
+import '../utils/agent_prompt_sections.dart';
 import 'debug_log_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -592,7 +595,9 @@ class _SettingsScreenState extends State<SettingsScreen>
                   children: [
                     ..._buildPromptSegmentInputs(
                       keys: _editablePromptSegmentKeys
-                          .where((key) => !_primaryPromptSegmentKeys.contains(key))
+                          .where(
+                            (key) => !_primaryPromptSegmentKeys.contains(key),
+                          )
                           .toList(growable: false),
                     ),
                   ],
@@ -751,120 +756,58 @@ class _SettingsScreenState extends State<SettingsScreen>
     if (!context.mounted) {
       return;
     }
-    var defaultAgentProvider = <String, dynamic>{};
-    try {
-      defaultAgentProvider = await appProvider.apiService
-          .getAIDefaultAgentProvider();
-    } catch (_) {
-      defaultAgentProvider = <String, dynamic>{};
-    }
-    final draft = provider.createAgentDraft;
-    final template = _preferredAgentTemplate(provider);
-    final defaultPrimary =
-        (defaultAgentProvider['primary'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final defaultProtocol = (defaultAgentProvider['protocol'] ?? '')
-        .toString()
-        .trim();
-    final defaultModel = (defaultPrimary['model'] ?? '').toString().trim();
-    final defaultBaseUrl = (defaultPrimary['base_url'] ?? '').toString().trim();
-    final defaultApiKey = (defaultPrimary['api_key'] ?? '').toString().trim();
-
-    final initialProtocol = isEdit
-        ? agent.protocol
-        : _firstNonEmpty([
-            defaultProtocol,
-            (draft['protocol'] ?? '').toString(),
-            template?.protocol ?? '',
-          ], fallback: 'openai_compatible');
-    final initialPrimaryModel = isEdit
-        ? (agent.primary.model.isNotEmpty ? agent.primary.model : 'gpt-4o-mini')
-        : _firstNonEmpty([
-            defaultModel,
-            (draft['primary_model'] ?? '').toString(),
-            template?.primary.model ?? '',
-          ], fallback: 'gpt-4o-mini');
-    final initialPrimaryBaseUrl = isEdit
-        ? agent.primary.baseUrl
-        : _firstNonEmpty([
-            defaultBaseUrl,
-            (draft['primary_base_url'] ?? '').toString(),
-            template?.primary.baseUrl ?? '',
-          ], fallback: 'https://api.openai.com/v1');
-    final initialPrimaryApiKey = isEdit
-        ? ''
-        : _firstNonEmpty([
-            defaultApiKey,
-            (draft['primary_api_key'] ?? '').toString(),
-            template?.primary.apiKey ?? '',
-          ]);
-    final initialFallbackBaseUrl = isEdit
-        ? agent.fallback.baseUrl
-        : _firstNonEmpty([
-            (draft['fallback_base_url'] ?? '').toString(),
-            template?.fallback.baseUrl ?? '',
-          ]);
-    final initialFallbackApiKey = isEdit
-        ? ''
-        : _firstNonEmpty([
-            (draft['fallback_api_key'] ?? '').toString(),
-            template?.fallback.apiKey ?? '',
-          ]);
-    final initialFallbackModel = isEdit
-        ? agent.fallback.model
-        : _firstNonEmpty([
-            (draft['fallback_model'] ?? '').toString(),
-            template?.fallback.model ?? '',
-          ]);
-    final initialSystemPrompt = isEdit
-        ? agent.systemPrompt
-        : _firstNonEmpty([
-            (draft['system_prompt'] ?? '').toString(),
-            template?.systemPrompt ?? '',
-          ]);
-    final initialSystemPromptSections = _splitAgentSystemPrompt(
-      initialSystemPrompt,
+    final defaultAgentProvider = await AgentFormUtils.loadDefaultProvider(
+      appProvider.apiService.getAIDefaultAgentProvider,
     );
-    final initialEnabled = isEdit
-        ? agent.enabled
-        : _asBool(draft['enabled'], fallback: template?.enabled ?? true);
+    if (!context.mounted) {
+      return;
+    }
+    final initialData = AgentFormInitialData.resolve(
+      agent: agent,
+      draft: provider.createAgentDraft,
+      defaultProvider: defaultAgentProvider,
+      template: AgentFormUtils.preferredTemplate(
+        provider.agents,
+        provider.selectedAgentId,
+      ),
+    );
 
-    final nameController = TextEditingController(text: agent?.name ?? '');
-    final protocolController = ValueNotifier<String>(initialProtocol);
+    final nameController = TextEditingController(text: initialData.name);
+    final protocolController = ValueNotifier<String>(initialData.protocol);
     final primaryBaseUrlController = TextEditingController(
-      text: initialPrimaryBaseUrl,
+      text: initialData.primary.baseUrl,
     );
     final primaryApiKeyController = TextEditingController(
-      text: initialPrimaryApiKey,
+      text: initialData.primary.apiKey,
     );
     final primaryModelController = TextEditingController(
-      text: initialPrimaryModel,
+      text: initialData.primary.model,
     );
     final fallbackBaseUrlController = TextEditingController(
-      text: initialFallbackBaseUrl,
+      text: initialData.fallback.baseUrl,
     );
     final fallbackApiKeyController = TextEditingController(
-      text: initialFallbackApiKey,
+      text: initialData.fallback.apiKey,
     );
     final fallbackModelController = TextEditingController(
-      text: initialFallbackModel,
+      text: initialData.fallback.model,
     );
     final systemPromptRoleController = TextEditingController(
-      text: initialSystemPromptSections['role'] ?? '',
+      text: initialData.promptSection('role'),
     );
     final systemPromptTaskController = TextEditingController(
-      text: initialSystemPromptSections['task_prompt'] ?? '',
+      text: initialData.promptSection('task_prompt'),
     );
     final systemPromptToolController = TextEditingController(
-      text: initialSystemPromptSections['tool_instructions'] ?? '',
+      text: initialData.promptSection('tool_instructions'),
     );
     final systemPromptRulesController = TextEditingController(
-      text: initialSystemPromptSections['rules'] ?? '',
+      text: initialData.promptSection('rules'),
     );
     final systemPromptExtraController = TextEditingController(
-      text: initialSystemPromptSections['extra'] ?? '',
+      text: initialData.promptSection('extra'),
     );
-    var enabled = initialEnabled;
+    var enabled = initialData.enabled;
     final messenger = ScaffoldMessenger.of(context);
 
     await showDialog<void>(
@@ -985,7 +928,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                     final primaryModel = primaryModelController.text.trim();
                     final primaryBaseUrl = primaryBaseUrlController.text.trim();
                     final primaryApiKey = primaryApiKeyController.text.trim();
-                    final composedSystemPrompt = _composeAgentSystemPrompt(
+                    final composedSystemPrompt = AgentPromptSections.compose(
                       role: systemPromptRoleController.text,
                       taskPrompt: systemPromptTaskController.text,
                       toolInstructions: systemPromptToolController.text,
@@ -1059,144 +1002,6 @@ class _SettingsScreenState extends State<SettingsScreen>
     systemPromptToolController.dispose();
     systemPromptRulesController.dispose();
     systemPromptExtraController.dispose();
-  }
-
-  Map<String, String> _splitAgentSystemPrompt(String raw) {
-    final text = raw.trim();
-    if (text.isEmpty) {
-      return const <String, String>{};
-    }
-    final hasHeaders = RegExp(r'^##\s+', multiLine: true).hasMatch(text);
-    if (!hasHeaders) {
-      return <String, String>{'task_prompt': text};
-    }
-
-    final buckets = <String, List<String>>{};
-    String currentKey = 'extra';
-    for (final rawLine in text.split('\n')) {
-      final line = rawLine.trimRight();
-      final match = RegExp(r'^##\s+(.+)$').firstMatch(line.trim());
-      if (match != null) {
-        final normalized = _normalizeAgentPromptSectionKey(match.group(1) ?? '');
-        currentKey = normalized.isEmpty ? 'extra' : normalized;
-        buckets.putIfAbsent(currentKey, () => <String>[]);
-        continue;
-      }
-      buckets.putIfAbsent(currentKey, () => <String>[]).add(line);
-    }
-
-    final out = <String, String>{};
-    buckets.forEach((key, lines) {
-      final value = lines.join('\n').trim();
-      if (value.isNotEmpty) {
-        out[key] = value;
-      }
-    });
-    return out;
-  }
-
-  String _normalizeAgentPromptSectionKey(String raw) {
-    final key = raw
-        .trim()
-        .toLowerCase()
-        .replaceAll(RegExp('[^a-z0-9 _-]'), '')
-        .replaceAll('-', '_')
-        .replaceAll(' ', '_');
-    switch (key) {
-      case 'role':
-      case 'persona':
-      case 'identity':
-        return 'role';
-      case 'task_prompt':
-      case 'task':
-      case 'instructions':
-      case 'instruction':
-        return 'task_prompt';
-      case 'tool_instructions':
-      case 'tools':
-      case 'tool':
-        return 'tool_instructions';
-      case 'rules':
-      case 'rule':
-        return 'rules';
-      case 'extra':
-        return 'extra';
-      default:
-        return '';
-    }
-  }
-
-  String _composeAgentSystemPrompt({
-    required String role,
-    required String taskPrompt,
-    required String toolInstructions,
-    required String rules,
-    required String extra,
-  }) {
-    final blocks = <String>[];
-    final roleText = role.trim();
-    final taskText = taskPrompt.trim();
-    final toolText = toolInstructions.trim();
-    final rulesText = rules.trim();
-    final extraText = extra.trim();
-
-    if (roleText.isNotEmpty) {
-      blocks.add('## role\n$roleText');
-    }
-    if (taskText.isNotEmpty) {
-      blocks.add('## task_prompt\n$taskText');
-    }
-    if (toolText.isNotEmpty) {
-      blocks.add('## tool_instructions\n$toolText');
-    }
-    if (rulesText.isNotEmpty) {
-      blocks.add('## rules\n$rulesText');
-    }
-    if (extraText.isNotEmpty) {
-      blocks.add(extraText);
-    }
-    return blocks.join('\n\n').trim();
-  }
-
-  AIAgentSummary? _preferredAgentTemplate(AIAgentProvider provider) {
-    if (provider.agents.isEmpty) {
-      return null;
-    }
-    final selected = provider.selectedAgentId.trim();
-    if (selected.isNotEmpty) {
-      for (final item in provider.agents) {
-        if (item.id == selected) {
-          return item;
-        }
-      }
-    }
-    return provider.agents.first;
-  }
-
-  String _firstNonEmpty(List<String> values, {String fallback = ''}) {
-    for (final item in values) {
-      final text = item.trim();
-      if (text.isNotEmpty) {
-        return text;
-      }
-    }
-    return fallback;
-  }
-
-  bool _asBool(dynamic value, {bool fallback = true}) {
-    if (value is bool) {
-      return value;
-    }
-    if (value is String) {
-      final normalized = value.trim().toLowerCase();
-      if (normalized == 'true' || normalized == '1') {
-        return true;
-      }
-      if (normalized == 'false' || normalized == '0') {
-        return false;
-      }
-    }
-    return fallback;
   }
 
   Future<void> _confirmDeleteAgent(

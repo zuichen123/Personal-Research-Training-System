@@ -11,6 +11,24 @@ License: AGPL-3.0-or-later
 
 架构文档见：[架构.md](./架构.md)
 
+## 项目结构
+
+- `cmd/server`：后端启动入口
+- `internal/bootstrap`：应用装配、路由注册、AI 控制入口
+- `internal/modules`：业务模块（question / practice / plan / ai / profile 等）
+- `internal/shared`：通用错误、HTTP 响应、基础设施辅助
+- `apps/flutter_client`：Flutter 客户端
+- `prompts/ai`：AI 提示词分段文件
+- `scripts`：常用构建脚本
+- `TODO.md`：已废弃，仅保留 Notion 迁移说明
+
+## 开发前提
+
+- Go 1.23+
+- Flutter SDK（用于 `apps/flutter_client`）
+- Windows 本地联调默认：后端 `http://127.0.0.1:8080/api/v1`
+- Android 模拟器默认：`http://10.0.2.2:8080/api/v1`
+
 ## 快速启动后端
 
 ```bash
@@ -27,41 +45,69 @@ flutter pub get
 flutter run
 ```
 
-## 核心 API
+如需显式指定后端地址：
 
-- 系统：`GET /api/v1/healthz`
-- 计划：`POST/GET/GET{id}/PUT{id}/DELETE{id} /api/v1/plans`
-- 题库：`POST/GET/GET{id}/PUT{id}/DELETE{id} /api/v1/questions`
-- 错题：
-  - `POST /api/v1/mistakes`
-  - `GET /api/v1/mistakes`
-  - `GET /api/v1/mistakes/{id}`
-  - `DELETE /api/v1/mistakes/{id}`
-- 练习：
-  - `POST /api/v1/practice/submit`
-  - `GET /api/v1/practice/attempts`
-  - `GET /api/v1/practice/attempts?question_id=...`
-  - `DELETE /api/v1/practice/attempts/{id}`
-- 资源：
-  - `POST /api/v1/resources`
-  - `GET /api/v1/resources`
-  - `GET /api/v1/resources/{id}`
-  - `GET /api/v1/resources/{id}/download`
-  - `DELETE /api/v1/resources/{id}`
-- 番茄钟：
-  - `POST /api/v1/pomodoro/start`
-  - `POST /api/v1/pomodoro/{id}/end`
-  - `GET /api/v1/pomodoro`
-  - `DELETE /api/v1/pomodoro/{id}`
-- AI：
-  - `GET /api/v1/ai/provider`
-  - `PUT /api/v1/ai/provider/config`
-  - `POST /api/v1/ai/learning`
-  - `POST /api/v1/ai/questions/generate?persist=true`
-  - `GET /api/v1/ai/questions/search`
-  - `POST /api/v1/ai/grade`
-  - `POST /api/v1/ai/evaluate`
-  - `POST /api/v1/ai/score`
+```bash
+flutter run --dart-define=API_BASE_URL=http://127.0.0.1:8080/api/v1
+```
+
+Windows 一键联调可直接使用：
+
+```bat
+run-test.bat
+```
+
+该脚本会：
+
+- 新开窗口启动 `go run ./cmd/server`
+- 在当前窗口启动 `flutter run`
+- 默认使用 Windows 设备，可透传 `-d` / `--device-id`
+
+## 常用脚本
+
+### 构建后端
+
+```powershell
+./scripts/build-cross.ps1
+```
+
+```bash
+./scripts/build-cross.sh
+```
+
+### 构建 Flutter 客户端
+
+```powershell
+./scripts/build-client.ps1 -Targets windows
+./scripts/build-client.ps1 -Targets web,apk -ApiBaseUrl http://127.0.0.1:8080/api/v1
+./scripts/build-client.ps1 -Targets all -DryRun
+```
+
+```bash
+./scripts/build-client.sh --target windows
+./scripts/build-client.sh --target web --target apk --api-base-url http://127.0.0.1:8080/api/v1
+./scripts/build-client.sh --target all --dry-run
+```
+
+说明：
+
+- PowerShell 与 Bash 版本能力对齐，适合不同终端环境
+- 支持目标：`windows`、`web`、`apk`、`all`
+- 构建产物统一整理到 `dist/flutter-client`
+- `-DryRun` / `--dry-run` 仅打印命令，不实际执行
+- `-SkipPubGet` / `--skip-pub-get` 可在依赖已准备好时跳过 `flutter pub get`
+
+## API 文档
+
+项目 API 以 Notion 清单为准，避免 README 与代码双维护后漂移：
+
+- Notion API 清单：`https://www.notion.so/31cba63208ec810ebdebd78d08036fe3`
+
+当前主要模块包括：
+
+- `System`：健康检查
+- `Question / Mistake / Practice / Resource / Plan / Pomodoro / Profile`
+- `AI`：provider、prompts、agents、sessions、artifacts、questions、learning、grade/evaluate/score
 
 > API 支持链路追踪请求头：`X-Trace-ID`（服务端会回传同名响应头）
 
@@ -117,7 +163,8 @@ flutter run
 - `LOG_SQL_SLOW_MS` 默认 `200`
 - `LOG_AI_SUMMARY_ENABLED` 默认 `true`
 
-### Profile API
+## 任务管理
 
-- `GET /api/v1/profile`
-- `PUT /api/v1/profile`
+- `TODO.md` 已废弃，不再作为任务来源
+- 任务拆解、状态流转、驳回原因统一记录在 Notion `Self-Study-Tool` 看板
+- 状态流转：`未开始 -> TODO -> In-Progress -> Review -> Finish / REJECT`

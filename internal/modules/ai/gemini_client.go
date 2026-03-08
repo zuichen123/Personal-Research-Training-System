@@ -1,14 +1,10 @@
 package ai
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"self-study-tool/internal/shared/errs"
@@ -21,32 +17,25 @@ type GeminiConfig struct {
 }
 
 func NewGeminiClient(cfg GeminiConfig) Client {
-	ready := strings.TrimSpace(cfg.APIKey) != "" && strings.TrimSpace(cfg.Model) != ""
+	ready := providerConfigReady(cfg.APIKey, cfg.Model)
 	if !ready {
 		return newRemoteLLMClient("gemini", cfg.Model, false, nil)
 	}
-	httpClient := &http.Client{Timeout: cfg.Timeout}
-	if cfg.Timeout <= 0 {
-		httpClient.Timeout = 20 * time.Second
-	}
+	httpClient := newProviderHTTPClient(cfg.Timeout)
 	modelPath := url.PathEscape(cfg.Model)
 	endpoint := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", modelPath, url.QueryEscape(cfg.APIKey))
 
 	invoker := func(ctx context.Context, input promptInvokeInput) (string, error) {
 		parts := []map[string]any{
 			{
-				"text": "You are a JSON API backend. Return strictly valid JSON and nothing else.\n" + input.Prompt,
+				"text": promptWithJSONBackendInstruction(input.Prompt),
 			},
 		}
-		for _, attachment := range input.Attachments {
-			mimeType, base64Data, err := parseBase64DataURL(attachment.DataURL)
-			if err != nil {
-				continue
-			}
+		for _, attachment := range decodeMediaAttachments(input.Attachments) {
 			parts = append(parts, map[string]any{
 				"inline_data": map[string]any{
-					"mime_type": mimeType,
-					"data":      base64Data,
+					"mime_type": attachment.MimeType,
+					"data":      attachment.Base64Data,
 				},
 			})
 		}
@@ -60,21 +49,14 @@ func NewGeminiClient(cfg GeminiConfig) Client {
 				"temperature": 0.2,
 			},
 		}
-		body, _ := json.Marshal(payload)
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+		req, err := newProviderJSONRequest(ctx, endpoint, payload)
 		if err != nil {
 			return "", err
 		}
-		req.Header.Set("Content-Type", "application/json")
 
-		resp, err := httpClient.Do(req)
+		respBody, err := doProviderJSONRequest(httpClient, req, "gemini")
 		if err != nil {
 			return "", err
-		}
-		defer resp.Body.Close()
-		respBody, _ := io.ReadAll(resp.Body)
-		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			return "", errs.Internal(fmt.Sprintf("gemini status %d: %s", resp.StatusCode, string(respBody)))
 		}
 		var parsed struct {
 			Candidates []struct {

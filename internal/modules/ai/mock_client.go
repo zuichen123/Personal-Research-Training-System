@@ -3,7 +3,6 @@ package ai
 import (
 	"context"
 	"fmt"
-	"math"
 	"strings"
 	"time"
 
@@ -31,18 +30,7 @@ func (m *MockClient) IsReady() bool {
 }
 
 func (m *MockClient) GenerateQuestions(ctx context.Context, req GenerateRequest) ([]question.CreateInput, error) {
-	if req.Count <= 0 {
-		req.Count = 3
-	}
-	if req.Count > 20 {
-		req.Count = 20
-	}
-	if req.Difficulty < 1 {
-		req.Difficulty = 2
-	}
-	if req.Subject == "" {
-		req.Subject = "general"
-	}
+	req = normalizeGenerateRequest(req)
 
 	select {
 	case <-ctx.Done():
@@ -208,7 +196,7 @@ func (m *MockClient) BuildLearningPlan(ctx context.Context, req LearnRequest) (L
 		nodes := buildThemeNodes(theme, start, end, hoursPerTheme, req.Goals)
 		themePlans = append(themePlans, LearnTheme{
 			Name:           theme,
-			EstimatedHours: round1(hoursPerTheme),
+			EstimatedHours: roundOneDecimal(hoursPerTheme),
 			Children:       nodes,
 		})
 	}
@@ -346,7 +334,7 @@ func (m *MockClient) ScoreLearning(ctx context.Context, req ScoreRequest) (Score
 	}
 
 	score := req.Accuracy*0.5 + req.Stability*0.3 + req.Speed*0.2
-	score = math.Round(score*10) / 10
+	score = roundOneDecimal(score)
 
 	advice := []string{
 		"Prioritize weak knowledge nodes from mistakes",
@@ -380,8 +368,8 @@ func (m *MockClient) Chat(ctx context.Context, req ChatRequest) (ChatResponse, e
 			break
 		}
 	}
-	mode := strings.ToLower(strings.TrimSpace(req.Mode))
-	if mode == "compress_session" {
+	modeConfig := resolveChatModeConfig(req.Mode)
+	if modeConfig.promptKey == PromptKeyCompressSession {
 		summary := "Mock summary: conversation compressed for long-term context."
 		if lastUser != "" {
 			summary = "Mock summary: " + truncateMockText(lastUser, 220)
@@ -394,7 +382,7 @@ func (m *MockClient) Chat(ctx context.Context, req ChatRequest) (ChatResponse, e
 			},
 		}, nil
 	}
-	if mode == "detect_intent" {
+	if modeConfig.promptKey == PromptKeyDetectIntent {
 		intent := IntentResult{
 			Action:     "none",
 			Confidence: 0.1,
@@ -555,7 +543,7 @@ func buildNodesByLevel(
 			nodes = append(nodes, LearnPlanNode{
 				Level:          "task",
 				Title:          fmt.Sprintf("%s task %d", theme, i+1),
-				EstimatedHours: round1(taskHours),
+				EstimatedHours: roundOneDecimal(taskHours),
 				StartDate:      formatDate(start),
 				EndDate:        formatDate(end),
 				Details:        []string{task},
@@ -578,7 +566,7 @@ func buildNodesByLevel(
 		nodes = append(nodes, LearnPlanNode{
 			Level:          level,
 			Title:          fmt.Sprintf("%s %d", titleLevel(level), i+1),
-			EstimatedHours: round1(hours / float64(segments)),
+			EstimatedHours: roundOneDecimal(hours / float64(segments)),
 			StartDate:      formatDate(segStart),
 			EndDate:        formatDate(segEnd),
 			Details: []string{
@@ -728,10 +716,6 @@ func truncateMockText(s string, max int) string {
 		return trimmed[:max]
 	}
 	return trimmed[:max-3] + "..."
-}
-
-func round1(v float64) float64 {
-	return math.Round(v*10) / 10
 }
 
 func titleLevel(level string) string {

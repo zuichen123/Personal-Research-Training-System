@@ -107,6 +107,48 @@ func TestResolvePlanID_ByTitleAndDate(t *testing.T) {
 	}
 }
 
+func TestResolvePlanID_UsesPlanTypeAlias(t *testing.T) {
+	repo := newTestPlanRepo([]plan.Item{
+		{
+			ID:         "p-day",
+			PlanType:   plan.DayPlan,
+			Title:      "Math Review",
+			TargetDate: "2026-03-10",
+			Status:     string(plan.StatusPending),
+			Priority:   3,
+			Source:     plan.SourceManual,
+			CreatedAt:  time.Now().UTC(),
+			UpdatedAt:  time.Now().UTC(),
+		},
+		{
+			ID:         "p-week",
+			PlanType:   plan.WeekPlan,
+			Title:      "Math Review",
+			TargetDate: "2026-03-10",
+			Status:     string(plan.StatusPending),
+			Priority:   2,
+			Source:     plan.SourceManual,
+			CreatedAt:  time.Now().UTC(),
+			UpdatedAt:  time.Now().UTC(),
+		},
+	})
+	control := &aiAppControl{planService: plan.NewService(repo)}
+
+	id, candidates, err := control.resolvePlanID(context.Background(), map[string]any{
+		"title": "Math Review",
+		"type":  "weekly",
+	})
+	if err != nil {
+		t.Fatalf("resolvePlanID() error = %v", err)
+	}
+	if id != "p-week" {
+		t.Fatalf("expected p-week, got %s", id)
+	}
+	if len(candidates) != 1 {
+		t.Fatalf("expected 1 candidate, got %d", len(candidates))
+	}
+}
+
 func TestExecutePlanDelete_ResolvesWithoutID(t *testing.T) {
 	repo := newTestPlanRepo([]plan.Item{
 		{
@@ -282,6 +324,51 @@ func TestExecutePlanDelete_WithAllFlagAndFilter(t *testing.T) {
 	}
 	if _, exists := repo.items["p-3"]; exists {
 		t.Fatal("expected matching plan p-3 deleted")
+	}
+}
+
+func TestExecutePlanDelete_WithPlanTypeAliasFilter(t *testing.T) {
+	repo := newTestPlanRepo([]plan.Item{
+		{
+			ID:         "p-day",
+			PlanType:   plan.DayPlan,
+			Title:      "Daily Math",
+			TargetDate: "2026-03-10",
+			Status:     string(plan.StatusPending),
+			Priority:   3,
+			Source:     plan.SourceManual,
+			CreatedAt:  time.Now().UTC(),
+			UpdatedAt:  time.Now().UTC(),
+		},
+		{
+			ID:         "p-week",
+			PlanType:   plan.WeekPlan,
+			Title:      "Weekly Math",
+			TargetDate: "2026-03-10",
+			Status:     string(plan.StatusPending),
+			Priority:   2,
+			Source:     plan.SourceManual,
+			CreatedAt:  time.Now().UTC(),
+			UpdatedAt:  time.Now().UTC(),
+		},
+	})
+	control := &aiAppControl{planService: plan.NewService(repo)}
+
+	result, err := control.executePlan(context.Background(), "delete", map[string]any{
+		"all":  true,
+		"type": "weekly",
+	})
+	if err != nil {
+		t.Fatalf("executePlan(delete with type alias) error = %v", err)
+	}
+	if asInt(result.Data["deleted_count"], 0) != 1 {
+		t.Fatalf("expected deleted_count=1, got %v", result.Data["deleted_count"])
+	}
+	if _, exists := repo.items["p-day"]; !exists {
+		t.Fatal("expected day plan to remain")
+	}
+	if _, exists := repo.items["p-week"]; exists {
+		t.Fatal("expected week plan to be deleted")
 	}
 }
 

@@ -280,16 +280,7 @@ func (c *aiAppControl) executePractice(ctx context.Context, operation string, pa
 func (c *aiAppControl) executePlan(ctx context.Context, operation string, params map[string]any) (ai.AppControlResult, error) {
 	switch operation {
 	case "list":
-		planType := string(
-			normalizePlanTypeAlias(
-				firstNonEmpty(
-					asString(params["plan_type"]),
-					asString(params["type"]),
-					asString(params["planType"]),
-					asString(params["scope"]),
-				),
-			),
-		)
+		planType := string(normalizedPlanTypeFromParams(params))
 		items, err := c.planService.List(ctx, planType)
 		if err != nil {
 			return ai.AppControlResult{}, err
@@ -335,14 +326,7 @@ func (c *aiAppControl) executePlan(ctx context.Context, operation string, params
 		}
 		return ai.AppControlResult{Summary: fmt.Sprintf("Plan %s loaded.", item.ID), Data: map[string]any{"item": item}}, nil
 	case "create":
-		resolvedPlanType := normalizePlanTypeAlias(
-			firstNonEmpty(
-				asString(params["plan_type"]),
-				asString(params["type"]),
-				asString(params["planType"]),
-				asString(params["scope"]),
-			),
-		)
+		resolvedPlanType := normalizedPlanTypeFromParams(params)
 		if resolvedPlanType == "" {
 			resolvedPlanType = inferPlanTypeFromParams(params)
 		}
@@ -372,14 +356,12 @@ func (c *aiAppControl) executePlan(ctx context.Context, operation string, params
 		if err != nil {
 			return ai.AppControlResult{}, err
 		}
+		resolvedPlanType := normalizedPlanTypeFromParams(params)
+		if resolvedPlanType == "" {
+			resolvedPlanType = oldItem.PlanType
+		}
 		in := plan.UpdateInput{
-			PlanType: plan.PlanType(
-				firstNonEmpty(
-					string(normalizePlanTypeAlias(asString(params["plan_type"]))),
-					string(normalizePlanTypeAlias(asString(params["type"]))),
-					string(oldItem.PlanType),
-				),
-			),
+			PlanType:   resolvedPlanType,
 			Title:      firstNonEmpty(asString(params["title"]), oldItem.Title),
 			Content:    firstNonEmpty(asString(params["content"]), oldItem.Content),
 			TargetDate: firstNonEmpty(asString(params["target_date"]), oldItem.TargetDate),
@@ -418,7 +400,7 @@ func (c *aiAppControl) deletePlanItems(
 	ctx context.Context,
 	params map[string]any,
 ) (ai.AppControlResult, error) {
-	planType := firstNonEmpty(asString(params["plan_type"]), asString(params["type"]))
+	planType := string(normalizedPlanTypeFromParams(params))
 	items, err := c.planService.List(ctx, planType)
 	if err != nil {
 		return ai.AppControlResult{}, err
@@ -507,6 +489,17 @@ func normalizePlanTypeAlias(raw string) plan.PlanType {
 	default:
 		return plan.PlanType(strings.TrimSpace(raw))
 	}
+}
+
+func normalizedPlanTypeFromParams(params map[string]any) plan.PlanType {
+	return normalizePlanTypeAlias(
+		firstNonEmpty(
+			asString(params["plan_type"]),
+			asString(params["type"]),
+			asString(params["planType"]),
+			asString(params["scope"]),
+		),
+	)
 }
 
 func inferPlanTypeFromParams(params map[string]any) plan.PlanType {
@@ -620,7 +613,7 @@ func (c *aiAppControl) resolvePlanID(
 		return directID, nil, nil
 	}
 
-	planType := firstNonEmpty(asString(params["plan_type"]), asString(params["type"]))
+	planType := string(normalizedPlanTypeFromParams(params))
 	items, err := c.planService.List(ctx, planType)
 	if err != nil {
 		return "", nil, err

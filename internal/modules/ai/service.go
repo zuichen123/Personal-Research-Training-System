@@ -3,7 +3,6 @@ package ai
 import (
 	"context"
 	"fmt"
-	"math"
 	"net/url"
 	"strings"
 	"sync"
@@ -584,16 +583,15 @@ func (s *Service) Learn(ctx context.Context, req LearnRequest) (LearnResult, err
 	if req.EndDate == "" {
 		req.EndDate = now.AddDate(0, 3, 0).Format("2006-01-02")
 	}
-	if req.ScheduleBinding != nil {
-		scheduleInput := strings.TrimSpace(strings.Join([]string{
-			req.Subject,
-			req.Unit,
-			strings.Join(req.Themes, " "),
-			req.Supplement,
-		}, " "))
-		schedulePatch := s.buildLearningSchedulePromptPatch(ctx, req.ScheduleBinding, scheduleInput)
-		req.PromptPatch = mergePromptRuntimePatch(req.PromptPatch, schedulePatch)
-	}
+	req.PromptPatch = s.applyLearningSchedulePromptPatch(
+		ctx,
+		req.PromptPatch,
+		req.ScheduleBinding,
+		req.Subject,
+		req.Unit,
+		strings.Join(req.Themes, " "),
+		req.Supplement,
+	)
 
 	return s.currentClient().BuildLearningPlan(ctx, req)
 }
@@ -613,17 +611,16 @@ func (s *Service) OptimizeLearningPlan(ctx context.Context, req OptimizeLearnReq
 	if req.Action != "complete_early" && req.Days <= 0 {
 		return OptimizeLearnResult{}, errs.BadRequest("days must be > 0 for postpone/advance")
 	}
-	if req.ScheduleBinding != nil {
-		scheduleInput := strings.TrimSpace(strings.Join([]string{
-			req.Action,
-			req.Reason,
-			req.Supplement,
-			req.Plan.Subject,
-			req.Plan.Unit,
-		}, " "))
-		schedulePatch := s.buildLearningSchedulePromptPatch(ctx, req.ScheduleBinding, scheduleInput)
-		req.PromptPatch = mergePromptRuntimePatch(req.PromptPatch, schedulePatch)
-	}
+	req.PromptPatch = s.applyLearningSchedulePromptPatch(
+		ctx,
+		req.PromptPatch,
+		req.ScheduleBinding,
+		req.Action,
+		req.Reason,
+		req.Supplement,
+		req.Plan.Subject,
+		req.Plan.Unit,
+	)
 	return s.currentClient().OptimizeLearningPlan(ctx, req)
 }
 
@@ -649,7 +646,7 @@ func (s *Service) Score(ctx context.Context, req ScoreRequest) (ScoreResult, err
 	if err != nil {
 		return ScoreResult{}, err
 	}
-	res.Score = math.Round(res.Score*10) / 10
+	res.Score = roundOneDecimal(res.Score)
 	res.Grade = normalizeGrade(res.Score)
 	if strings.TrimSpace(res.Grade) == "" {
 		res.Grade = normalizeGrade(res.Score)
@@ -670,6 +667,20 @@ func normalizeGrade(score float64) string {
 	default:
 		return "E"
 	}
+}
+
+func (s *Service) applyLearningSchedulePromptPatch(
+	ctx context.Context,
+	base PromptRuntimePatch,
+	binding *ScheduleBinding,
+	parts ...string,
+) PromptRuntimePatch {
+	if binding == nil {
+		return base
+	}
+	scheduleInput := joinPromptInput(parts...)
+	schedulePatch := s.buildLearningSchedulePromptPatch(ctx, binding, scheduleInput)
+	return mergePromptRuntimePatch(base, schedulePatch)
 }
 
 func normalizeStringList(items []string) []string {
