@@ -58,9 +58,13 @@ class _AIMultimodalMessageInputState extends State<AIMultimodalMessageInput> {
     penStrokeWidth: 2.4,
     exportBackgroundColor: Colors.white,
   );
-  final List<AIChatAttachmentPayload> _attachments = <AIChatAttachmentPayload>[];
+
+  final List<AIChatAttachmentPayload> _attachments =
+      <AIChatAttachmentPayload>[];
   bool _localSending = false;
   bool _eraserMode = false;
+  bool _toolsExpanded = false;
+  bool _showHandwritingPanel = false;
 
   bool get _busy => widget.sending || _localSending;
 
@@ -76,26 +80,7 @@ class _AIMultimodalMessageInputState extends State<AIMultimodalMessageInput> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            OutlinedButton.icon(
-              onPressed: _busy ? null : _pickImageAttachment,
-              icon: const Icon(Icons.photo_library_outlined),
-              label: const Text('上传图片'),
-            ),
-            OutlinedButton.icon(
-              onPressed: _busy ? null : _pickAudioAttachment,
-              icon: const Icon(Icons.mic_external_on_outlined),
-              label: const Text('上传语音'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        _buildHandwritingPanel(context),
         if (_attachments.isNotEmpty) ...[
-          const SizedBox(height: 8),
           Wrap(
             spacing: 6,
             runSpacing: 6,
@@ -105,15 +90,40 @@ class _AIMultimodalMessageInputState extends State<AIMultimodalMessageInput> {
                 .map(
                   (entry) => InputChip(
                     label: Text(_attachmentLabel(entry.value)),
-                    onDeleted: _busy ? null : () => _removeAttachment(entry.key),
+                    onDeleted: _busy
+                        ? null
+                        : () => _removeAttachment(entry.key),
                   ),
                 )
                 .toList(growable: false),
           ),
+          const SizedBox(height: 8),
         ],
-        const SizedBox(height: 8),
+        if (_toolsExpanded) ...[
+          _buildAttachmentToolPanel(context),
+          if (_showHandwritingPanel) ...[
+            const SizedBox(height: 8),
+            _buildHandwritingPanel(context),
+          ],
+          const SizedBox(height: 8),
+        ],
         Row(
           children: [
+            IconButton.filledTonal(
+              onPressed: _busy
+                  ? null
+                  : () {
+                      setState(() {
+                        _toolsExpanded = !_toolsExpanded;
+                        if (!_toolsExpanded) {
+                          _showHandwritingPanel = false;
+                        }
+                      });
+                    },
+              icon: Icon(_toolsExpanded ? Icons.close : Icons.add),
+              tooltip: _toolsExpanded ? '收起附件工具' : '展开附件工具',
+            ),
+            const SizedBox(width: 8),
             Expanded(
               child: TextField(
                 controller: _inputController,
@@ -140,6 +150,37 @@ class _AIMultimodalMessageInputState extends State<AIMultimodalMessageInput> {
           ],
         ),
       ],
+    );
+  }
+
+  Widget _buildAttachmentToolPanel(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          OutlinedButton.icon(
+            onPressed: _busy ? null : _pickImageAttachment,
+            icon: const Icon(Icons.photo_library_outlined),
+            label: const Text('上传图片'),
+          ),
+          OutlinedButton.icon(
+            onPressed: _busy ? null : _pickAudioAttachment,
+            icon: const Icon(Icons.mic_external_on_outlined),
+            label: const Text('上传语音'),
+          ),
+          FilledButton.tonalIcon(
+            onPressed: _busy
+                ? null
+                : () => setState(
+                    () => _showHandwritingPanel = !_showHandwritingPanel,
+                  ),
+            icon: const Icon(Icons.draw_outlined),
+            label: Text(_showHandwritingPanel ? '收起画板' : '展开画板'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -199,7 +240,7 @@ class _AIMultimodalMessageInputState extends State<AIMultimodalMessageInput> {
           ),
           const SizedBox(height: 6),
           SizedBox(
-            height: 120,
+            height: 160,
             width: double.infinity,
             child: DecoratedBox(
               decoration: BoxDecoration(
@@ -214,7 +255,7 @@ class _AIMultimodalMessageInputState extends State<AIMultimodalMessageInput> {
           ),
           const SizedBox(height: 4),
           const Text(
-            '画板内容会转换成图片附件发送给 AI。',
+            '点击“加入附件”后，画板内容会转换为图片发送给 AI。',
             style: TextStyle(fontSize: 11, color: Colors.grey),
           ),
         ],
@@ -356,7 +397,7 @@ class _AIMultimodalMessageInputState extends State<AIMultimodalMessageInput> {
     }
     final previous = _signatureController;
     final recreated = SignatureController(
-      points: List<Point>.from(previous.points),
+      points: List.from(previous.points),
       penColor: eraserMode ? Colors.white : Colors.black,
       penStrokeWidth: eraserMode ? 14 : 2.4,
       exportBackgroundColor: Colors.white,
@@ -374,7 +415,7 @@ class _AIMultimodalMessageInputState extends State<AIMultimodalMessageInput> {
 
   String _attachmentLabel(AIChatAttachmentPayload attachment) {
     final mime = attachment.mimeType.toLowerCase();
-    final prefix = mime.startsWith('audio/') ? '音频' : '图片';
+    final prefix = mime.startsWith('audio/') ? '语音' : '图片';
     return '$prefix · ${attachment.name}';
   }
 
