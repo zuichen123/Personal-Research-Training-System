@@ -5,6 +5,7 @@ import '../models/practice.dart';
 import '../models/question.dart';
 import '../providers/app_provider.dart';
 import '../widgets/ai_formula_text.dart';
+import 'practice_ai_paper_screen.dart';
 import 'practice_attempt_detail_screen.dart';
 import 'practice_session_screen.dart';
 
@@ -22,6 +23,11 @@ class PracticeScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('练习'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.auto_fix_high),
+            tooltip: 'AI组卷',
+            onPressed: () => _openAIPaperComposer(context),
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () => provider.fetchAttempts(force: true),
@@ -341,5 +347,15 @@ class PracticeScreen extends StatelessWidget {
       return;
     }
     await context.read<AppProvider>().fetchAttempts(force: true);
+  }
+
+  Future<void> _openAIPaperComposer(BuildContext context) async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const PracticeAIPaperScreen()));
+    if (!context.mounted) {
+      return;
+    }
+    await context.read<AppProvider>().fetchQuestions(force: true);
   }
 }
