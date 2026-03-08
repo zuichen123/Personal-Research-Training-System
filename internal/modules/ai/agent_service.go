@@ -43,7 +43,8 @@ type CreateSessionRequest struct {
 }
 
 type SendSessionMessageRequest struct {
-	Content string `json:"content"`
+	Content     string            `json:"content"`
+	Attachments []ImageAttachment `json:"attachments,omitempty"`
 }
 
 type ConfirmActionRequest struct {
@@ -448,8 +449,13 @@ func (s *Service) SendSessionMessage(
 		return SessionMessageResponse{}, errs.BadRequest("session id is required")
 	}
 	content := strings.TrimSpace(req.Content)
-	if content == "" {
-		return SessionMessageResponse{}, errs.BadRequest("content is required")
+	attachments, err := normalizeImageAttachments(req.Attachments)
+	if err != nil {
+		return SessionMessageResponse{}, err
+	}
+	req.Attachments = attachments
+	if content == "" && len(req.Attachments) == 0 {
+		return SessionMessageResponse{}, errs.BadRequest("content or attachments is required")
 	}
 	session, err := s.agentStore.GetSessionByID(ctx, sessionID)
 	if err != nil {
@@ -463,17 +469,25 @@ func (s *Service) SendSessionMessage(
 		return SessionMessageResponse{}, errs.BadRequest("agent is disabled")
 	}
 
+	userMessageContent := content
+	if userMessageContent == "" {
+		userMessageContent = buildAttachmentSummaryText(req.Attachments)
+	} else if len(req.Attachments) > 0 {
+		userMessageContent = strings.TrimSpace(
+			userMessageContent + "\n\n" + buildAttachmentSummaryText(req.Attachments),
+		)
+	}
 	userMessage := AgentMessage{
 		ID:        uuid.NewString(),
 		SessionID: sessionID,
 		Role:      "user",
-		Content:   content,
+		Content:   userMessageContent,
 		CreatedAt: nowRFC3339(),
 	}
 	if _, err := s.agentStore.CreateMessage(ctx, userMessage); err != nil {
 		return SessionMessageResponse{}, err
 	}
-	schedulePatch := s.buildSessionSchedulePromptPatch(ctx, session, content, true)
+	schedulePatch := s.buildSessionSchedulePromptPatch(ctx, session, userMessageContent, true)
 
 	history, err := s.agentStore.ListMessages(ctx, sessionID, agentContextKeepRecent, "")
 	if err != nil {
@@ -485,6 +499,7 @@ func (s *Service) SendSessionMessage(
 	intentResp, intentMeta, err := s.chatWithFallback(ctx, agent, ChatRequest{
 		SystemPrompt: agent.SystemPrompt,
 		Messages:     messages,
+		Attachments:  req.Attachments,
 		Mode:         "detect_intent",
 		PromptPatch:  schedulePatch,
 	})
@@ -564,6 +579,7 @@ func (s *Service) SendSessionMessage(
 	chatResp, chatMeta, err := s.chatWithFallback(ctx, agent, ChatRequest{
 		SystemPrompt: agent.SystemPrompt,
 		Messages:     messages,
+		Attachments:  req.Attachments,
 		Mode:         "chat",
 		PromptPatch:  schedulePatch,
 	})
@@ -1995,6 +2011,34 @@ func supportedToolActionsFromCapabilities(capabilities []string) []string {
 		}
 	}
 	return out
+}
+
+func buildAttachmentSummaryText(attachments []ImageAttachment) string {
+	if len(attachments) == 0 {
+		return ""
+	}
+	imageCount := 0
+	audioCount := 0
+	for _, item := range attachments {
+		mime := strings.ToLower(strings.TrimSpace(item.MimeType))
+		switch {
+		case strings.HasPrefix(mime, "image/"):
+			imageCount++
+		case strings.HasPrefix(mime, "audio/"):
+			audioCount++
+		}
+	}
+	parts := make([]string, 0, 3)
+	if imageCount > 0 {
+		parts = append(parts, fmt.Sprintf("%d image", imageCount))
+	}
+	if audioCount > 0 {
+		parts = append(parts, fmt.Sprintf("%d audio", audioCount))
+	}
+	if len(parts) == 0 {
+		parts = append(parts, fmt.Sprintf("%d file", len(attachments)))
+	}
+	return "[attachments] " + strings.Join(parts, ", ")
 }
 
 func truncateText(text string, max int) string {

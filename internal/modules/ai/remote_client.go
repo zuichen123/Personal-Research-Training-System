@@ -304,7 +304,7 @@ func (c *remoteLLMClient) Chat(ctx context.Context, req ChatRequest) (ChatRespon
 	}
 	prompt := c.buildOperationPrompt(key, userInput, req.PromptPatch)
 	var out ChatResponse
-	if err := c.invokeJSON(ctx, operation, prompt, nil, &out); err != nil {
+	if err := c.invokeJSON(ctx, operation, prompt, req.Attachments, &out); err != nil {
 		return ChatResponse{}, err
 	}
 	if strings.TrimSpace(out.Content) == "" && mode != "detect_intent" {

@@ -611,11 +611,18 @@ class ApiService {
   Future<AISendMessageResult> sendAISessionMessage(
     String sessionId, {
     required String content,
+    List<Map<String, dynamic>> attachments = const <Map<String, dynamic>>[],
     AIStreamProgressCallback? onProgress,
   }) async {
+    final normalizedAttachments = attachments
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
     final data = await _requestAIStreamData(
       path: '/ai/sessions/$sessionId/messages',
-      jsonBody: {'content': content},
+      jsonBody: {
+        'content': content,
+        if (normalizedAttachments.isNotEmpty) 'attachments': normalizedAttachments,
+      },
       timeout: _aiRequestTimeout,
       onProgress: onProgress,
     );

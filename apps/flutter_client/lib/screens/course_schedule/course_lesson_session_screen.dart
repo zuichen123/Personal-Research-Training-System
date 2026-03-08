@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/ai_agent_chat.dart';
 import '../../providers/ai_agent_provider.dart';
 import '../../widgets/ai_formula_text.dart';
+import '../../widgets/ai_multimodal_message_input.dart';
 
 class CourseLessonSessionScreen extends StatefulWidget {
   const CourseLessonSessionScreen({
@@ -30,7 +31,6 @@ class _CourseLessonSessionScreenState extends State<CourseLessonSessionScreen> {
   static const String _autoOpeningPrompt =
       '请作为本节课智能助教先发起课堂开场白，先说明本节课主题、学习目标和上课流程，然后邀请学生开始。';
 
-  final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   bool _preparing = true;
   bool _sending = false;
@@ -46,7 +46,6 @@ class _CourseLessonSessionScreenState extends State<CourseLessonSessionScreen> {
 
   @override
   void dispose() {
-    _inputController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -92,9 +91,12 @@ class _CourseLessonSessionScreenState extends State<CourseLessonSessionScreen> {
     _scrollToBottom();
   }
 
-  Future<void> _send() async {
-    final text = _inputController.text.trim();
-    if (text.isEmpty || _sending) {
+  Future<void> _send(
+    String text,
+    List<AIChatAttachmentPayload> attachments,
+  ) async {
+    final normalizedText = text.trim();
+    if ((normalizedText.isEmpty && attachments.isEmpty) || _sending) {
       return;
     }
     setState(() => _sending = true);
@@ -102,8 +104,10 @@ class _CourseLessonSessionScreenState extends State<CourseLessonSessionScreen> {
     try {
       await provider.selectAgent(widget.agentId);
       await provider.selectSession(widget.sessionId);
-      await provider.sendMessage(text);
-      _inputController.clear();
+      await provider.sendMessage(
+        normalizedText,
+        attachments: attachments.map((item) => item.toJson()).toList(),
+      );
       _scrollToBottom();
     } catch (_) {
       // keep provider error message
@@ -185,32 +189,11 @@ class _CourseLessonSessionScreenState extends State<CourseLessonSessionScreen> {
             top: false,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _inputController,
-                      minLines: 1,
-                      maxLines: 4,
-                      decoration: const InputDecoration(
-                        hintText: '输入要发送给上课助教的内容',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  FilledButton.icon(
-                    onPressed: (_sending || provider.sending) ? null : _send,
-                    icon: (_sending || provider.sending)
-                        ? const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.send),
-                    label: const Text('发送'),
-                  ),
-                ],
+              child: AIMultimodalMessageInput(
+                sending: _sending || provider.sending,
+                hintText: '输入要发送给上课助教的内容...',
+                sendLabel: '发送',
+                onSend: _send,
               ),
             ),
           ),

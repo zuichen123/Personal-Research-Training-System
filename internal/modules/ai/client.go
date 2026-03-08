@@ -331,6 +331,7 @@ type AgentArtifact struct {
 type ChatRequest struct {
 	SystemPrompt string             `json:"system_prompt,omitempty"`
 	Messages     []ChatMessage      `json:"messages"`
+	Attachments  []ImageAttachment  `json:"attachments,omitempty"`
 	Mode         string             `json:"mode,omitempty"`
 	PromptPatch  PromptRuntimePatch `json:"prompt_patch,omitempty"`
 }

@@ -5,6 +5,7 @@ import '../models/ai_agent_chat.dart';
 import '../providers/ai_agent_provider.dart';
 import '../providers/app_provider.dart';
 import '../widgets/ai_formula_text.dart';
+import '../widgets/ai_multimodal_message_input.dart';
 import 'ai_screen.dart';
 
 class AgentChatHubScreen extends StatefulWidget {
@@ -507,7 +508,6 @@ class _AgentTabPanel extends StatefulWidget {
 }
 
 class _AgentTabPanelState extends State<_AgentTabPanel> {
-  final TextEditingController _inputController = TextEditingController();
   final TextEditingController _scheduleThemeController =
       TextEditingController();
   String _scheduleMode = 'auto';
@@ -518,7 +518,6 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
 
   @override
   void dispose() {
-    _inputController.dispose();
     _scheduleThemeController.dispose();
     super.dispose();
   }
@@ -979,44 +978,26 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
           const Divider(height: 1),
           Padding(
             padding: const EdgeInsets.all(8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _inputController,
-                    minLines: 1,
-                    maxLines: 4,
-                    decoration: const InputDecoration(hintText: '输入消息...'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                FilledButton.icon(
-                  onPressed: provider.sending
-                      ? null
-                      : () async {
-                          final text = _inputController.text.trim();
-                          if (text.isEmpty) return;
-                          _inputController.clear();
-                          try {
-                            await provider.sendMessage(text);
-                          } catch (_) {
-                            if (!mounted) return;
-                            final msg = provider.errorMessage ?? '发送失败';
-                            messenger.showSnackBar(
-                              SnackBar(content: Text(msg)),
-                            );
-                          }
-                        },
-                  icon: provider.sending
-                      ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.send),
-                  label: const Text('发送'),
-                ),
-              ],
+            child: AIMultimodalMessageInput(
+              sending: provider.sending,
+              hintText: '输入消息...',
+              sendLabel: '发送',
+              onSend: (text, attachments) async {
+                try {
+                  await provider.sendMessage(
+                    text,
+                    attachments: attachments
+                        .map((item) => item.toJson())
+                        .toList(growable: false),
+                  );
+                } catch (_) {
+                  if (!mounted) return;
+                  final msg = provider.errorMessage ?? '发送失败';
+                  messenger.showSnackBar(
+                    SnackBar(content: Text(msg)),
+                  );
+                }
+              },
             ),
           ),
         ],

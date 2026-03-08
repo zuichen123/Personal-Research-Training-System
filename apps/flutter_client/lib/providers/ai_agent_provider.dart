@@ -288,12 +288,23 @@ class AIAgentProvider with ChangeNotifier {
     });
   }
 
-  Future<void> sendMessage(String content) async {
+  Future<void> sendMessage(
+    String content, {
+    List<Map<String, dynamic>> attachments = const <Map<String, dynamic>>[],
+  }) async {
     if (_selectedAgentId.isEmpty) {
       return;
     }
     final text = content.trim();
-    if (text.isEmpty) {
+    final normalizedAttachments = attachments
+        .map((item) => Map<String, dynamic>.from(item))
+        .where(
+          (item) =>
+              (item['data_url'] ?? '').toString().trim().isNotEmpty &&
+              (item['mime_type'] ?? '').toString().trim().isNotEmpty,
+        )
+        .toList(growable: false);
+    if (text.isEmpty && normalizedAttachments.isEmpty) {
       return;
     }
     final sessionId = selectedSessionIdOf(_selectedAgentId);
@@ -304,12 +315,16 @@ class AIAgentProvider with ChangeNotifier {
     if (activeSessionId.isEmpty) {
       return;
     }
+    final userMessageContent = _buildUserMessagePreview(
+      text,
+      normalizedAttachments,
+    );
     final now = DateTime.now();
     final localUserMessage = _buildLocalMessage(
       id: 'local_user_${now.microsecondsSinceEpoch}',
       sessionId: activeSessionId,
       role: 'user',
-      content: text,
+      content: userMessageContent,
       createdAt: now,
     );
     final localAssistantPlaceholder = _buildLocalMessage(
@@ -332,6 +347,7 @@ class AIAgentProvider with ChangeNotifier {
       final result = await _api.sendAISessionMessage(
         activeSessionId,
         content: text,
+        attachments: normalizedAttachments,
         onProgress: (message) {
           final normalized = message.trim();
           if (normalized.isEmpty) {
@@ -407,6 +423,40 @@ class AIAgentProvider with ChangeNotifier {
       _sending = false;
       notifyListeners();
     }
+  }
+
+  String _buildUserMessagePreview(
+    String text,
+    List<Map<String, dynamic>> attachments,
+  ) {
+    if (attachments.isEmpty) {
+      return text;
+    }
+    var imageCount = 0;
+    var audioCount = 0;
+    for (final item in attachments) {
+      final mime = (item['mime_type'] ?? '').toString().trim().toLowerCase();
+      if (mime.startsWith('image/')) {
+        imageCount++;
+      } else if (mime.startsWith('audio/')) {
+        audioCount++;
+      }
+    }
+    final parts = <String>[];
+    if (imageCount > 0) {
+      parts.add('$imageCount image');
+    }
+    if (audioCount > 0) {
+      parts.add('$audioCount audio');
+    }
+    if (parts.isEmpty) {
+      parts.add('${attachments.length} file');
+    }
+    final summary = '[attachments] ${parts.join(', ')}';
+    if (text.isEmpty) {
+      return summary;
+    }
+    return '$text\n\n$summary';
   }
 
   AIAgentMessage _buildLocalMessage({
