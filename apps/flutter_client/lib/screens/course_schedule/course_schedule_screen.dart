@@ -1041,12 +1041,20 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
   }
 
   void _openPracticePrompt(_CourseLesson lesson) {
+    final hasSession = _lessonSessions.containsKey(lesson.id);
+    final actionLabel = hasSession ? '\u8fdb\u5165\u4f1a\u8bdd' : '\u5f00\u59cb\u4e0a\u8bfe';
     final message =
         '\u5df2\u751f\u6210\u7ec3\u4e60\u63d0\u793a\u8bcd\uff1a${lesson.subject} - ${lesson.topic}\u3002'
-        '\u53ef\u4f7f\u7528\u201c\u5f00\u59cb\u4e0a\u8bfe\u201d\u5c06\u4e0a\u4e0b\u6587\u53d1\u9001\u7ed9\u667a\u80fd\u52a9\u6559\u3002';
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+        '\u53ef\u76f4\u63a5\u70b9\u51fb\u201c$actionLabel\u201d\u53d1\u9001\u4e0a\u4e0b\u6587\u7ed9\u667a\u80fd\u52a9\u6559\u3002';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        action: SnackBarAction(
+          label: actionLabel,
+          onPressed: () => _startLesson(lesson),
+        ),
+      ),
+    );
   }
 
   AIAgentSummary _selectLessonAgent(List<AIAgentSummary> agents) {
