@@ -866,9 +866,30 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
     setState(() => _startingLesson = true);
 
     final agentProvider = context.read<AIAgentProvider>();
+    final appProvider = context.read<AppProvider>();
     try {
+      if (!appProvider.isSectionLoaded(DataSection.profile)) {
+        try {
+          await appProvider.fetchUserProfile();
+        } catch (_) {
+          // Continue without profile; session context will mark profile as not provided.
+        }
+      }
+      final lessonTheme = _buildLessonSessionTheme(
+        lesson: lesson,
+        appProvider: appProvider,
+      );
+
       final existing = _lessonSessions[lesson.id];
       if (existing != null && existing.sessionId.trim().isNotEmpty) {
+        await agentProvider.selectAgent(existing.agentId);
+        await agentProvider.updateSessionScheduleBinding(
+          sessionId: existing.sessionId,
+          mode: 'manual',
+          theme: lessonTheme,
+          autoEnabled: true,
+          manualPlanIds: const <String>[],
+        );
         await _openLessonSession(lesson, existing);
         return;
       }
@@ -899,7 +920,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
       await agentProvider.updateSessionScheduleBinding(
         sessionId: sessionId,
         mode: 'manual',
-        theme: '${lesson.subject}: ${lesson.topic}',
+        theme: lessonTheme,
         autoEnabled: true,
         manualPlanIds: const <String>[],
       );
@@ -1050,6 +1071,66 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
       return withChatIntent.first;
     }
     return agents.first;
+  }
+
+  String _buildLessonSessionTheme({
+    required _CourseLesson lesson,
+    required AppProvider appProvider,
+  }) {
+    final timeline = _buildLessonTimeline(lesson);
+    final currentIndex = timeline.indexWhere((item) => item.id == lesson.id);
+    _CourseLesson? previous;
+    _CourseLesson? next;
+    if (currentIndex > 0) {
+      previous = timeline[currentIndex - 1];
+    }
+    if (currentIndex >= 0 && currentIndex < timeline.length - 1) {
+      next = timeline[currentIndex + 1];
+    }
+
+    final lines = <String>[
+      'course_session_context=true',
+      'current_lesson=${_lessonBrief(lesson)}',
+      'classroom=${lesson.classroom}',
+      'time=${lesson.startTime}-${lesson.endTime}',
+      'previous_lesson=${previous == null ? "-" : _lessonBrief(previous)}',
+      'next_lesson=${next == null ? "-" : _lessonBrief(next)}',
+    ];
+
+    final profile = appProvider.userProfile;
+    if (profile == null) {
+      lines.add('student_profile=not_provided');
+    } else {
+      lines.add('student_id=${profile.userId}');
+      lines.add('student_nickname=${profile.nickname.trim().isEmpty ? "-" : profile.nickname.trim()}');
+      lines.add('academic_status=${profile.academicStatus.trim().isEmpty ? "-" : profile.academicStatus.trim()}');
+      lines.add('daily_study_minutes=${profile.dailyStudyMinutes}');
+      lines.add('goals=${profile.goals.isEmpty ? "-" : profile.goals.join(", ")}');
+      lines.add('weak_subjects=${profile.weakSubjects.isEmpty ? "-" : profile.weakSubjects.join(", ")}');
+      lines.add('target_destination=${profile.targetDestination.trim().isEmpty ? "-" : profile.targetDestination.trim()}');
+      lines.add('notes=${profile.notes.trim().isEmpty ? "-" : profile.notes.trim()}');
+    }
+    return lines.join('; ');
+  }
+
+  List<_CourseLesson> _buildLessonTimeline(_CourseLesson anchor) {
+    final lessons = <_CourseLesson>[];
+    for (var offset = -7; offset <= 7; offset++) {
+      final date = anchor.date.add(Duration(days: offset));
+      lessons.addAll(_lessonsForDate(date));
+    }
+    lessons.sort((left, right) {
+      final dateCompare = left.date.compareTo(right.date);
+      if (dateCompare != 0) {
+        return dateCompare;
+      }
+      return left.period.compareTo(right.period);
+    });
+    return lessons;
+  }
+
+  String _lessonBrief(_CourseLesson lesson) {
+    return '${_dateLabel(lesson.date)} 第${lesson.period}节 ${lesson.subject}/${lesson.topic}';
   }
 
   String _buildMasteryPlanContent({

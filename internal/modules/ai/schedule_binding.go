@@ -30,8 +30,8 @@ type UpdateSessionScheduleBindingRequest struct {
 }
 
 type SessionScheduleBindingResponse struct {
-	Binding     ScheduleBinding `json:"binding"`
-	MatchedPlans []plan.Item    `json:"matched_plans"`
+	Binding      ScheduleBinding `json:"binding"`
+	MatchedPlans []plan.Item     `json:"matched_plans"`
 }
 
 type rankedPlanItem struct {
@@ -475,9 +475,6 @@ func extractScheduleKeywords(text string) []string {
 }
 
 func renderCurrentScheduleSegment(binding ScheduleBinding, items []plan.Item, autoTheme string) string {
-	if len(items) == 0 {
-		return ""
-	}
 	mode := strings.ToLower(strings.TrimSpace(binding.Mode))
 	if mode == "" {
 		mode = scheduleBindingModeAuto
@@ -486,11 +483,18 @@ func renderCurrentScheduleSegment(binding ScheduleBinding, items []plan.Item, au
 	if mode == scheduleBindingModeAuto && strings.TrimSpace(autoTheme) != "" {
 		theme = strings.TrimSpace(autoTheme)
 	}
+	if len(items) == 0 && theme == "" {
+		return ""
+	}
 	lines := make([]string, 0, len(items)+4)
 	lines = append(lines, "Linked schedule context:")
 	lines = append(lines, "binding_mode="+mode)
 	if theme != "" {
 		lines = append(lines, "theme="+theme)
+	}
+	if len(items) == 0 {
+		lines = append(lines, "no_matched_plans=true")
+		return strings.TrimSpace(strings.Join(lines, "\n"))
 	}
 	for idx, item := range items {
 		targetDate := strings.TrimSpace(item.TargetDate)
