@@ -163,3 +163,47 @@ func TestToolDataPreview_EmptyMap(t *testing.T) {
 		t.Fatalf("expected empty preview for empty map, got: %q", got)
 	}
 }
+
+func TestIsDebugGetPromptCommand(t *testing.T) {
+	if !isDebugGetPromptCommand("DEBUG-GET-PTROMPT") {
+		t.Fatal("expected typo command variant to be supported")
+	}
+	if !isDebugGetPromptCommand("debug-get-prompt") {
+		t.Fatal("expected corrected command variant to be supported")
+	}
+	if isDebugGetPromptCommand("DEBUG-GET-XXX") {
+		t.Fatal("did not expect unrelated debug command")
+	}
+}
+
+func TestBuildDebugPromptDump_IncludesRequiredSections(t *testing.T) {
+	svc := NewService(
+		NewMockClient(0),
+		newQuestionServiceForTest(),
+		false,
+		RuntimeConfig{Provider: "mock"},
+	)
+	text := svc.buildDebugPromptDump(
+		Agent{
+			ID:           "agent-1",
+			Name:         "debug-agent",
+			Protocol:     AgentProtocolMock,
+			SystemPrompt: "you are a debug tutor",
+		},
+		PromptRuntimePatch{
+			SegmentUpdates: map[string]string{
+				promptSegmentCurrentSchedule: "lesson context",
+			},
+		},
+		"DEBUG-GET-PTROMPT",
+	)
+	if !strings.Contains(text, "## system_prompt") {
+		t.Fatalf("expected system prompt section, got: %s", text)
+	}
+	if !strings.Contains(text, "## detect_intent_prompt_effective") {
+		t.Fatalf("expected detect_intent section, got: %s", text)
+	}
+	if !strings.Contains(text, "## agent_chat_prompt_effective") {
+		t.Fatalf("expected agent_chat section, got: %s", text)
+	}
+}

@@ -26,6 +26,9 @@ const (
 	agentAutoCompressMinNewMessages = 30
 	agentAutoCompressCooldown       = 30 * time.Minute
 	agentAutoCompressStaleAfter     = 7 * 24 * time.Hour
+
+	agentDebugGetPromptCommand      = "debug-get-ptrompt"
+	agentDebugGetPromptCommandAlias = "debug-get-prompt"
 )
 
 type UpsertAgentRequest struct {
@@ -488,6 +491,36 @@ func (s *Service) SendSessionMessage(
 		return SessionMessageResponse{}, err
 	}
 	schedulePatch := s.buildSessionSchedulePromptPatch(ctx, session, userMessageContent, true)
+	if isDebugGetPromptCommand(content) {
+		debugIntent := IntentResult{
+			Action:     "none",
+			Confidence: 1,
+			Params: map[string]any{
+				"debug": "prompt_dump",
+			},
+		}
+		assistant := AgentMessage{
+			ID:           uuid.NewString(),
+			SessionID:    sessionID,
+			Role:         "assistant",
+			Content:      s.buildDebugPromptDump(agent, schedulePatch, content),
+			Intent:       &debugIntent,
+			ProviderUsed: "local_debug",
+			ModelUsed:    "prompt_runtime",
+			FallbackUsed: false,
+			LatencyMS:    0,
+			CreatedAt:    nowRFC3339(),
+		}
+		created, err := s.agentStore.CreateMessage(ctx, assistant)
+		if err != nil {
+			return SessionMessageResponse{}, err
+		}
+		s.runAutoCompressionBestEffort(ctx, sessionID)
+		return SessionMessageResponse{
+			AssistantMessage: created,
+			Intent:           debugIntent,
+		}, nil
+	}
 
 	history, err := s.agentStore.ListMessages(ctx, sessionID, agentContextKeepRecent, "")
 	if err != nil {
@@ -2073,6 +2106,58 @@ func buildAttachmentSummaryText(attachments []ImageAttachment) string {
 		parts = append(parts, fmt.Sprintf("%d file", len(attachments)))
 	}
 	return "[attachments] " + strings.Join(parts, ", ")
+}
+
+func isDebugGetPromptCommand(content string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(content))
+	return normalized == agentDebugGetPromptCommand || normalized == agentDebugGetPromptCommandAlias
+}
+
+func (s *Service) buildDebugPromptDump(agent Agent, patch PromptRuntimePatch, command string) string {
+	effectivePatch := buildAgentToolPromptPatch(agent, patch)
+	normalizedPatch := normalizePromptRuntimePatch(effectivePatch)
+	patchText := "{}"
+	if raw, err := json.MarshalIndent(normalizedPatch, "", "  "); err == nil {
+		patchText = strings.TrimSpace(string(raw))
+	}
+
+	detectIntentPrompt := ""
+	agentChatPrompt := ""
+	if s.promptRuntime != nil {
+		detectIntentPrompt = strings.TrimSpace(
+			s.promptRuntime.ComposeWithPatch(PromptKeyDetectIntent, "", normalizedPatch),
+		)
+		agentChatPrompt = strings.TrimSpace(
+			s.promptRuntime.ComposeWithPatch(PromptKeyAgentChat, "", normalizedPatch),
+		)
+	}
+	if detectIntentPrompt == "" {
+		detectIntentPrompt = "(empty)"
+	}
+	if agentChatPrompt == "" {
+		agentChatPrompt = "(empty)"
+	}
+
+	sections := []string{
+		"DEBUG PROMPT DUMP",
+		"command=" + strings.TrimSpace(command),
+		"agent_id=" + strings.TrimSpace(agent.ID),
+		"agent_name=" + strings.TrimSpace(agent.Name),
+		"agent_protocol=" + strings.TrimSpace(string(agent.Protocol)),
+		"",
+		"## system_prompt",
+		strings.TrimSpace(agent.SystemPrompt),
+		"",
+		"## runtime_patch",
+		patchText,
+		"",
+		"## detect_intent_prompt_effective",
+		detectIntentPrompt,
+		"",
+		"## agent_chat_prompt_effective",
+		agentChatPrompt,
+	}
+	return strings.TrimSpace(strings.Join(sections, "\n"))
 }
 
 func truncateText(text string, max int) string {
