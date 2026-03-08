@@ -1,0 +1,22 @@
+﻿Return ONLY JSON:
+{
+  "score":0-100,
+  "single_evaluation":"string",
+  "comprehensive_evaluation":"string",
+  "single_explanation":"string",
+  "comprehensive_explanation":"string",
+  "knowledge_supplements":["string"],
+  "retest_questions":[
+    {
+      "title":"string",
+      "stem":"string",
+      "type":"short_answer",
+      "subject":"string",
+      "source":"wrong_book",
+      "answer_key":["string"],
+      "tags":["retest"],
+      "difficulty":1-5,
+      "mastery_level":0
+    }
+  ]
+}

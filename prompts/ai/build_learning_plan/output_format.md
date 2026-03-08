@@ -1,0 +1,44 @@
+﻿Return ONLY JSON with this schema:
+{
+  "mode":"string",
+  "subject":"string",
+  "unit":"string",
+  "created_at":"RFC3339 string",
+  "final_goal":"string",
+  "current_status":"string",
+  "plan_start_date":"YYYY-MM-DD",
+  "plan_end_date":"YYYY-MM-DD",
+  "study_outline":["string"],
+  "review_checklist":["string"],
+  "stage_suggestion":"string",
+  "missing_fields":["string"],
+  "follow_up_questions":["string"],
+  "themes":[
+    {
+      "name":"string",
+      "estimated_hours":number,
+      "children":[
+        {
+          "level":"year|month|week|day|task",
+          "title":"string",
+          "estimated_hours":number,
+          "start_date":"YYYY-MM-DD",
+          "end_date":"YYYY-MM-DD",
+          "details":["string"],
+          "children":[]
+        }
+      ]
+    }
+  ],
+  "plan_items":[
+    {
+      "plan_type":"year_plan|month_plan|week_plan|day_plan|current_phase",
+      "title":"string",
+      "content":"string",
+      "target_date":"YYYY-MM-DD",
+      "status":"pending|in_progress|done|rescheduled",
+      "priority":1
+    }
+  ],
+  "optimization_hints":["string"]
+}
