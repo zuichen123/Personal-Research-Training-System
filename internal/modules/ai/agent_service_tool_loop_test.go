@@ -171,6 +171,9 @@ func TestIsDebugGetPromptCommand(t *testing.T) {
 	if !isDebugGetPromptCommand("debug-get-prompt") {
 		t.Fatal("expected corrected command variant to be supported")
 	}
+	if !isDebugGetPromptCommand("DEBUG") {
+		t.Fatal("expected short debug command variant to be supported")
+	}
 	if isDebugGetPromptCommand("DEBUG-GET-XXX") {
 		t.Fatal("did not expect unrelated debug command")
 	}

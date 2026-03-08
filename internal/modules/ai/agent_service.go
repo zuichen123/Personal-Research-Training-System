@@ -29,6 +29,7 @@ const (
 
 	agentDebugGetPromptCommand      = "debug-get-ptrompt"
 	agentDebugGetPromptCommandAlias = "debug-get-prompt"
+	agentDebugGetPromptCommandShort = "debug"
 )
 
 type UpsertAgentRequest struct {
@@ -2110,7 +2111,9 @@ func buildAttachmentSummaryText(attachments []ImageAttachment) string {
 
 func isDebugGetPromptCommand(content string) bool {
 	normalized := strings.ToLower(strings.TrimSpace(content))
-	return normalized == agentDebugGetPromptCommand || normalized == agentDebugGetPromptCommandAlias
+	return normalized == agentDebugGetPromptCommand ||
+		normalized == agentDebugGetPromptCommandAlias ||
+		normalized == agentDebugGetPromptCommandShort
 }
 
 func (s *Service) buildDebugPromptDump(agent Agent, patch PromptRuntimePatch, command string) string {
