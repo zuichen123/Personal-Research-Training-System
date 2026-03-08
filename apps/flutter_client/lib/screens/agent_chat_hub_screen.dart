@@ -256,10 +256,13 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
       (draft['fallback_base_url'] ?? '').toString(),
       template?.fallback.baseUrl ?? '',
     ]);
-    final initialPrompt = _firstNonEmpty([
+    final initialSystemPrompt = _firstNonEmpty([
       (draft['system_prompt'] ?? '').toString(),
       template?.systemPrompt ?? '',
     ]);
+    final initialSystemPromptSections = _splitAgentSystemPrompt(
+      initialSystemPrompt,
+    );
     final initialEnabled = _asBool(
       draft['enabled'],
       fallback: template?.enabled ?? true,
@@ -284,7 +287,21 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
     final fallbackBaseUrlController = TextEditingController(
       text: initialFallbackBaseUrl,
     );
-    final promptController = TextEditingController(text: initialPrompt);
+    final systemPromptRoleController = TextEditingController(
+      text: initialSystemPromptSections['role'] ?? '',
+    );
+    final systemPromptTaskController = TextEditingController(
+      text: initialSystemPromptSections['task_prompt'] ?? '',
+    );
+    final systemPromptToolController = TextEditingController(
+      text: initialSystemPromptSections['tool_instructions'] ?? '',
+    );
+    final systemPromptRulesController = TextEditingController(
+      text: initialSystemPromptSections['rules'] ?? '',
+    );
+    final systemPromptExtraController = TextEditingController(
+      text: initialSystemPromptSections['extra'] ?? '',
+    );
     var protocol = initialProtocol;
     var enabled = initialEnabled;
 
@@ -334,7 +351,31 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
                   _dialogInput(fallbackApiKeyController, '备 API Key（可选）'),
                   _dialogInput(fallbackBaseUrlController, '备 Base URL（可选）'),
                   const SizedBox(height: 8),
-                  _dialogInput(promptController, '系统提示词', maxLines: 3),
+                  _dialogInput(
+                    systemPromptRoleController,
+                    'System Prompt - role/persona',
+                    maxLines: 3,
+                  ),
+                  _dialogInput(
+                    systemPromptTaskController,
+                    'System Prompt - task_prompt',
+                    maxLines: 6,
+                  ),
+                  _dialogInput(
+                    systemPromptToolController,
+                    'System Prompt - tool_instructions',
+                    maxLines: 4,
+                  ),
+                  _dialogInput(
+                    systemPromptRulesController,
+                    'System Prompt - rules',
+                    maxLines: 4,
+                  ),
+                  _dialogInput(
+                    systemPromptExtraController,
+                    'System Prompt - extra (optional)',
+                    maxLines: 4,
+                  ),
                   const SizedBox(height: 8),
                   SwitchListTile(
                     value: enabled,
@@ -357,6 +398,13 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
             FilledButton(
               onPressed: () async {
                 try {
+                  final composedSystemPrompt = _composeAgentSystemPrompt(
+                    role: systemPromptRoleController.text,
+                    taskPrompt: systemPromptTaskController.text,
+                    toolInstructions: systemPromptToolController.text,
+                    rules: systemPromptRulesController.text,
+                    extra: systemPromptExtraController.text,
+                  );
                   await context.read<AIAgentProvider>().createAgent(
                     name: nameController.text.trim(),
                     protocol: protocol,
@@ -366,7 +414,7 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
                     fallbackBaseUrl: fallbackBaseUrlController.text.trim(),
                     fallbackApiKey: fallbackApiKeyController.text.trim(),
                     fallbackModel: fallbackModelController.text.trim(),
-                    systemPrompt: promptController.text.trim(),
+                    systemPrompt: composedSystemPrompt,
                     enabled: enabled,
                   );
                   if (!ctx.mounted) return;
@@ -386,6 +434,18 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
         );
       },
     );
+    nameController.dispose();
+    primaryModelController.dispose();
+    primaryApiKeyController.dispose();
+    primaryBaseUrlController.dispose();
+    fallbackModelController.dispose();
+    fallbackApiKeyController.dispose();
+    fallbackBaseUrlController.dispose();
+    systemPromptRoleController.dispose();
+    systemPromptTaskController.dispose();
+    systemPromptToolController.dispose();
+    systemPromptRulesController.dispose();
+    systemPromptExtraController.dispose();
   }
 
   Future<void> _deleteAgent(AIAgentSummary agent) async {
@@ -459,6 +519,105 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
       final msg = provider.errorMessage ?? '压缩失败';
       messenger.showSnackBar(SnackBar(content: Text(msg)));
     }
+  }
+
+  Map<String, String> _splitAgentSystemPrompt(String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) {
+      return const <String, String>{};
+    }
+    final hasHeaders = RegExp(r'^##\s+', multiLine: true).hasMatch(text);
+    if (!hasHeaders) {
+      return <String, String>{'task_prompt': text};
+    }
+
+    final buckets = <String, List<String>>{};
+    String currentKey = 'extra';
+    for (final rawLine in text.split('\n')) {
+      final line = rawLine.trimRight();
+      final match = RegExp(r'^##\s+(.+)$').firstMatch(line.trim());
+      if (match != null) {
+        final normalized = _normalizeAgentPromptSectionKey(
+          match.group(1) ?? '',
+        );
+        currentKey = normalized.isEmpty ? 'extra' : normalized;
+        buckets.putIfAbsent(currentKey, () => <String>[]);
+        continue;
+      }
+      buckets.putIfAbsent(currentKey, () => <String>[]).add(line);
+    }
+
+    final out = <String, String>{};
+    buckets.forEach((key, lines) {
+      final value = lines.join('\n').trim();
+      if (value.isNotEmpty) {
+        out[key] = value;
+      }
+    });
+    return out;
+  }
+
+  String _normalizeAgentPromptSectionKey(String raw) {
+    final key = raw
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp('[^a-z0-9 _-]'), '')
+        .replaceAll('-', '_')
+        .replaceAll(' ', '_');
+    switch (key) {
+      case 'role':
+      case 'persona':
+      case 'identity':
+        return 'role';
+      case 'task_prompt':
+      case 'task':
+      case 'instructions':
+      case 'instruction':
+        return 'task_prompt';
+      case 'tool_instructions':
+      case 'tools':
+      case 'tool':
+        return 'tool_instructions';
+      case 'rules':
+      case 'rule':
+        return 'rules';
+      case 'extra':
+        return 'extra';
+      default:
+        return '';
+    }
+  }
+
+  String _composeAgentSystemPrompt({
+    required String role,
+    required String taskPrompt,
+    required String toolInstructions,
+    required String rules,
+    required String extra,
+  }) {
+    final blocks = <String>[];
+    final roleText = role.trim();
+    final taskText = taskPrompt.trim();
+    final toolText = toolInstructions.trim();
+    final rulesText = rules.trim();
+    final extraText = extra.trim();
+
+    if (roleText.isNotEmpty) {
+      blocks.add('## role\n$roleText');
+    }
+    if (taskText.isNotEmpty) {
+      blocks.add('## task_prompt\n$taskText');
+    }
+    if (toolText.isNotEmpty) {
+      blocks.add('## tool_instructions\n$toolText');
+    }
+    if (rulesText.isNotEmpty) {
+      blocks.add('## rules\n$rulesText');
+    }
+    if (extraText.isNotEmpty) {
+      blocks.add(extraText);
+    }
+    return blocks.join('\n\n').trim();
   }
 
   Widget _dialogInput(
@@ -993,9 +1152,7 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
                 } catch (_) {
                   if (!mounted) return;
                   final msg = provider.errorMessage ?? '发送失败';
-                  messenger.showSnackBar(
-                    SnackBar(content: Text(msg)),
-                  );
+                  messenger.showSnackBar(SnackBar(content: Text(msg)));
                 }
               },
             ),
