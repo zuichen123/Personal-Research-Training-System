@@ -822,6 +822,9 @@ class _SettingsScreenState extends State<SettingsScreen>
             (draft['system_prompt'] ?? '').toString(),
             template?.systemPrompt ?? '',
           ]);
+    final initialSystemPromptSections = _splitAgentSystemPrompt(
+      initialSystemPrompt,
+    );
     final initialEnabled = isEdit
         ? agent.enabled
         : _asBool(draft['enabled'], fallback: template?.enabled ?? true);
@@ -846,8 +849,20 @@ class _SettingsScreenState extends State<SettingsScreen>
     final fallbackModelController = TextEditingController(
       text: initialFallbackModel,
     );
-    final systemPromptController = TextEditingController(
-      text: initialSystemPrompt,
+    final systemPromptRoleController = TextEditingController(
+      text: initialSystemPromptSections['role'] ?? '',
+    );
+    final systemPromptTaskController = TextEditingController(
+      text: initialSystemPromptSections['task_prompt'] ?? '',
+    );
+    final systemPromptToolController = TextEditingController(
+      text: initialSystemPromptSections['tool_instructions'] ?? '',
+    );
+    final systemPromptRulesController = TextEditingController(
+      text: initialSystemPromptSections['rules'] ?? '',
+    );
+    final systemPromptExtraController = TextEditingController(
+      text: initialSystemPromptSections['extra'] ?? '',
     );
     var enabled = initialEnabled;
     final messenger = ScaffoldMessenger.of(context);
@@ -916,7 +931,36 @@ class _SettingsScreenState extends State<SettingsScreen>
                         fallbackApiKeyController,
                         isEdit ? '备 API Key（留空=保持不变）' : '备 API Key（可选）',
                       ),
-                      _input(systemPromptController, '系统提示词', maxLines: 4),
+                      _input(
+                        systemPromptRoleController,
+                        'System Prompt - role/persona',
+                        maxLines: 3,
+                        minLines: 2,
+                      ),
+                      _input(
+                        systemPromptTaskController,
+                        'System Prompt - task_prompt',
+                        maxLines: 6,
+                        minLines: 3,
+                      ),
+                      _input(
+                        systemPromptToolController,
+                        'System Prompt - tool_instructions',
+                        maxLines: 4,
+                        minLines: 2,
+                      ),
+                      _input(
+                        systemPromptRulesController,
+                        'System Prompt - rules',
+                        maxLines: 4,
+                        minLines: 2,
+                      ),
+                      _input(
+                        systemPromptExtraController,
+                        'System Prompt - extra (optional)',
+                        maxLines: 4,
+                        minLines: 2,
+                      ),
                       SwitchListTile(
                         value: enabled,
                         contentPadding: EdgeInsets.zero,
@@ -941,6 +985,13 @@ class _SettingsScreenState extends State<SettingsScreen>
                     final primaryModel = primaryModelController.text.trim();
                     final primaryBaseUrl = primaryBaseUrlController.text.trim();
                     final primaryApiKey = primaryApiKeyController.text.trim();
+                    final composedSystemPrompt = _composeAgentSystemPrompt(
+                      role: systemPromptRoleController.text,
+                      taskPrompt: systemPromptTaskController.text,
+                      toolInstructions: systemPromptToolController.text,
+                      rules: systemPromptRulesController.text,
+                      extra: systemPromptExtraController.text,
+                    );
                     if (name.isEmpty || primaryModel.isEmpty) {
                       messenger.showSnackBar(
                         const SnackBar(content: Text('名称和主模型不能为空')),
@@ -961,7 +1012,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                               .trim(),
                           fallbackApiKey: fallbackApiKeyController.text.trim(),
                           fallbackModel: fallbackModelController.text.trim(),
-                          systemPrompt: systemPromptController.text.trim(),
+                          systemPrompt: composedSystemPrompt,
                           enabled: enabled,
                         );
                       } else {
@@ -975,7 +1026,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                               .trim(),
                           fallbackApiKey: fallbackApiKeyController.text.trim(),
                           fallbackModel: fallbackModelController.text.trim(),
-                          systemPrompt: systemPromptController.text.trim(),
+                          systemPrompt: composedSystemPrompt,
                           enabled: enabled,
                         );
                       }
@@ -1003,7 +1054,108 @@ class _SettingsScreenState extends State<SettingsScreen>
     fallbackBaseUrlController.dispose();
     fallbackApiKeyController.dispose();
     fallbackModelController.dispose();
-    systemPromptController.dispose();
+    systemPromptRoleController.dispose();
+    systemPromptTaskController.dispose();
+    systemPromptToolController.dispose();
+    systemPromptRulesController.dispose();
+    systemPromptExtraController.dispose();
+  }
+
+  Map<String, String> _splitAgentSystemPrompt(String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) {
+      return const <String, String>{};
+    }
+    final hasHeaders = RegExp(r'^##\s+', multiLine: true).hasMatch(text);
+    if (!hasHeaders) {
+      return <String, String>{'task_prompt': text};
+    }
+
+    final buckets = <String, List<String>>{};
+    String currentKey = 'extra';
+    for (final rawLine in text.split('\n')) {
+      final line = rawLine.trimRight();
+      final match = RegExp(r'^##\s+(.+)$').firstMatch(line.trim());
+      if (match != null) {
+        final normalized = _normalizeAgentPromptSectionKey(match.group(1) ?? '');
+        currentKey = normalized.isEmpty ? 'extra' : normalized;
+        buckets.putIfAbsent(currentKey, () => <String>[]);
+        continue;
+      }
+      buckets.putIfAbsent(currentKey, () => <String>[]).add(line);
+    }
+
+    final out = <String, String>{};
+    buckets.forEach((key, lines) {
+      final value = lines.join('\n').trim();
+      if (value.isNotEmpty) {
+        out[key] = value;
+      }
+    });
+    return out;
+  }
+
+  String _normalizeAgentPromptSectionKey(String raw) {
+    final key = raw
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp('[^a-z0-9 _-]'), '')
+        .replaceAll('-', '_')
+        .replaceAll(' ', '_');
+    switch (key) {
+      case 'role':
+      case 'persona':
+      case 'identity':
+        return 'role';
+      case 'task_prompt':
+      case 'task':
+      case 'instructions':
+      case 'instruction':
+        return 'task_prompt';
+      case 'tool_instructions':
+      case 'tools':
+      case 'tool':
+        return 'tool_instructions';
+      case 'rules':
+      case 'rule':
+        return 'rules';
+      case 'extra':
+        return 'extra';
+      default:
+        return '';
+    }
+  }
+
+  String _composeAgentSystemPrompt({
+    required String role,
+    required String taskPrompt,
+    required String toolInstructions,
+    required String rules,
+    required String extra,
+  }) {
+    final blocks = <String>[];
+    final roleText = role.trim();
+    final taskText = taskPrompt.trim();
+    final toolText = toolInstructions.trim();
+    final rulesText = rules.trim();
+    final extraText = extra.trim();
+
+    if (roleText.isNotEmpty) {
+      blocks.add('## role\n$roleText');
+    }
+    if (taskText.isNotEmpty) {
+      blocks.add('## task_prompt\n$taskText');
+    }
+    if (toolText.isNotEmpty) {
+      blocks.add('## tool_instructions\n$toolText');
+    }
+    if (rulesText.isNotEmpty) {
+      blocks.add('## rules\n$rulesText');
+    }
+    if (extraText.isNotEmpty) {
+      blocks.add(extraText);
+    }
+    return blocks.join('\n\n').trim();
   }
 
   AIAgentSummary? _preferredAgentTemplate(AIAgentProvider provider) {
