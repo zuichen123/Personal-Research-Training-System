@@ -7,7 +7,16 @@ import '../widgets/ai_formula_text.dart';
 import 'practice_session_screen.dart';
 
 class PracticeAIPaperScreen extends StatefulWidget {
-  const PracticeAIPaperScreen({super.key});
+  const PracticeAIPaperScreen({
+    super.key,
+    this.initialSubject = 'math',
+    this.initialTopic = '函数综合',
+    this.initialSubtopics = const <String>[],
+  });
+
+  final String initialSubject;
+  final String initialTopic;
+  final List<String> initialSubtopics;
 
   @override
   State<PracticeAIPaperScreen> createState() => _PracticeAIPaperScreenState();
@@ -33,23 +42,29 @@ class _PracticeAIPaperScreenState extends State<PracticeAIPaperScreen> {
     mission: '负责生成综合应用题，强调建模与解题过程。',
   );
 
-  final TextEditingController _subjectController = TextEditingController(
-    text: 'math',
-  );
-  final TextEditingController _topicController = TextEditingController(
-    text: '函数综合',
-  );
+  final TextEditingController _subjectController = TextEditingController();
+  final TextEditingController _topicController = TextEditingController();
   final TextEditingController _countController = TextEditingController(
     text: '6',
   );
   final TextEditingController _difficultyController = TextEditingController(
     text: '3',
   );
+  final TextEditingController _subtopicController = TextEditingController();
 
   bool _generating = false;
   _PaperPlan? _latestPlan;
   List<Question> _paperQuestions = const <Question>[];
   final List<_AgentRunLog> _runLogs = <_AgentRunLog>[];
+  final List<String> _subtopics = <String>[];
+
+  @override
+  void initState() {
+    super.initState();
+    _subjectController.text = widget.initialSubject;
+    _topicController.text = widget.initialTopic;
+    _subtopics.addAll(_normalizeSubtopics(widget.initialSubtopics));
+  }
 
   @override
   void dispose() {
@@ -57,6 +72,7 @@ class _PracticeAIPaperScreenState extends State<PracticeAIPaperScreen> {
     _topicController.dispose();
     _countController.dispose();
     _difficultyController.dispose();
+    _subtopicController.dispose();
     super.dispose();
   }
 
@@ -134,11 +150,60 @@ class _PracticeAIPaperScreenState extends State<PracticeAIPaperScreen> {
             TextField(
               controller: _topicController,
               decoration: const InputDecoration(
-                labelText: '主题',
+                labelText: '主主题',
                 hintText: '如：函数综合',
                 border: OutlineInputBorder(),
               ),
             ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _subtopicController,
+                    decoration: const InputDecoration(
+                      labelText: 'AI子板块（可选）',
+                      hintText: '例如：一元函数 / 导数应用',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.tonalIcon(
+                  onPressed: _generating ? null : _appendSubtopic,
+                  icon: const Icon(Icons.add),
+                  label: const Text('添加'),
+                ),
+              ],
+            ),
+            if (_subtopics.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: _subtopics
+                    .asMap()
+                    .entries
+                    .map((entry) {
+                      return InputChip(
+                        label: Text(entry.value),
+                        onDeleted: _generating
+                            ? null
+                            : () {
+                                setState(() {
+                                  _subtopics.removeAt(entry.key);
+                                });
+                              },
+                      );
+                    })
+                    .toList(growable: false),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                '已开启子板块细分：组卷会按子板块分别调用 AI。',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ],
             const SizedBox(height: 10),
             Row(
               children: [
@@ -327,10 +392,13 @@ class _PracticeAIPaperScreenState extends State<PracticeAIPaperScreen> {
       return;
     }
 
-    final plan = _PaperPlanner.plan(totalCount);
+    final segments = _effectiveSubtopics(topic);
+    final segmentCounts = _splitCount(totalCount, segments.length);
+    final overallPlan = _PaperPlanner.plan(totalCount);
+
     setState(() {
       _generating = true;
-      _latestPlan = plan;
+      _latestPlan = overallPlan;
       _paperQuestions = const <Question>[];
       _runLogs.clear();
     });
@@ -338,31 +406,45 @@ class _PracticeAIPaperScreenState extends State<PracticeAIPaperScreen> {
     _appendLog(
       agentName: _controllerAgent.name,
       status: _RunStatus.success,
-      message: '完成编排：选择题 ${plan.objectiveCount}，应用题 ${plan.applicationCount}',
+      message:
+          '总卷编排完成：选择题 ${overallPlan.objectiveCount}，应用题 ${overallPlan.applicationCount}，子板块 ${segments.length} 个',
     );
 
-    final objective = await _runGenerationAgent(
-      provider: provider,
-      agent: _objectiveAgent,
-      subject: subject,
-      topic: topic,
-      questionType: 'single_choice',
-      count: plan.objectiveCount,
-      difficulty: difficulty,
-      plan: plan,
-    );
-    final application = await _runGenerationAgent(
-      provider: provider,
-      agent: _applicationAgent,
-      subject: subject,
-      topic: topic,
-      questionType: 'short_answer',
-      count: plan.applicationCount,
-      difficulty: difficulty,
-      plan: plan,
-    );
+    final combined = <Question>[];
+    for (var i = 0; i < segments.length; i++) {
+      final segmentTopic = segments[i];
+      final segmentCount = segmentCounts[i];
+      final segmentPlan = _PaperPlanner.plan(segmentCount);
 
-    final combined = <Question>[...objective, ...application];
+      _appendLog(
+        agentName: _controllerAgent.name,
+        status: _RunStatus.running,
+        message:
+            '子板块 ${i + 1}/${segments.length}：$segmentTopic，题量 ${segmentPlan.totalCount}',
+      );
+
+      final objective = await _runGenerationAgent(
+        provider: provider,
+        agent: _objectiveAgent,
+        subject: subject,
+        topic: segmentTopic,
+        questionType: 'single_choice',
+        count: segmentPlan.objectiveCount,
+        difficulty: difficulty,
+      );
+      final application = await _runGenerationAgent(
+        provider: provider,
+        agent: _applicationAgent,
+        subject: subject,
+        topic: segmentTopic,
+        questionType: 'short_answer',
+        count: segmentPlan.applicationCount,
+        difficulty: difficulty,
+      );
+      combined.addAll(objective);
+      combined.addAll(application);
+    }
+
     if (combined.isNotEmpty) {
       await provider.fetchQuestions(force: true);
     }
@@ -376,7 +458,7 @@ class _PracticeAIPaperScreenState extends State<PracticeAIPaperScreen> {
     });
 
     if (combined.isEmpty) {
-      _showSnack('组卷失败：未生成可用题目');
+      _showSnack('组卷失败：未生成可用题目，请检查 AI 配置或重试');
       return;
     }
     _showSnack('组卷完成，共 ${combined.length} 题');
@@ -390,7 +472,6 @@ class _PracticeAIPaperScreenState extends State<PracticeAIPaperScreen> {
     required String questionType,
     required int count,
     required int difficulty,
-    required _PaperPlan plan,
   }) async {
     if (count <= 0) {
       _appendLog(
@@ -404,23 +485,16 @@ class _PracticeAIPaperScreenState extends State<PracticeAIPaperScreen> {
     _appendLog(
       agentName: agent.name,
       status: _RunStatus.running,
-      message: '开始生成 $count 题',
+      message: '开始生成 $count 题（$topic）',
     );
 
     try {
       final generated = await provider.apiService.generateAIQuestions({
-        'topic': '$topic（${agent.role}）',
+        'topic': '$topic；请只生成${_questionTypeLabel(questionType)}。',
         'subject': subject,
         'scope': 'practice_paper',
         'count': count,
         'difficulty': difficulty,
-        'question_type': questionType,
-        'agent_role': agent.role,
-        'paper_constraints': {
-          'total_count': plan.totalCount,
-          'objective_count': plan.objectiveCount,
-          'application_count': plan.applicationCount,
-        },
       }, persist: true);
       _appendLog(
         agentName: agent.name,
@@ -436,6 +510,53 @@ class _PracticeAIPaperScreenState extends State<PracticeAIPaperScreen> {
       );
       return const <Question>[];
     }
+  }
+
+  void _appendSubtopic() {
+    final raw = _subtopicController.text.trim();
+    if (raw.isEmpty) {
+      return;
+    }
+    if (_subtopics.contains(raw)) {
+      _subtopicController.clear();
+      return;
+    }
+    setState(() {
+      _subtopics.add(raw);
+      _subtopicController.clear();
+    });
+  }
+
+  List<String> _effectiveSubtopics(String topic) {
+    if (_subtopics.isEmpty) {
+      return <String>[topic];
+    }
+    return List<String>.from(_subtopics);
+  }
+
+  List<String> _normalizeSubtopics(List<String> values) {
+    final out = <String>[];
+    for (final item in values) {
+      final value = item.trim();
+      if (value.isEmpty || out.contains(value)) {
+        continue;
+      }
+      out.add(value);
+    }
+    return out;
+  }
+
+  List<int> _splitCount(int total, int segments) {
+    if (segments <= 1) {
+      return <int>[total];
+    }
+    final base = total ~/ segments;
+    final remainder = total % segments;
+    final out = <int>[];
+    for (var i = 0; i < segments; i++) {
+      out.add(base + (i < remainder ? 1 : 0));
+    }
+    return out;
   }
 
   void _appendLog({
