@@ -8,6 +8,10 @@
 
 ## 2) 默认工作流
 - 开始前先执行 `git status --short`，确认当前基线。
+- 工作流内容查询入口：
+  - 仓库级通用流程、测试闭环、提交规则优先查本文件 `AGENTS.md`。
+  - 任务状态流转、任务拆解、驳回原因、测试记录优先查 Notion 中 `Self-Study-Tool` 数据库对应任务页。
+  - 接口复用与前后端 API 对齐优先查 Notion API 清单页：`https://www.notion.so/31cba63208ec810ebdebd78d08036fe3`
 - 开始实现前，先在 Notion 查阅 API 清单页，优先复用已有接口，避免重复造轮子：
   - `https://www.notion.so/31cba63208ec810ebdebd78d08036fe3`
 - 若 Notion 清单与代码不一致，先更新 Notion 再改代码，并在回执中说明差异。
