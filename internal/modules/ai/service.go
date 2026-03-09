@@ -583,15 +583,7 @@ func (s *Service) Learn(ctx context.Context, req LearnRequest) (LearnResult, err
 	if req.EndDate == "" {
 		req.EndDate = now.AddDate(0, 3, 0).Format("2006-01-02")
 	}
-	req.PromptPatch = s.applyLearningSchedulePromptPatch(
-		ctx,
-		req.PromptPatch,
-		req.ScheduleBinding,
-		req.Subject,
-		req.Unit,
-		strings.Join(req.Themes, " "),
-		req.Supplement,
-	)
+	s.applyLearningSchedulePromptPatch(ctx, &req)
 
 	return s.currentClient().BuildLearningPlan(ctx, req)
 }
@@ -611,16 +603,7 @@ func (s *Service) OptimizeLearningPlan(ctx context.Context, req OptimizeLearnReq
 	if req.Action != "complete_early" && req.Days <= 0 {
 		return OptimizeLearnResult{}, errs.BadRequest("days must be > 0 for postpone/advance")
 	}
-	req.PromptPatch = s.applyLearningSchedulePromptPatch(
-		ctx,
-		req.PromptPatch,
-		req.ScheduleBinding,
-		req.Action,
-		req.Reason,
-		req.Supplement,
-		req.Plan.Subject,
-		req.Plan.Unit,
-	)
+	s.applyLearningSchedulePromptPatch(ctx, &req)
 	return s.currentClient().OptimizeLearningPlan(ctx, req)
 }
 
@@ -667,20 +650,6 @@ func normalizeGrade(score float64) string {
 	default:
 		return "E"
 	}
-}
-
-func (s *Service) applyLearningSchedulePromptPatch(
-	ctx context.Context,
-	base PromptRuntimePatch,
-	binding *ScheduleBinding,
-	parts ...string,
-) PromptRuntimePatch {
-	if binding == nil {
-		return base
-	}
-	scheduleInput := joinPromptInput(parts...)
-	schedulePatch := s.buildLearningSchedulePromptPatch(ctx, binding, scheduleInput)
-	return mergePromptRuntimePatch(base, schedulePatch)
 }
 
 func normalizeStringList(items []string) []string {

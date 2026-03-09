@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"self-study-tool/internal/modules/plan"
 	"self-study-tool/internal/modules/question"
 )
 
@@ -48,6 +49,64 @@ func (s *testConfigStore) SavePromptTemplate(_ context.Context, cfg PromptTempla
 
 func newQuestionServiceForTest() *question.Service {
 	return question.NewService(question.NewMemoryRepository())
+}
+
+type testPlanRepo struct {
+	items map[string]plan.Item
+}
+
+func newTestPlanRepo(items ...plan.Item) *testPlanRepo {
+	repo := &testPlanRepo{items: make(map[string]plan.Item, len(items))}
+	for _, item := range items {
+		repo.items[item.ID] = item
+	}
+	return repo
+}
+
+func (r *testPlanRepo) Create(_ context.Context, item plan.Item) (plan.Item, error) {
+	r.items[item.ID] = item
+	return item, nil
+}
+
+func (r *testPlanRepo) GetByID(_ context.Context, id string) (plan.Item, error) {
+	if item, ok := r.items[id]; ok {
+		return item, nil
+	}
+	return plan.Item{}, nil
+}
+
+func (r *testPlanRepo) List(_ context.Context, _ string) ([]plan.Item, error) {
+	out := make([]plan.Item, 0, len(r.items))
+	for _, item := range r.items {
+		out = append(out, item)
+	}
+	return out, nil
+}
+
+func (r *testPlanRepo) Update(_ context.Context, item plan.Item) (plan.Item, error) {
+	r.items[item.ID] = item
+	return item, nil
+}
+
+func (r *testPlanRepo) Delete(_ context.Context, id string) error {
+	delete(r.items, id)
+	return nil
+}
+
+type captureLearningPatchClient struct {
+	*MockClient
+	lastLearnRequest    LearnRequest
+	lastOptimizeRequest OptimizeLearnRequest
+}
+
+func (c *captureLearningPatchClient) BuildLearningPlan(ctx context.Context, req LearnRequest) (LearnResult, error) {
+	c.lastLearnRequest = req
+	return c.MockClient.BuildLearningPlan(ctx, req)
+}
+
+func (c *captureLearningPatchClient) OptimizeLearningPlan(ctx context.Context, req OptimizeLearnRequest) (OptimizeLearnResult, error) {
+	c.lastOptimizeRequest = req
+	return c.MockClient.OptimizeLearningPlan(ctx, req)
 }
 
 func TestService_UpdateProviderConfig_RejectsInvalidURL(t *testing.T) {
@@ -605,6 +664,119 @@ func TestService_Learn_DefaultsAndFallbacks(t *testing.T) {
 	}
 	if len(result.Themes) == 0 {
 		t.Fatal("expected fallback themes")
+	}
+}
+
+func TestService_Learn_AppliesLearningSchedulePromptPatch(t *testing.T) {
+	client := &captureLearningPatchClient{MockClient: NewMockClient(0)}
+	planService := plan.NewService(newTestPlanRepo(plan.Item{
+		ID:         "plan-math-review",
+		PlanType:   plan.DayPlan,
+		Title:      "math algebra review",
+		Content:    "quadratic function consolidation",
+		TargetDate: "2026-03-10",
+		Status:     "pending",
+		Priority:   3,
+		Source:     plan.SourceAIAgent,
+		CreatedAt:  time.Now().UTC(),
+		UpdatedAt:  time.Now().UTC(),
+	}))
+	svc := NewServiceWithStoreAndDeps(
+		client,
+		newQuestionServiceForTest(),
+		planService,
+		false,
+		RuntimeConfig{Provider: "mock"},
+		nil,
+		nil,
+	)
+
+	_, err := svc.Learn(context.Background(), LearnRequest{
+		Subject: "math",
+		Unit:    "algebra",
+		Themes:  []string{"quadratic"},
+		ScheduleBinding: &ScheduleBinding{
+			Mode:        scheduleBindingModeAuto,
+			AutoEnabled: true,
+		},
+		PromptPatch: PromptRuntimePatch{
+			SegmentUpdates: map[string]string{"persona": "keep me"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Learn() error = %v", err)
+	}
+	if got := client.lastLearnRequest.PromptPatch.SegmentUpdates["persona"]; got != "keep me" {
+		t.Fatalf("expected existing patch to be preserved, got %q", got)
+	}
+	segment := client.lastLearnRequest.PromptPatch.SegmentUpdates[promptSegmentCurrentSchedule]
+	if !strings.Contains(segment, "binding_mode=auto") {
+		t.Fatalf("expected auto binding segment, got: %s", segment)
+	}
+	if !strings.Contains(segment, "math algebra review") {
+		t.Fatalf("expected matched plan in segment, got: %s", segment)
+	}
+	if !strings.Contains(segment, "theme=math algebra quadratic") {
+		t.Fatalf("expected prompt input theme, got: %s", segment)
+	}
+}
+
+func TestService_OptimizeLearningPlan_AppliesLearningSchedulePromptPatch(t *testing.T) {
+	client := &captureLearningPatchClient{MockClient: NewMockClient(0)}
+	planService := plan.NewService(newTestPlanRepo(plan.Item{
+		ID:         "plan-postpone-review",
+		PlanType:   plan.DayPlan,
+		Title:      "postpone math algebra review",
+		Content:    "quadratic catch-up after leave",
+		TargetDate: "2026-03-10",
+		Status:     "pending",
+		Priority:   2,
+		Source:     plan.SourceAIAgent,
+		CreatedAt:  time.Now().UTC(),
+		UpdatedAt:  time.Now().UTC(),
+	}))
+	svc := NewServiceWithStoreAndDeps(
+		client,
+		newQuestionServiceForTest(),
+		planService,
+		false,
+		RuntimeConfig{Provider: "mock"},
+		nil,
+		nil,
+	)
+
+	_, err := svc.OptimizeLearningPlan(context.Background(), OptimizeLearnRequest{
+		Action:     "postpone",
+		Days:       2,
+		Reason:     "math leave",
+		Supplement: "quadratic catch-up",
+		Plan: LearnResult{
+			Subject: "math",
+			Unit:    "algebra",
+		},
+		ScheduleBinding: &ScheduleBinding{
+			Mode:        scheduleBindingModeAuto,
+			AutoEnabled: true,
+		},
+		PromptPatch: PromptRuntimePatch{
+			SegmentUpdates: map[string]string{"persona": "keep optimize"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("OptimizeLearningPlan() error = %v", err)
+	}
+	if got := client.lastOptimizeRequest.PromptPatch.SegmentUpdates["persona"]; got != "keep optimize" {
+		t.Fatalf("expected existing patch to be preserved, got %q", got)
+	}
+	segment := client.lastOptimizeRequest.PromptPatch.SegmentUpdates[promptSegmentCurrentSchedule]
+	if !strings.Contains(segment, "binding_mode=auto") {
+		t.Fatalf("expected auto binding segment, got: %s", segment)
+	}
+	if !strings.Contains(segment, "postpone math algebra review") {
+		t.Fatalf("expected matched plan in segment, got: %s", segment)
+	}
+	if !strings.Contains(segment, "theme=postpone math leave quadratic catch up algebra") {
+		t.Fatalf("expected optimize prompt input theme, got: %s", segment)
 	}
 }
 
