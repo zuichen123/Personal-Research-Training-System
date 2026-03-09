@@ -14,6 +14,7 @@
 - 实施完成后做最小可行验证（按变更范围选择）：
   - 后端改动：至少执行相关 `go test` 或 `go test ./...`。
   - Flutter 改动：至少执行相关 `flutter analyze`。
+  - Flutter 功能在代码测试通过后，可额外执行 `flutter build web`，并使用 Playwright MCP 对刚完成的功能做一次 Web 端验证。
   - 文档改动：做内容与结构自检，确认规则可执行、无歧义。
 - 验证通过后，默认执行一次提交（一个需求一个提交）。
 
@@ -84,6 +85,12 @@
 - 驳回处理：
   - `Review` 中被驳回的任务，由用户改为 `REJECT` 并写明原因。
   - 代理收到后，优先读取任务页中的驳回原因并逐条修复，再回到 `Review`。
+- 测试闭环：
+  - 代码测试通过后，可将 Flutter 编译为 Web，并使用 Playwright MCP 测试刚完成的功能。
+  - Playwright MCP 测试通过后，任务进入 `Review`。
+  - 若因环境、平台或账号限制导致无法测试，需在任务页注明原因，任务也进入 `Review`。
+  - 若 Playwright MCP 测试未通过，任务进入 `REJECT`，并在任务页记录失败现象与下一轮修复点。
+  - 单个功能累计进入 `REJECT` 最多 3 次；第 3 次仍失败时，停止继续自循环驳回，直接进入 `Review`，等待用户亲自测试。
 - 一致性要求：
   - 状态流转必须遵循：`未开始 -> TODO -> In-Progress -> Review -> (Finish | REJECT)`。
   - 在 `In-Progress/REJECT/TODO/未开始` 仍有任务时，不中断循环，不切换到无关工作。
