@@ -190,6 +190,8 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
             maxLines: 8,
             resetKey: _draftResetToken,
             showCameraButton: true,
+            handwritingReferences: _buildHandwritingReferences(q),
+            initialHandwritingReferenceKey: 'question',
           ),
           const SizedBox(height: 12),
           Row(
@@ -631,6 +633,33 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
 
   String _normalizeQuestionType(String value) {
     return value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+  }
+
+  List<PracticeAnswerHandwritingReference> _buildHandwritingReferences(
+    Question question,
+  ) {
+    final questionText = [
+      if (question.title.trim().isNotEmpty) question.title.trim(),
+      if (question.stem.trim().isNotEmpty) question.stem.trim(),
+    ].join('\n');
+    final optionsText = question.options
+        .map((item) => '${item.key}. ${item.text}')
+        .join('\n')
+        .trim();
+    return <PracticeAnswerHandwritingReference>[
+      if (questionText.isNotEmpty)
+        PracticeAnswerHandwritingReference(
+          key: 'question',
+          label: '题目',
+          content: questionText,
+        ),
+      if (optionsText.isNotEmpty)
+        PracticeAnswerHandwritingReference(
+          key: 'options',
+          label: '选项',
+          content: optionsText,
+        ),
+    ];
   }
 
   Map<String, dynamic> _toAIQuestionPayload(Question q) {

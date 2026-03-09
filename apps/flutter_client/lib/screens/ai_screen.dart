@@ -635,6 +635,8 @@ class _AIScreenState extends State<AIScreen> {
                   ? '可补充思路、易错点或要求 AI 重点关注的地方'
                   : '可直接输入答案，也可附图、语音或手写内容',
               showCameraButton: true,
+              handwritingReferences: _buildHandwritingReferences(question),
+              initialHandwritingReferenceKey: 'question',
             ),
             if (_isSingleChoice(question) || _isMultiChoice(question))
               Align(
@@ -734,6 +736,33 @@ class _AIScreenState extends State<AIScreen> {
         });
       }
     }
+  }
+
+  List<PracticeAnswerHandwritingReference> _buildHandwritingReferences(
+    Question question,
+  ) {
+    final questionText = [
+      if (question.title.trim().isNotEmpty) question.title.trim(),
+      if (question.stem.trim().isNotEmpty) question.stem.trim(),
+    ].join('\n');
+    final optionsText = question.options
+        .map((item) => '${item.key}. ${item.text}')
+        .join('\n')
+        .trim();
+    return <PracticeAnswerHandwritingReference>[
+      if (questionText.isNotEmpty)
+        PracticeAnswerHandwritingReference(
+          key: 'question',
+          label: '题目',
+          content: questionText,
+        ),
+      if (optionsText.isNotEmpty)
+        PracticeAnswerHandwritingReference(
+          key: 'options',
+          label: '选项',
+          content: optionsText,
+        ),
+    ];
   }
 
   void _updateGeneratedAttachments(

@@ -194,25 +194,13 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
           hintText: '多答案可用逗号或换行分隔（选择题可直接点选后提交）',
           showCameraButton: true,
           resetKey: _draftResetToken,
+          handwritingReferences: _buildHandwritingReferences(question),
+          initialHandwritingReferenceKey: 'question',
           onChanged: (_) {
             if (_boardMode && _boardReferenceKey == 'typed') {
               setState(() {});
             }
           },
-          extraToolActions: _boardMode
-              ? const <Widget>[]
-              : <Widget>[
-                  OutlinedButton.icon(
-                    onPressed: _submitting || _currentSubmitted
-                        ? null
-                        : () => setState(() {
-                            _boardMode = true;
-                            _boardFullScreen = false;
-                          }),
-                    icon: const Icon(Icons.draw_outlined),
-                    label: const Text('打开画板模式'),
-                  ),
-                ],
         ),
         const SizedBox(height: 12),
         Row(
@@ -1036,6 +1024,33 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
     _attachments
       ..clear()
       ..addAll(next);
+  }
+
+  List<PracticeAnswerHandwritingReference> _buildHandwritingReferences(
+    Question question,
+  ) {
+    final questionText = [
+      if (question.title.trim().isNotEmpty) question.title.trim(),
+      if (question.stem.trim().isNotEmpty) question.stem.trim(),
+    ].join('\n');
+    final optionsText = question.options
+        .map((item) => '${item.key}. ${item.text}')
+        .join('\n')
+        .trim();
+    return <PracticeAnswerHandwritingReference>[
+      if (questionText.isNotEmpty)
+        PracticeAnswerHandwritingReference(
+          key: 'question',
+          label: '题目',
+          content: questionText,
+        ),
+      if (optionsText.isNotEmpty)
+        PracticeAnswerHandwritingReference(
+          key: 'options',
+          label: '选项',
+          content: optionsText,
+        ),
+    ];
   }
 
   Widget _buildAttachmentChips() {

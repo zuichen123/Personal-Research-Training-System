@@ -10,6 +10,20 @@ import 'package:signature/signature.dart';
 import '../utils/signature_canvas_utils.dart';
 import 'ai_multimodal_message_input.dart' show AIChatAttachmentPayload;
 
+class PracticeAnswerHandwritingReference {
+  const PracticeAnswerHandwritingReference({
+    required this.key,
+    required this.label,
+    required this.content,
+  });
+
+  final String key;
+  final String label;
+  final String content;
+
+  bool get hasContent => content.trim().isNotEmpty;
+}
+
 class PracticeMultimodalAnswerInput extends StatefulWidget {
   const PracticeMultimodalAnswerInput({
     super.key,
@@ -25,6 +39,8 @@ class PracticeMultimodalAnswerInput extends StatefulWidget {
     this.onChanged,
     this.showCameraButton = true,
     this.extraToolActions = const <Widget>[],
+    this.handwritingReferences = const <PracticeAnswerHandwritingReference>[],
+    this.initialHandwritingReferenceKey,
     this.maxAttachments = 6,
     this.resetKey,
   });
@@ -41,6 +57,8 @@ class PracticeMultimodalAnswerInput extends StatefulWidget {
   final ValueChanged<String>? onChanged;
   final bool showCameraButton;
   final List<Widget> extraToolActions;
+  final List<PracticeAnswerHandwritingReference> handwritingReferences;
+  final String? initialHandwritingReferenceKey;
   final int maxAttachments;
   final Object? resetKey;
 
@@ -51,6 +69,9 @@ class PracticeMultimodalAnswerInput extends StatefulWidget {
 
 class _PracticeMultimodalAnswerInputState
     extends State<PracticeMultimodalAnswerInput> {
+  static const double _handwritingCanvasWidth = 2400;
+  static const double _handwritingCanvasHeight = 1600;
+
   final ImagePicker _imagePicker = ImagePicker();
   final SignatureController _signatureController = SignatureController(
     disabled: true,
@@ -58,9 +79,6 @@ class _PracticeMultimodalAnswerInputState
     penStrokeWidth: 2.4,
     exportBackgroundColor: Colors.white,
   );
-  static const double _handwritingViewportHeight = 280;
-  static const double _handwritingCanvasWidth = 2400;
-  static const double _handwritingCanvasHeight = 1600;
 
   bool _eraserMode = false;
   int? _signaturePointerId;
@@ -92,8 +110,8 @@ class _PracticeMultimodalAnswerInputState
   @override
   Widget build(BuildContext context) {
     final expandedToolsText = widget.showCameraButton
-        ? '已展开：图片 / 拍照 / 语音 / 手写'
-        : '已展开：图片 / 语音 / 手写';
+        ? '已展开：图片 / 拍照 / 语音 / 手写 / 全屏'
+        : '已展开：图片 / 语音 / 手写 / 全屏';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -207,6 +225,11 @@ class _PracticeMultimodalAnswerInputState
             icon: const Icon(Icons.draw_outlined),
             label: Text(_showHandwritingPanel ? '收起手写' : '展开手写'),
           ),
+          OutlinedButton.icon(
+            onPressed: widget.enabled ? _openHandwritingFullscreen : null,
+            icon: const Icon(Icons.fullscreen),
+            label: const Text('全屏画板'),
+          ),
           ...widget.extraToolActions,
         ],
       ),
@@ -215,6 +238,8 @@ class _PracticeMultimodalAnswerInputState
 
   Widget _buildHandwritingPanel(BuildContext context) {
     final borderColor = Theme.of(context).colorScheme.outlineVariant;
+    final viewportHeight = _handwritingViewportHeight(context);
+
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -232,33 +257,41 @@ class _PracticeMultimodalAnswerInputState
                 style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
               ),
               const Spacer(),
-              IconButton(
-                tooltip: '画笔',
+              TextButton.icon(
+                onPressed: widget.enabled ? _openHandwritingFullscreen : null,
+                icon: const Icon(Icons.fullscreen, size: 18),
+                label: const Text('全屏'),
+              ),
+            ],
+          ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
                 onPressed: widget.enabled ? () => _setEraserMode(false) : null,
-                visualDensity: VisualDensity.compact,
                 icon: Icon(
                   Icons.edit,
-                  size: 18,
                   color: _eraserMode
                       ? Colors.grey
                       : Theme.of(context).colorScheme.primary,
                 ),
+                label: const Text('画笔'),
               ),
-              IconButton(
-                tooltip: '橡皮',
+              OutlinedButton.icon(
                 onPressed: widget.enabled ? () => _setEraserMode(true) : null,
-                visualDensity: VisualDensity.compact,
                 icon: Icon(
                   Icons.auto_fix_normal,
-                  size: 18,
                   color: _eraserMode
                       ? Theme.of(context).colorScheme.primary
                       : Colors.grey,
                 ),
+                label: const Text('橡皮'),
               ),
-              TextButton(
+              OutlinedButton.icon(
                 onPressed: widget.enabled ? _clearSignature : null,
-                child: const Text('清空'),
+                icon: const Icon(Icons.layers_clear_outlined),
+                label: const Text('清空'),
               ),
               FilledButton.tonalIcon(
                 onPressed: widget.enabled ? _captureSignatureAttachment : null,
@@ -267,51 +300,52 @@ class _PracticeMultimodalAnswerInputState
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           SizedBox(
-            height: _handwritingViewportHeight,
+            height: viewportHeight,
             width: double.infinity,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: InteractiveViewer(
-                  constrained: false,
-                  minScale: 0.5,
-                  maxScale: 6,
-                  child: SizedBox(
-                    width: _handwritingCanvasWidth,
-                    height: _handwritingCanvasHeight,
-                    child: ColoredBox(
-                      color: Colors.white,
-                      child: Listener(
-                        behavior: HitTestBehavior.opaque,
-                        onPointerDown: _handleSignaturePointerDown,
-                        onPointerMove: _handleSignaturePointerMove,
-                        onPointerUp: _handleSignaturePointerEnd,
-                        onPointerCancel: _handleSignaturePointerEnd,
-                        child: Signature(
-                          controller: _signatureController,
-                          backgroundColor: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+            child: _HandwritingBoardCanvas(
+              controller: _signatureController,
+              onPointerDown: _handleSignaturePointerDown,
+              onPointerMove: _handleSignaturePointerMove,
+              onPointerUp: _handleSignaturePointerEnd,
+              onPointerCancel: _handleSignaturePointerEnd,
+              canvasWidth: _handwritingCanvasWidth,
+              canvasHeight: _handwritingCanvasHeight,
             ),
           ),
           const SizedBox(height: 6),
           const Text(
-            '手写区已切换为大画布模式，可在白板中拖拽、缩放后继续书写。点击“加入附件”后会转成图片提交。',
+            '支持大画布书写；移动端可直接进入全屏，并在全屏中切换题目或选项参考。',
             style: TextStyle(fontSize: 11, color: Colors.grey),
           ),
         ],
       ),
     );
+  }
+
+  double _handwritingViewportHeight(BuildContext context) {
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    return (screenHeight * 0.26).clamp(220.0, 320.0).toDouble();
+  }
+
+  Future<void> _openHandwritingFullscreen() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (context) => _PracticeHandwritingFullscreenPage(
+          controller: _signatureController,
+          references: widget.handwritingReferences,
+          initialReferenceKey: widget.initialHandwritingReferenceKey,
+          initialAttachmentsCount: widget.attachments.length,
+          maxAttachments: widget.maxAttachments,
+          onAppendAttachment: _appendAttachmentInternal,
+        ),
+      ),
+    );
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> _pickImageAttachment(ImageSource source) async {
@@ -379,32 +413,29 @@ class _PracticeMultimodalAnswerInputState
   }
 
   Future<void> _captureSignatureAttachment() async {
-    if (_signatureController.isEmpty) {
+    final attachment = await _buildHandwritingAttachmentFromController(
+      _signatureController,
+    );
+    if (attachment == null) {
       _showSnack('请先在手写区书写内容');
       return;
     }
-    final bytes = await _signatureController.toPngBytes();
-    if (bytes == null || bytes.isEmpty) {
-      _showSnack('手写内容转换失败');
-      return;
-    }
-    _appendAttachment(
-      AIChatAttachmentPayload(
-        name: 'handwriting_${DateTime.now().millisecondsSinceEpoch}.png',
-        source: 'handwriting',
-        mimeType: 'image/png',
-        dataUrl: _toDataUrl('image/png', bytes),
-      ),
-    );
+    _appendAttachment(attachment);
     _signatureController.clear();
   }
 
   void _appendAttachment(AIChatAttachmentPayload attachment) {
-    if (widget.attachments.length >= widget.maxAttachments) {
+    if (!_appendAttachmentInternal(attachment)) {
       _showSnack('最多添加 ${widget.maxAttachments} 个附件');
-      return;
+    }
+  }
+
+  bool _appendAttachmentInternal(AIChatAttachmentPayload attachment) {
+    if (widget.attachments.length >= widget.maxAttachments) {
+      return false;
     }
     widget.onAttachmentsChanged([...widget.attachments, attachment]);
+    return true;
   }
 
   void _removeAttachment(int index) {
@@ -508,4 +539,449 @@ class _PracticeMultimodalAnswerInputState
       context,
     )?.showSnackBar(SnackBar(content: Text(text)));
   }
+}
+
+class _PracticeHandwritingFullscreenPage extends StatefulWidget {
+  const _PracticeHandwritingFullscreenPage({
+    required this.controller,
+    required this.references,
+    required this.initialReferenceKey,
+    required this.initialAttachmentsCount,
+    required this.maxAttachments,
+    required this.onAppendAttachment,
+  });
+
+  final SignatureController controller;
+  final List<PracticeAnswerHandwritingReference> references;
+  final String? initialReferenceKey;
+  final int initialAttachmentsCount;
+  final int maxAttachments;
+  final bool Function(AIChatAttachmentPayload attachment) onAppendAttachment;
+
+  @override
+  State<_PracticeHandwritingFullscreenPage> createState() =>
+      _PracticeHandwritingFullscreenPageState();
+}
+
+class _PracticeHandwritingFullscreenPageState
+    extends State<_PracticeHandwritingFullscreenPage> {
+  static const String _noneReferenceKey = '__none__';
+
+  bool _eraserMode = false;
+  int? _signaturePointerId;
+  late int _attachmentCount;
+  late String _referenceKey;
+
+  List<PracticeAnswerHandwritingReference> get _availableReferences => widget
+      .references
+      .where((item) => item.hasContent)
+      .toList(growable: false);
+
+  PracticeAnswerHandwritingReference? get _activeReference {
+    if (_referenceKey == _noneReferenceKey) {
+      return null;
+    }
+    for (final item in _availableReferences) {
+      if (item.key == _referenceKey) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _attachmentCount = widget.initialAttachmentsCount;
+    _referenceKey = _resolveReferenceKey(widget.initialReferenceKey);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('全屏手写画板')),
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final horizontalPadding = constraints.maxWidth < 720 ? 12.0 : 16.0;
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                horizontalPadding,
+                12,
+                horizontalPadding,
+                12,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildToolbar(context),
+                  if (_availableReferences.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    _buildReferenceSelector(),
+                  ],
+                  const SizedBox(height: 12),
+                  Expanded(child: _buildResponsiveBoardLayout(constraints)),
+                  const SizedBox(height: 8),
+                  const Text(
+                    '移动端可直接全屏书写；可按需切换题目或选项参考，并通过双指缩放、拖拽查看画布。',
+                    style: TextStyle(fontSize: 11, color: Colors.grey),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildToolbar(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        OutlinedButton.icon(
+          onPressed: () => _setEraserMode(false),
+          icon: Icon(
+            Icons.edit,
+            color: _eraserMode
+                ? Colors.grey
+                : Theme.of(context).colorScheme.primary,
+          ),
+          label: const Text('画笔'),
+        ),
+        OutlinedButton.icon(
+          onPressed: () => _setEraserMode(true),
+          icon: Icon(
+            Icons.auto_fix_normal,
+            color: _eraserMode
+                ? Theme.of(context).colorScheme.primary
+                : Colors.grey,
+          ),
+          label: const Text('橡皮'),
+        ),
+        OutlinedButton.icon(
+          onPressed: _clearSignature,
+          icon: const Icon(Icons.layers_clear_outlined),
+          label: const Text('清空'),
+        ),
+        FilledButton.tonalIcon(
+          onPressed: _appendAsAttachment,
+          icon: const Icon(Icons.add_photo_alternate_outlined, size: 18),
+          label: Text('加入附件（$_attachmentCount/${widget.maxAttachments}）'),
+        ),
+        OutlinedButton.icon(
+          onPressed: () => Navigator.of(context).maybePop(),
+          icon: const Icon(Icons.check_circle_outline),
+          label: const Text('完成'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildReferenceSelector() {
+    return DropdownButtonFormField<String>(
+      value: _referenceKey,
+      decoration: const InputDecoration(
+        labelText: '参考内容',
+        border: OutlineInputBorder(),
+        isDense: true,
+      ),
+      items: <DropdownMenuItem<String>>[
+        const DropdownMenuItem<String>(
+          value: _noneReferenceKey,
+          child: Text('不显示参考'),
+        ),
+        ..._availableReferences.map(
+          (item) => DropdownMenuItem<String>(
+            value: item.key,
+            child: Text(item.label),
+          ),
+        ),
+      ],
+      onChanged: (value) {
+        if (value == null) {
+          return;
+        }
+        setState(() => _referenceKey = value);
+      },
+    );
+  }
+
+  Widget _buildResponsiveBoardLayout(BoxConstraints constraints) {
+    final reference = _activeReference;
+    if (reference == null || !reference.hasContent) {
+      return _buildBoardCanvas();
+    }
+
+    final narrow = constraints.maxWidth < 900;
+    if (narrow) {
+      final referenceHeight = (constraints.maxHeight * 0.28)
+          .clamp(160.0, 260.0)
+          .toDouble();
+      return Column(
+        children: [
+          SizedBox(
+            height: referenceHeight,
+            child: _HandwritingReferencePanel(reference: reference),
+          ),
+          const SizedBox(height: 12),
+          Expanded(child: _buildBoardCanvas()),
+        ],
+      );
+    }
+
+    final referenceWidth = (constraints.maxWidth * 0.34)
+        .clamp(260.0, 440.0)
+        .toDouble();
+    return Row(
+      children: [
+        SizedBox(
+          width: referenceWidth,
+          child: _HandwritingReferencePanel(reference: reference),
+        ),
+        const SizedBox(width: 12),
+        Expanded(child: _buildBoardCanvas()),
+      ],
+    );
+  }
+
+  Widget _buildBoardCanvas() {
+    return _HandwritingBoardCanvas(
+      controller: widget.controller,
+      onPointerDown: _handleSignaturePointerDown,
+      onPointerMove: _handleSignaturePointerMove,
+      onPointerUp: _handleSignaturePointerEnd,
+      onPointerCancel: _handleSignaturePointerEnd,
+      canvasWidth: _PracticeMultimodalAnswerInputState._handwritingCanvasWidth,
+      canvasHeight:
+          _PracticeMultimodalAnswerInputState._handwritingCanvasHeight,
+    );
+  }
+
+  Future<void> _appendAsAttachment() async {
+    if (_attachmentCount >= widget.maxAttachments) {
+      _showSnack('最多添加 ${widget.maxAttachments} 个附件');
+      return;
+    }
+    final attachment = await _buildHandwritingAttachmentFromController(
+      widget.controller,
+    );
+    if (attachment == null) {
+      _showSnack('请先在手写区书写内容');
+      return;
+    }
+    if (!widget.onAppendAttachment(attachment)) {
+      _showSnack('最多添加 ${widget.maxAttachments} 个附件');
+      return;
+    }
+    setState(() {
+      _attachmentCount += 1;
+    });
+    widget.controller.clear();
+    _showSnack('手写内容已加入附件');
+  }
+
+  void _setEraserMode(bool eraserMode) {
+    if (_eraserMode == eraserMode) {
+      return;
+    }
+    setState(() {
+      _eraserMode = eraserMode;
+    });
+  }
+
+  void _handleSignaturePointerDown(PointerDownEvent event) {
+    if (!_isPrimaryButtonPressed(event.buttons)) {
+      _signaturePointerId = null;
+      return;
+    }
+    _signaturePointerId = event.pointer;
+    if (_eraserMode) {
+      SignatureCanvasUtils.eraseAt(widget.controller, event.localPosition);
+      return;
+    }
+    SignatureCanvasUtils.addPoint(
+      widget.controller,
+      event.localPosition,
+      PointType.tap,
+      pressure: _normalizedPressure(event.pressure),
+    );
+  }
+
+  void _handleSignaturePointerMove(PointerMoveEvent event) {
+    if (_signaturePointerId != event.pointer ||
+        !_isPrimaryButtonPressed(event.buttons)) {
+      return;
+    }
+    if (_eraserMode) {
+      SignatureCanvasUtils.eraseAt(widget.controller, event.localPosition);
+      return;
+    }
+    SignatureCanvasUtils.addPoint(
+      widget.controller,
+      event.localPosition,
+      PointType.move,
+      pressure: _normalizedPressure(event.pressure),
+    );
+  }
+
+  void _handleSignaturePointerEnd(PointerEvent event) {
+    if (_signaturePointerId == event.pointer) {
+      _signaturePointerId = null;
+    }
+  }
+
+  bool _isPrimaryButtonPressed(int buttons) => (buttons & kPrimaryButton) != 0;
+
+  double _normalizedPressure(double pressure) => pressure > 0 ? pressure : 1.0;
+
+  void _clearSignature() {
+    widget.controller.clear();
+  }
+
+  String _resolveReferenceKey(String? candidate) {
+    final references = _availableReferences;
+    if (references.isEmpty) {
+      return _noneReferenceKey;
+    }
+    if (candidate != null) {
+      for (final item in references) {
+        if (item.key == candidate) {
+          return candidate;
+        }
+      }
+    }
+    return references.first.key;
+  }
+
+  void _showSnack(String text) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+}
+
+class _HandwritingBoardCanvas extends StatelessWidget {
+  const _HandwritingBoardCanvas({
+    required this.controller,
+    required this.onPointerDown,
+    required this.onPointerMove,
+    required this.onPointerUp,
+    required this.onPointerCancel,
+    required this.canvasWidth,
+    required this.canvasHeight,
+  });
+
+  final SignatureController controller;
+  final void Function(PointerDownEvent event) onPointerDown;
+  final void Function(PointerMoveEvent event) onPointerMove;
+  final void Function(PointerEvent event) onPointerUp;
+  final void Function(PointerEvent event) onPointerCancel;
+  final double canvasWidth;
+  final double canvasHeight;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: InteractiveViewer(
+          constrained: false,
+          minScale: 0.5,
+          maxScale: 6,
+          child: SizedBox(
+            width: canvasWidth,
+            height: canvasHeight,
+            child: ColoredBox(
+              color: Colors.white,
+              child: Listener(
+                behavior: HitTestBehavior.opaque,
+                onPointerDown: onPointerDown,
+                onPointerMove: onPointerMove,
+                onPointerUp: onPointerUp,
+                onPointerCancel: onPointerCancel,
+                child: Signature(
+                  controller: controller,
+                  backgroundColor: Colors.white,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HandwritingReferencePanel extends StatelessWidget {
+  const _HandwritingReferencePanel({required this.reference});
+
+  final PracticeAnswerHandwritingReference reference;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.menu_book_outlined,
+                  size: 16,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  reference.label,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: SingleChildScrollView(
+                child: SelectableText(
+                  reference.content,
+                  style: const TextStyle(fontSize: 12, height: 1.45),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+Future<AIChatAttachmentPayload?> _buildHandwritingAttachmentFromController(
+  SignatureController controller,
+) async {
+  if (controller.isEmpty) {
+    return null;
+  }
+  final bytes = await controller.toPngBytes();
+  if (bytes == null || bytes.isEmpty) {
+    return null;
+  }
+  return AIChatAttachmentPayload(
+    name: 'handwriting_${DateTime.now().millisecondsSinceEpoch}.png',
+    source: 'handwriting',
+    mimeType: 'image/png',
+    dataUrl: 'data:image/png;base64,${base64Encode(bytes)}',
+  );
 }
