@@ -98,6 +98,9 @@
 - 一致性要求：
   - 状态流转必须遵循：`未开始 -> TODO -> In-Progress -> Review -> (Finish | REJECT)`。
   - 在 `In-Progress/REJECT/TODO/未开始` 仍有任务时，不中断循环，不切换到无关工作。
+  - 在全部任务进入 `Review` 之前，禁止因待确认问题停止工作流。
+  - 若执行过程中出现需要用户确认的问题，直接写入对应 Notion 任务页的 `QUESTION`；用户会在最后统一回复并写入 `ANSWER`。
+  - 写入 `QUESTION` 后，继续推进其余可执行小步或下一个可执行任务，直到当前轮次所有任务都进入 `Review`。
 
 ## 10) TODO.md 状态
 - `TODO.md` 已废弃，不再作为任务来源或状态同步文件。
