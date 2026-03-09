@@ -58,6 +58,9 @@ class _PracticeMultimodalAnswerInputState
     penStrokeWidth: 2.4,
     exportBackgroundColor: Colors.white,
   );
+  static const double _handwritingViewportHeight = 280;
+  static const double _handwritingCanvasWidth = 2400;
+  static const double _handwritingCanvasHeight = 1600;
 
   bool _eraserMode = false;
   int? _signaturePointerId;
@@ -266,29 +269,44 @@ class _PracticeMultimodalAnswerInputState
           ),
           const SizedBox(height: 6),
           SizedBox(
-            height: 160,
+            height: _handwritingViewportHeight,
             width: double.infinity,
             child: DecoratedBox(
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Listener(
-                behavior: HitTestBehavior.opaque,
-                onPointerDown: _handleSignaturePointerDown,
-                onPointerMove: _handleSignaturePointerMove,
-                onPointerUp: _handleSignaturePointerEnd,
-                onPointerCancel: _handleSignaturePointerEnd,
-                child: Signature(
-                  controller: _signatureController,
-                  backgroundColor: Colors.white,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: InteractiveViewer(
+                  constrained: false,
+                  minScale: 0.5,
+                  maxScale: 6,
+                  child: SizedBox(
+                    width: _handwritingCanvasWidth,
+                    height: _handwritingCanvasHeight,
+                    child: ColoredBox(
+                      color: Colors.white,
+                      child: Listener(
+                        behavior: HitTestBehavior.opaque,
+                        onPointerDown: _handleSignaturePointerDown,
+                        onPointerMove: _handleSignaturePointerMove,
+                        onPointerUp: _handleSignaturePointerEnd,
+                        onPointerCancel: _handleSignaturePointerEnd,
+                        child: Signature(
+                          controller: _signatureController,
+                          backgroundColor: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           const Text(
-            '点击“加入附件”后，手写内容会转换为图片并作为附件提交。',
+            '手写区已切换为大画布模式，可在白板中拖拽、缩放后继续书写。点击“加入附件”后会转成图片提交。',
             style: TextStyle(fontSize: 11, color: Colors.grey),
           ),
         ],
