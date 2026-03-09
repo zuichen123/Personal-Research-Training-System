@@ -34,3 +34,6 @@ data/*.sqlite3
 data/
 dist/
 build/
+
+# AGENTS.md
+AGENTS.md
