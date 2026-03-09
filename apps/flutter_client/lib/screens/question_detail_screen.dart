@@ -7,6 +7,9 @@ import 'package:provider/provider.dart';
 import '../models/question.dart';
 import '../providers/app_provider.dart';
 import '../widgets/ai_formula_text.dart';
+import '../widgets/ai_multimodal_message_input.dart'
+    show AIChatAttachmentPayload;
+import '../widgets/practice_multimodal_answer_input.dart';
 
 class QuestionDetailScreen extends StatefulWidget {
   const QuestionDetailScreen({
@@ -24,9 +27,13 @@ class QuestionDetailScreen extends StatefulWidget {
 
 class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
   final TextEditingController _answerController = TextEditingController();
+  final Set<String> _selectedOptions = <String>{};
+  final List<AIChatAttachmentPayload> _attachments =
+      <AIChatAttachmentPayload>[];
   bool _submitting = false;
   Map<String, dynamic>? _gradeResult;
   DateTime _answerStartedAt = DateTime.now();
+  int _draftResetToken = 0;
 
   @override
   void dispose() {
@@ -70,35 +77,82 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
                   AIFormulaText(q.stem, style: theme.textTheme.bodyLarge),
                   if (q.options.isNotEmpty) ...[
                     const SizedBox(height: 12),
-                    ...q.options.map(
-                      (o) => Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              width: 26,
-                              height: 26,
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: cs.primaryContainer,
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                o.key,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: cs.onPrimaryContainer,
-                                  fontSize: 13,
+                    if (_isSingleChoice(q))
+                      ...q.options.map((option) {
+                        return RadioListTile<String>(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          value: option.key,
+                          groupValue: _selectedOptions.isEmpty
+                              ? null
+                              : _selectedOptions.first,
+                          title: AIFormulaText('${option.key}. ${option.text}'),
+                          onChanged: _submitting
+                              ? null
+                              : (value) {
+                                  if (value == null) {
+                                    return;
+                                  }
+                                  setState(() {
+                                    _selectedOptions
+                                      ..clear()
+                                      ..add(value);
+                                  });
+                                },
+                        );
+                      }),
+                    if (_isMultiChoice(q))
+                      ...q.options.map((option) {
+                        final checked = _selectedOptions.contains(option.key);
+                        return CheckboxListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          value: checked,
+                          title: AIFormulaText('${option.key}. ${option.text}'),
+                          onChanged: _submitting
+                              ? null
+                              : (selected) {
+                                  setState(() {
+                                    if (selected == true) {
+                                      _selectedOptions.add(option.key);
+                                    } else {
+                                      _selectedOptions.remove(option.key);
+                                    }
+                                  });
+                                },
+                        );
+                      }),
+                    if (!_isChoiceQuestion(q))
+                      ...q.options.map(
+                        (o) => Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                width: 26,
+                                height: 26,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: cs.primaryContainer,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  o.key,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: cs.onPrimaryContainer,
+                                    fontSize: 13,
+                                  ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(child: AIFormulaText(o.text)),
-                          ],
+                              const SizedBox(width: 8),
+                              Expanded(child: AIFormulaText(o.text)),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
                   ],
                   const SizedBox(height: 8),
                   Wrap(
@@ -121,14 +175,21 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
           const SizedBox(height: 16),
 
           // ─ 作答区 ─
-          TextField(
+          PracticeMultimodalAnswerInput(
+            key: ValueKey('question-detail-answer-${q.id}'),
             controller: _answerController,
+            attachments: _attachments,
+            onAttachmentsChanged: (next) =>
+                setState(() => _replaceAttachments(next)),
+            enabled: !_submitting,
+            labelText: _isChoiceQuestion(q) ? '补充说明（可选）' : '你的答案',
+            hintText: _isChoiceQuestion(q)
+                ? '可补充思路、易错点或要求 AI 重点关注的地方'
+                : '可直接输入答案，也可附图、语音或手写内容',
             minLines: 4,
             maxLines: 8,
-            decoration: const InputDecoration(
-              labelText: '你的答案',
-              alignLabelWithHint: true,
-            ),
+            resetKey: _draftResetToken,
+            showCameraButton: true,
           ),
           const SizedBox(height: 12),
           Row(
@@ -151,8 +212,10 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
                 onPressed: _submitting
                     ? null
                     : () {
-                        _answerController.clear();
-                        setState(() => _gradeResult = null);
+                        setState(() {
+                          _clearDraft();
+                          _gradeResult = null;
+                        });
                       },
                 child: const Text('清空'),
               ),
@@ -446,11 +509,17 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
   }
 
   Future<void> _submit() async {
-    final answer = _answerController.text.trim();
-    if (answer.isEmpty) {
-      _showSnack('请先输入答案');
+    final gradeAnswers = _collectGradeAnswers(widget.question);
+    if (gradeAnswers.isEmpty && _attachments.isEmpty) {
+      _showSnack('请先输入答案、选择选项或添加附件');
       return;
     }
+
+    final practiceAnswers = [...gradeAnswers];
+    _appendAnswersUnique(
+      practiceAnswers,
+      _attachments.map((item) => '[${item.source}] ${item.name}'),
+    );
 
     setState(() => _submitting = true);
     final provider = context.read<AppProvider>();
@@ -458,16 +527,20 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
     try {
       final payload = <String, dynamic>{
         'question': _toAIQuestionPayload(widget.question),
-        'user_answer': [answer],
+        'user_answer': gradeAnswers,
+        if (_attachments.isNotEmpty)
+          'attachments': _attachments.map((item) => item.toJson()).toList(),
       };
       final elapsedSeconds = DateTime.now()
           .difference(_answerStartedAt)
           .inSeconds
           .clamp(0, 1 << 30);
       await provider.gradeWithAI(payload);
-      await provider.submitPractice(widget.question.id, [
-        answer,
-      ], elapsedSeconds);
+      await provider.submitPractice(
+        widget.question.id,
+        practiceAnswers,
+        elapsedSeconds,
+      );
       if (!mounted) return;
       setState(() {
         _gradeResult = provider.aiGradeResult;
@@ -481,6 +554,83 @@ class _QuestionDetailScreenState extends State<QuestionDetailScreen> {
         setState(() => _submitting = false);
       }
     }
+  }
+
+  void _replaceAttachments(List<AIChatAttachmentPayload> next) {
+    _attachments
+      ..clear()
+      ..addAll(next);
+  }
+
+  void _clearDraft() {
+    _answerController.clear();
+    _selectedOptions.clear();
+    _attachments.clear();
+    _draftResetToken += 1;
+    _answerStartedAt = DateTime.now();
+  }
+
+  List<String> _collectGradeAnswers(Question question) {
+    final combined = <String>[];
+    if (_isChoiceQuestion(question)) {
+      final ordered = question.options
+          .map((item) => item.key)
+          .where(_selectedOptions.contains)
+          .toList(growable: false);
+      if (ordered.isNotEmpty) {
+        _appendAnswersUnique(combined, ordered);
+      } else if (_selectedOptions.isNotEmpty) {
+        final fallback = _selectedOptions.toList(growable: true)..sort();
+        _appendAnswersUnique(combined, fallback);
+      }
+    }
+    _appendAnswersUnique(combined, _parseAnswers(_answerController.text));
+    return combined;
+  }
+
+  void _appendAnswersUnique(List<String> out, Iterable<String> source) {
+    for (final item in source) {
+      final normalized = item.trim();
+      if (normalized.isEmpty || out.contains(normalized)) {
+        continue;
+      }
+      out.add(normalized);
+    }
+  }
+
+  List<String> _parseAnswers(String raw) {
+    return raw
+        .split(RegExp(r'[\n,;]+'))
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  bool _isChoiceQuestion(Question question) {
+    return _isSingleChoice(question) || _isMultiChoice(question);
+  }
+
+  bool _isSingleChoice(Question question) {
+    final raw = question.type.trim();
+    final normalized = _normalizeQuestionType(raw);
+    return normalized == 'singlechoice' ||
+        normalized == 'single' ||
+        normalized == 'radio' ||
+        raw.contains('单选');
+  }
+
+  bool _isMultiChoice(Question question) {
+    final raw = question.type.trim();
+    final normalized = _normalizeQuestionType(raw);
+    return normalized == 'multichoice' ||
+        normalized == 'multiplechoice' ||
+        normalized == 'multiple' ||
+        normalized == 'multi' ||
+        raw.contains('多选');
+  }
+
+  String _normalizeQuestionType(String value) {
+    return value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
   }
 
   Map<String, dynamic> _toAIQuestionPayload(Question q) {

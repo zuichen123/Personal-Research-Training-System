@@ -3,10 +3,8 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/gestures.dart' show kPrimaryButton;
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:signature/signature.dart';
 
@@ -16,6 +14,7 @@ import '../utils/signature_canvas_utils.dart';
 import '../widgets/ai_formula_text.dart';
 import '../widgets/ai_multimodal_message_input.dart'
     show AIChatAttachmentPayload;
+import '../widgets/practice_multimodal_answer_input.dart';
 
 enum PracticeOrderMode { sequential, random }
 
@@ -30,7 +29,6 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
   final TextEditingController _answerController = TextEditingController();
   final Random _random = Random();
   final Map<String, int> _sourceOrder = <String, int>{};
-  final ImagePicker _imagePicker = ImagePicker();
   final SignatureController _boardController = SignatureController(
     disabled: true,
     penColor: Colors.black,
@@ -43,7 +41,6 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
   bool _submitting = false;
   bool _autoNextEnabled = true;
   bool _currentSubmitted = false;
-  bool _toolsExpanded = false;
   bool _boardMode = false;
   bool _boardFullScreen = false;
   bool _boardEraserMode = false;
@@ -59,6 +56,7 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
   int _currentIndex = 0;
   int _elapsedSeconds = 0;
   int _answeredCount = 0;
+  int _draftResetToken = 0;
 
   Question? get _currentQuestion {
     if (_pendingQuestions.isEmpty) {
@@ -184,32 +182,37 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
         _buildProgressCard(),
         const SizedBox(height: 12),
         _buildQuestionCard(question),
-        if (_attachments.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          _buildAttachmentChips(),
-        ],
         const SizedBox(height: 12),
-        _buildToolToggleBar(),
-        if (_toolsExpanded) ...[
-          const SizedBox(height: 8),
-          _buildAttachmentToolPanel(),
-        ],
-        const SizedBox(height: 12),
-        TextField(
+        PracticeMultimodalAnswerInput(
+          key: ValueKey('practice-answer-${question.id}'),
           controller: _answerController,
-          minLines: 3,
-          maxLines: 6,
+          attachments: _attachments,
+          onAttachmentsChanged: (next) =>
+              setState(() => _replaceAttachments(next)),
           enabled: !_submitting && !_currentSubmitted,
+          labelText: '你的答案',
+          hintText: '多答案可用逗号或换行分隔（选择题可直接点选后提交）',
+          showCameraButton: true,
+          resetKey: _draftResetToken,
           onChanged: (_) {
             if (_boardMode && _boardReferenceKey == 'typed') {
               setState(() {});
             }
           },
-          decoration: const InputDecoration(
-            labelText: '你的答案',
-            hintText: '多答案可用逗号或换行分隔（选择题可直接点选后提交）',
-            border: OutlineInputBorder(),
-          ),
+          extraToolActions: _boardMode
+              ? const <Widget>[]
+              : <Widget>[
+                  OutlinedButton.icon(
+                    onPressed: _submitting || _currentSubmitted
+                        ? null
+                        : () => setState(() {
+                            _boardMode = true;
+                            _boardFullScreen = false;
+                          }),
+                    icon: const Icon(Icons.draw_outlined),
+                    label: const Text('打开画板模式'),
+                  ),
+                ],
         ),
         const SizedBox(height: 12),
         Row(
@@ -864,82 +867,6 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
     );
   }
 
-  Widget _buildToolToggleBar() {
-    return Row(
-      children: [
-        IconButton.filledTonal(
-          onPressed: _submitting || _currentSubmitted
-              ? null
-              : () => setState(() => _toolsExpanded = !_toolsExpanded),
-          icon: Icon(_toolsExpanded ? Icons.close : Icons.add),
-          tooltip: _toolsExpanded ? '收起多模态工具' : '展开多模态工具',
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            _toolsExpanded ? '已展开：图片 / 语音 / 画板' : '点击 + 展开多模态输入工具',
-            style: const TextStyle(fontSize: 12, color: Colors.grey),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAttachmentToolPanel() {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        OutlinedButton.icon(
-          onPressed: _submitting || _currentSubmitted
-              ? null
-              : _pickImageAttachment,
-          icon: const Icon(Icons.photo_library_outlined),
-          label: const Text('上传图片'),
-        ),
-        OutlinedButton.icon(
-          onPressed: _submitting || _currentSubmitted
-              ? null
-              : _pickAudioAttachment,
-          icon: const Icon(Icons.mic_external_on_outlined),
-          label: const Text('上传语音'),
-        ),
-        FilledButton.tonalIcon(
-          onPressed: _submitting || _currentSubmitted
-              ? null
-              : () => setState(() {
-                  _boardMode = true;
-                  _boardFullScreen = false;
-                }),
-          icon: const Icon(Icons.draw_outlined),
-          label: const Text('打开画板模式'),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAttachmentChips() {
-    return Wrap(
-      spacing: 6,
-      runSpacing: 6,
-      children: _attachments
-          .asMap()
-          .entries
-          .map((entry) {
-            final item = entry.value;
-            final mime = item.mimeType.toLowerCase();
-            final prefix = mime.startsWith('audio/') ? '语音' : '图片';
-            return InputChip(
-              label: Text('$prefix · ${item.name}'),
-              onDeleted: _submitting || _currentSubmitted
-                  ? null
-                  : () => _removeAttachment(entry.key),
-            );
-          })
-          .toList(growable: false),
-    );
-  }
-
   Future<void> _bootstrap() async {
     _stopTimer();
     setState(() {
@@ -1027,6 +954,37 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
       _pendingQuestions = <Question>[current, ...reordered];
       _currentIndex = 0;
     });
+  }
+
+  void _replaceAttachments(List<AIChatAttachmentPayload> next) {
+    _attachments
+      ..clear()
+      ..addAll(next);
+  }
+
+  Widget _buildAttachmentChips() {
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: _attachments
+          .asMap()
+          .entries
+          .map((entry) {
+            final item = entry.value;
+            final mime = item.mimeType.toLowerCase();
+            final prefix = mime.startsWith('audio/') ? '语音' : '图片';
+            return InputChip(
+              label: Text('$prefix · ${item.name}'),
+              onDeleted: _submitting || _currentSubmitted
+                  ? null
+                  : () => setState(() {
+                      final next = [..._attachments]..removeAt(entry.key);
+                      _replaceAttachments(next);
+                    }),
+            );
+          })
+          .toList(growable: false),
+    );
   }
 
   Future<void> _submitCurrentAnswer() async {
@@ -1189,68 +1147,6 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
     return value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
   }
 
-  Future<void> _pickImageAttachment() async {
-    try {
-      final picked = await _imagePicker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 85,
-      );
-      if (picked == null) {
-        return;
-      }
-      final bytes = await picked.readAsBytes();
-      if (bytes.isEmpty) {
-        return;
-      }
-      final name = picked.name.trim().isEmpty
-          ? 'image_${DateTime.now().millisecondsSinceEpoch}.jpg'
-          : picked.name;
-      final mimeType = _guessMimeType(name, fallback: 'image/jpeg');
-      _appendAttachment(
-        AIChatAttachmentPayload(
-          name: name,
-          source: 'gallery',
-          mimeType: mimeType,
-          dataUrl: _toDataUrl(mimeType, bytes),
-        ),
-      );
-    } catch (_) {
-      _showSnack('图片添加失败，请重试');
-    }
-  }
-
-  Future<void> _pickAudioAttachment() async {
-    try {
-      final result = await FilePicker.platform.pickFiles(
-        withData: true,
-        type: FileType.custom,
-        allowedExtensions: const ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'webm'],
-      );
-      if (result == null || result.files.isEmpty) {
-        return;
-      }
-      final file = result.files.first;
-      final bytes = file.bytes;
-      if (bytes == null || bytes.isEmpty) {
-        return;
-      }
-      final name = file.name.trim().isEmpty
-          ? 'voice_${DateTime.now().millisecondsSinceEpoch}.wav'
-          : file.name;
-      final mimeType = _guessMimeType(name, fallback: 'audio/wav');
-      _appendAttachment(
-        AIChatAttachmentPayload(
-          name: name,
-          source: 'audio_upload',
-          mimeType: mimeType,
-          dataUrl: _toDataUrl(mimeType, bytes),
-        ),
-      );
-    } catch (_) {
-      _showSnack('语音添加失败，请重试');
-    }
-  }
-
   Future<void> _captureBoardAttachment() async {
     if (_boardController.isEmpty) {
       _showSnack('画板为空，无法加入附件');
@@ -1261,34 +1157,22 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
       _showSnack('画板导出失败，请重试');
       return;
     }
-    _appendAttachment(
-      AIChatAttachmentPayload(
-        name: 'handwriting_${DateTime.now().millisecondsSinceEpoch}.png',
-        source: 'handwriting',
-        mimeType: 'image/png',
-        dataUrl: _toDataUrl('image/png', bytes),
-      ),
-    );
-    _showSnack('画板内容已加入附件');
-  }
-
-  void _appendAttachment(AIChatAttachmentPayload attachment) {
     if (_attachments.length >= 6) {
       _showSnack('最多添加 6 个附件');
       return;
     }
     setState(() {
-      _attachments.add(attachment);
+      _replaceAttachments([
+        ..._attachments,
+        AIChatAttachmentPayload(
+          name: 'handwriting_${DateTime.now().millisecondsSinceEpoch}.png',
+          source: 'handwriting',
+          mimeType: 'image/png',
+          dataUrl: _toDataUrl('image/png', bytes),
+        ),
+      ]);
     });
-  }
-
-  void _removeAttachment(int index) {
-    if (index < 0 || index >= _attachments.length) {
-      return;
-    }
-    setState(() {
-      _attachments.removeAt(index);
-    });
+    _showSnack('画板内容已加入附件');
   }
 
   void _setBoardEraserMode(bool eraserMode) {
@@ -1301,7 +1185,9 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
   }
 
   void _handleBoardPointerDown(PointerDownEvent event) {
-    if (_submitting || _currentSubmitted || !_isPrimaryButtonPressed(event.buttons)) {
+    if (_submitting ||
+        _currentSubmitted ||
+        !_isPrimaryButtonPressed(event.buttons)) {
       _boardPointerId = null;
       return;
     }
@@ -1319,7 +1205,8 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
   }
 
   void _handleBoardPointerMove(PointerMoveEvent event) {
-    if (_boardPointerId != event.pointer || !_isPrimaryButtonPressed(event.buttons)) {
+    if (_boardPointerId != event.pointer ||
+        !_isPrimaryButtonPressed(event.buttons)) {
       return;
     }
     if (_boardEraserMode) {
@@ -1352,7 +1239,7 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
     _answerController.clear();
     _selectedOptions.clear();
     _attachments.clear();
-    _toolsExpanded = false;
+    _draftResetToken += 1;
     _boardMode = false;
     _boardFullScreen = false;
     _boardEraserMode = false;
@@ -1362,26 +1249,6 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
 
   String _toDataUrl(String mimeType, Uint8List bytes) {
     return 'data:$mimeType;base64,${base64Encode(bytes)}';
-  }
-
-  String _guessMimeType(String fileName, {required String fallback}) {
-    final normalized = fileName.toLowerCase();
-    if (normalized.endsWith('.png')) return 'image/png';
-    if (normalized.endsWith('.jpg') || normalized.endsWith('.jpeg')) {
-      return 'image/jpeg';
-    }
-    if (normalized.endsWith('.webp')) return 'image/webp';
-    if (normalized.endsWith('.gif')) return 'image/gif';
-    if (normalized.endsWith('.heic')) return 'image/heic';
-    if (normalized.endsWith('.heif')) return 'image/heif';
-    if (normalized.endsWith('.bmp')) return 'image/bmp';
-    if (normalized.endsWith('.wav')) return 'audio/wav';
-    if (normalized.endsWith('.mp3')) return 'audio/mpeg';
-    if (normalized.endsWith('.m4a')) return 'audio/mp4';
-    if (normalized.endsWith('.aac')) return 'audio/aac';
-    if (normalized.endsWith('.ogg')) return 'audio/ogg';
-    if (normalized.endsWith('.webm')) return 'audio/webm';
-    return fallback;
   }
 
   String _formatDuration(int seconds) {

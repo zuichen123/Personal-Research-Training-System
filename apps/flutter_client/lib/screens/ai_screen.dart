@@ -1,15 +1,15 @@
 import 'dart:convert';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
-import 'package:signature/signature.dart';
 
 import '../models/question.dart';
 import '../providers/app_provider.dart';
 import '../widgets/ai_formula_text.dart';
+import '../widgets/ai_multimodal_message_input.dart'
+    show AIChatAttachmentPayload;
+import '../widgets/practice_multimodal_answer_input.dart';
 
 enum AIScreenFocusSection { none, generate, grade }
 
@@ -73,9 +73,7 @@ class _AIScreenState extends State<AIScreen> {
   final Map<String, TextEditingController> _generatedSupplementControllers = {};
   final Map<String, Map<String, dynamic>> _generatedGradeResults = {};
   final Map<String, bool> _generatedSubmitting = {};
-  final Map<String, SignatureController> _generatedSignatureControllers = {};
-  final Map<String, bool> _generatedEraserMode = {};
-  final Map<String, List<_AnswerImageAttachment>> _generatedAttachments = {};
+  final Map<String, List<AIChatAttachmentPayload>> _generatedAttachments = {};
   bool _learningGenerating = false;
   bool _questionGenerating = false;
   bool _searchGenerating = false;
@@ -83,7 +81,6 @@ class _AIScreenState extends State<AIScreen> {
   bool _gradeGenerating = false;
   bool _evaluateGenerating = false;
 
-  final ImagePicker _imagePicker = ImagePicker();
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _generateSectionKey = GlobalKey();
   final GlobalKey _gradeSectionKey = GlobalKey();
@@ -534,13 +531,7 @@ class _AIScreenState extends State<AIScreen> {
     final result = _generatedGradeResults[qKey];
     final submitting = _generatedSubmitting[qKey] == true;
     final attachments =
-        _generatedAttachments[qKey] ?? const <_AnswerImageAttachment>[];
-    final signatureController = _generatedSignatureControllers[qKey] ??=
-        SignatureController(
-          penStrokeWidth: 2.4,
-          penColor: Colors.black,
-          exportBackgroundColor: Colors.white,
-        );
+        _generatedAttachments[qKey] ?? const <AIChatAttachmentPayload>[];
 
     return Card(
       margin: const EdgeInsets.only(top: 8),
@@ -630,64 +621,21 @@ class _AIScreenState extends State<AIScreen> {
                 );
               }),
             const SizedBox(height: 4),
-            _input(
-              noteController,
-              _isSingleChoice(question) || _isMultiChoice(question)
+            PracticeMultimodalAnswerInput(
+              key: ValueKey('generated-answer-$qKey'),
+              controller: noteController,
+              attachments: attachments,
+              onAttachmentsChanged: (next) =>
+                  setState(() => _updateGeneratedAttachments(qKey, next)),
+              enabled: !submitting,
+              labelText: _isSingleChoice(question) || _isMultiChoice(question)
                   ? '做题时遇到的问题/想法补充（可选）'
                   : '作答内容 / 问题补充',
+              hintText: _isSingleChoice(question) || _isMultiChoice(question)
+                  ? '可补充思路、易错点或要求 AI 重点关注的地方'
+                  : '可直接输入答案，也可附图、语音或手写内容',
+              showCameraButton: true,
             ),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                OutlinedButton.icon(
-                  onPressed: submitting
-                      ? null
-                      : () => _pickImageAttachment(qKey, ImageSource.gallery),
-                  icon: const Icon(Icons.photo_library_outlined),
-                  label: const Text('上传图片'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: submitting
-                      ? null
-                      : () => _pickImageAttachment(qKey, ImageSource.camera),
-                  icon: const Icon(Icons.photo_camera_outlined),
-                  label: const Text('拍照'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: submitting
-                      ? null
-                      : () => _pickAudioAttachment(qKey),
-                  icon: const Icon(Icons.mic_external_on_outlined),
-                  label: const Text('上传语音'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            _handwritingPanel(
-              qKey: qKey,
-              controller: signatureController,
-              submitting: submitting,
-            ),
-            if (attachments.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: attachments
-                    .asMap()
-                    .entries
-                    .map(
-                      (entry) => InputChip(
-                        label: Text(_attachmentLabel(entry.value)),
-                        onDeleted: submitting
-                            ? null
-                            : () => _removeAttachment(qKey, entry.key),
-                      ),
-                    )
-                    .toList(),
-              ),
-            ],
             if (_isSingleChoice(question) || _isMultiChoice(question))
               Align(
                 alignment: Alignment.centerLeft,
@@ -731,7 +679,7 @@ class _AIScreenState extends State<AIScreen> {
     final selected = _generatedSelections[qKey] ?? <String>{};
     final note = _generatedSupplementControllers[qKey]?.text.trim() ?? '';
     final attachments =
-        _generatedAttachments[qKey] ?? const <_AnswerImageAttachment>[];
+        _generatedAttachments[qKey] ?? const <AIChatAttachmentPayload>[];
 
     final userAnswers = <String>[];
     if (_isSingleChoice(question) || _isMultiChoice(question)) {
@@ -788,266 +736,15 @@ class _AIScreenState extends State<AIScreen> {
     }
   }
 
-  Widget _handwritingPanel({
-    required String qKey,
-    required SignatureController controller,
-    required bool submitting,
-  }) {
-    final eraser = _generatedEraserMode[qKey] == true;
-    final borderColor = Theme.of(context).colorScheme.outlineVariant;
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: borderColor),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      padding: const EdgeInsets.all(8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Text(
-                '手写区',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
-              ),
-              const Spacer(),
-              IconButton(
-                tooltip: '画笔',
-                onPressed: submitting
-                    ? null
-                    : () => _setEraserMode(qKey, false),
-                visualDensity: VisualDensity.compact,
-                icon: Icon(
-                  Icons.edit,
-                  size: 18,
-                  color: eraser
-                      ? Colors.grey
-                      : Theme.of(context).colorScheme.primary,
-                ),
-              ),
-              IconButton(
-                tooltip: '橡皮',
-                onPressed: submitting ? null : () => _setEraserMode(qKey, true),
-                visualDensity: VisualDensity.compact,
-                icon: Icon(
-                  Icons.auto_fix_normal,
-                  size: 18,
-                  color: eraser
-                      ? Theme.of(context).colorScheme.primary
-                      : Colors.grey,
-                ),
-              ),
-              TextButton(
-                onPressed: submitting ? null : () => _clearSignature(qKey),
-                child: const Text('清空'),
-              ),
-              FilledButton.tonalIcon(
-                onPressed: submitting
-                    ? null
-                    : () => _captureSignatureAttachment(qKey),
-                icon: const Icon(Icons.add_photo_alternate_outlined, size: 18),
-                label: const Text('加入附件'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          SizedBox(
-            height: 140,
-            width: double.infinity,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Signature(
-                controller: controller,
-                backgroundColor: Colors.white,
-              ),
-            ),
-          ),
-          const SizedBox(height: 4),
-          const Text(
-            '手写内容会转为图片并作为附件提交给 AI。',
-            style: TextStyle(fontSize: 11, color: Colors.grey),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _pickImageAttachment(String qKey, ImageSource source) async {
-    try {
-      final picked = await _imagePicker.pickImage(
-        source: source,
-        imageQuality: 85,
-      );
-      if (picked == null) {
-        return;
-      }
-      final bytes = await picked.readAsBytes();
-      if (bytes.isEmpty) {
-        _showSnack('图片读取失败');
-        return;
-      }
-      final name = picked.name.trim().isEmpty
-          ? 'image_${DateTime.now().millisecondsSinceEpoch}.jpg'
-          : picked.name;
-      final mimeType = _guessMimeType(name, fallback: 'image/jpeg');
-      _appendAttachment(
-        qKey,
-        _AnswerImageAttachment(
-          name: name,
-          source: source == ImageSource.camera ? 'camera' : 'gallery',
-          mimeType: mimeType,
-          dataUrl: _toDataUrl(mimeType, bytes),
-        ),
-      );
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      _showSnack('上传图片失败');
-    }
-  }
-
-  Future<void> _pickAudioAttachment(String qKey) async {
-    try {
-      final result = await FilePicker.platform.pickFiles(
-        withData: true,
-        type: FileType.custom,
-        allowedExtensions: const ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'webm'],
-      );
-      if (result == null || result.files.isEmpty) {
-        return;
-      }
-      final file = result.files.first;
-      final bytes = file.bytes;
-      if (bytes == null || bytes.isEmpty) {
-        _showSnack('语音文件读取失败');
-        return;
-      }
-      final name = file.name.trim().isEmpty
-          ? 'voice_${DateTime.now().millisecondsSinceEpoch}.wav'
-          : file.name;
-      final mimeType = _guessMimeType(name, fallback: 'audio/wav');
-      _appendAttachment(
-        qKey,
-        _AnswerImageAttachment(
-          name: name,
-          source: 'audio_upload',
-          mimeType: mimeType,
-          dataUrl: _toDataUrl(mimeType, bytes),
-        ),
-      );
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      _showSnack('上传语音失败');
-    }
-  }
-
-  Future<void> _captureSignatureAttachment(String qKey) async {
-    final controller = _generatedSignatureControllers[qKey];
-    if (controller == null || controller.isEmpty) {
-      _showSnack('请先在手写区书写内容');
+  void _updateGeneratedAttachments(
+    String qKey,
+    List<AIChatAttachmentPayload> next,
+  ) {
+    if (next.isEmpty) {
+      _generatedAttachments.remove(qKey);
       return;
     }
-    final bytes = await controller.toPngBytes();
-    if (bytes == null || bytes.isEmpty) {
-      _showSnack('手写内容转换失败');
-      return;
-    }
-    _appendAttachment(
-      qKey,
-      _AnswerImageAttachment(
-        name: 'handwriting_${DateTime.now().millisecondsSinceEpoch}.png',
-        source: 'handwriting',
-        mimeType: 'image/png',
-        dataUrl: _toDataUrl('image/png', bytes),
-      ),
-    );
-    controller.clear();
-  }
-
-  void _appendAttachment(String qKey, _AnswerImageAttachment item) {
-    final current =
-        _generatedAttachments[qKey] ?? const <_AnswerImageAttachment>[];
-    if (current.length >= 6) {
-      _showSnack('附件最多 6 个');
-      return;
-    }
-    setState(() {
-      _generatedAttachments[qKey] = [...current, item];
-    });
-  }
-
-  void _removeAttachment(String qKey, int index) {
-    final current = _generatedAttachments[qKey];
-    if (current == null || index < 0 || index >= current.length) {
-      return;
-    }
-    setState(() {
-      final next = [...current]..removeAt(index);
-      if (next.isEmpty) {
-        _generatedAttachments.remove(qKey);
-      } else {
-        _generatedAttachments[qKey] = next;
-      }
-    });
-  }
-
-  void _setEraserMode(String qKey, bool eraser) {
-    final controller = _generatedSignatureControllers[qKey];
-    if (controller == null) {
-      return;
-    }
-    setState(() {
-      _generatedEraserMode[qKey] = eraser;
-      _generatedSignatureControllers[qKey] = SignatureController(
-        points: List<Point>.from(controller.points),
-        penColor: eraser ? Colors.white : Colors.black,
-        penStrokeWidth: eraser ? 14 : 2.4,
-        exportBackgroundColor: Colors.white,
-      );
-    });
-    controller.dispose();
-  }
-
-  void _clearSignature(String qKey) {
-    final controller = _generatedSignatureControllers[qKey];
-    controller?.clear();
-  }
-
-  String _attachmentLabel(_AnswerImageAttachment attachment) {
-    final mime = attachment.mimeType.toLowerCase();
-    final prefix = mime.startsWith('audio/') ? '音频' : '图片';
-    return '$prefix · ${attachment.name}';
-  }
-
-  String _toDataUrl(String mimeType, Uint8List bytes) {
-    return 'data:$mimeType;base64,${base64Encode(bytes)}';
-  }
-
-  String _guessMimeType(String fileName, {required String fallback}) {
-    final normalized = fileName.toLowerCase();
-    if (normalized.endsWith('.png')) return 'image/png';
-    if (normalized.endsWith('.jpg') || normalized.endsWith('.jpeg')) {
-      return 'image/jpeg';
-    }
-    if (normalized.endsWith('.webp')) return 'image/webp';
-    if (normalized.endsWith('.gif')) return 'image/gif';
-    if (normalized.endsWith('.heic')) return 'image/heic';
-    if (normalized.endsWith('.heif')) return 'image/heif';
-    if (normalized.endsWith('.bmp')) return 'image/bmp';
-
-    if (normalized.endsWith('.wav')) return 'audio/wav';
-    if (normalized.endsWith('.mp3')) return 'audio/mpeg';
-    if (normalized.endsWith('.m4a')) return 'audio/mp4';
-    if (normalized.endsWith('.aac')) return 'audio/aac';
-    if (normalized.endsWith('.ogg')) return 'audio/ogg';
-    if (normalized.endsWith('.webm')) return 'audio/webm';
-    return fallback;
+    _generatedAttachments[qKey] = next;
   }
 
   void _showSnack(String message) {
@@ -1663,15 +1360,10 @@ class _AIScreenState extends State<AIScreen> {
     for (final controller in _generatedSupplementControllers.values) {
       controller.dispose();
     }
-    for (final controller in _generatedSignatureControllers.values) {
-      controller.dispose();
-    }
     _generatedSupplementControllers.clear();
-    _generatedSignatureControllers.clear();
     _generatedSelections.clear();
     _generatedGradeResults.clear();
     _generatedSubmitting.clear();
-    _generatedEraserMode.clear();
     _generatedAttachments.clear();
   }
 
@@ -1697,29 +1389,6 @@ class _AIScreenState extends State<AIScreen> {
       'tags': q.tags,
       'difficulty': q.difficulty,
       'mastery_level': q.masteryLevel,
-    };
-  }
-}
-
-class _AnswerImageAttachment {
-  const _AnswerImageAttachment({
-    required this.name,
-    required this.source,
-    required this.mimeType,
-    required this.dataUrl,
-  });
-
-  final String name;
-  final String source;
-  final String mimeType;
-  final String dataUrl;
-
-  Map<String, dynamic> toJson() {
-    return {
-      'name': name,
-      'source': source,
-      'mime_type': mimeType,
-      'data_url': dataUrl,
     };
   }
 }
