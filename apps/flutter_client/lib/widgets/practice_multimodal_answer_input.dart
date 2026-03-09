@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:signature/signature.dart';
 
 import '../utils/signature_canvas_utils.dart';
+import 'ai_formula_text.dart';
 import 'ai_multimodal_message_input.dart' show AIChatAttachmentPayload;
 
 class PracticeAnswerHandwritingReference {
@@ -955,9 +956,13 @@ class _HandwritingReferencePanel extends StatelessWidget {
             const SizedBox(height: 8),
             Expanded(
               child: SingleChildScrollView(
-                child: SelectableText(
+                child: AIFormulaText(
                   reference.content,
-                  style: const TextStyle(fontSize: 12, height: 1.45),
+                  selectable: true,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontSize: 12,
+                    height: 1.45,
+                  ),
                 ),
               ),
             ),
