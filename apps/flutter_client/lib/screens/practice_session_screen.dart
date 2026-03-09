@@ -494,69 +494,42 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
                 ),
               ),
             ),
-            if (referenceText.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxHeight: 110),
-                      child: SingleChildScrollView(
-                        child: SelectableText(
-                          referenceText,
-                          style: const TextStyle(fontSize: 12, height: 1.35),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
             Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: Theme.of(context).colorScheme.outlineVariant,
-                    ),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: InteractiveViewer(
-                      constrained: false,
-                      minScale: 0.5,
-                      maxScale: 6,
-                      child: SizedBox(
-                        width: 2400,
-                        height: 1600,
-                        child: ColoredBox(
-                          color: Colors.white,
-                          child: Listener(
-                            behavior: HitTestBehavior.opaque,
-                            onPointerDown: _handleBoardPointerDown,
-                            onPointerMove: _handleBoardPointerMove,
-                            onPointerUp: _handleBoardPointerEnd,
-                            onPointerCancel: _handleBoardPointerEnd,
-                            child: Signature(
-                              controller: _boardController,
-                              backgroundColor: Colors.white,
+              child: _boardFullScreen
+                  ? Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            flex: 10,
+                            child: _buildBoardReferencePanel(
+                              referenceText,
+                              fullScreen: true,
                             ),
                           ),
-                        ),
+                          const SizedBox(width: 12),
+                          Expanded(flex: 18, child: _buildBoardCanvas()),
+                        ],
                       ),
+                    )
+                  : Column(
+                      children: [
+                        if (referenceText.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                            child: _buildBoardReferencePanel(
+                              referenceText,
+                              fullScreen: false,
+                            ),
+                          ),
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                            child: _buildBoardCanvas(),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ),
-              ),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
@@ -606,6 +579,109 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBoardReferencePanel(
+    String referenceText, {
+    required bool fullScreen,
+  }) {
+    final theme = Theme.of(context);
+    final displayText = referenceText.trim();
+    final hasContent = displayText.isNotEmpty;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.menu_book_outlined,
+                  size: 16,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  '参考内容',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (fullScreen)
+              Expanded(
+                child: SingleChildScrollView(
+                  child: SelectableText(
+                    hasContent
+                        ? displayText
+                        : '当前参考为空，可切换题干、选项、输入内容、已选答案或附件摘要。',
+                    style: TextStyle(
+                      fontSize: 12,
+                      height: 1.45,
+                      color: hasContent ? null : theme.colorScheme.outline,
+                    ),
+                  ),
+                ),
+              )
+            else
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 110),
+                child: SingleChildScrollView(
+                  child: SelectableText(
+                    displayText,
+                    style: const TextStyle(fontSize: 12, height: 1.35),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBoardCanvas() {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: InteractiveViewer(
+          constrained: false,
+          minScale: 0.5,
+          maxScale: 6,
+          child: SizedBox(
+            width: 2400,
+            height: 1600,
+            child: ColoredBox(
+              color: Colors.white,
+              child: Listener(
+                behavior: HitTestBehavior.opaque,
+                onPointerDown: _handleBoardPointerDown,
+                onPointerMove: _handleBoardPointerMove,
+                onPointerUp: _handleBoardPointerEnd,
+                onPointerCancel: _handleBoardPointerEnd,
+                child: Signature(
+                  controller: _boardController,
+                  backgroundColor: Colors.white,
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
