@@ -8,6 +8,7 @@ import '../../models/plan.dart';
 import '../../providers/ai_agent_provider.dart';
 import '../../providers/app_provider.dart';
 import '../plans_screen.dart';
+import '../practice_session_screen.dart';
 import 'course_lesson_session_screen.dart';
 
 enum CourseScheduleView { year, month, day, lesson }
@@ -509,7 +510,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
         const SizedBox(height: 12),
         _knowledgeSummaryCard(lesson),
         const SizedBox(height: 12),
-        _afterClassPracticeCard(lesson),
+        _afterClassPracticeCard(context, lesson),
         const SizedBox(height: 12),
         _masteryCard(context, lesson),
         const SizedBox(height: 12),
@@ -607,34 +608,53 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
     );
   }
 
-  Widget _afterClassPracticeCard(_CourseLesson lesson) {
+  Widget _afterClassPracticeCard(BuildContext context, _CourseLesson lesson) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              '\u8bfe\u540e\u7ec3\u4e60',
-              style: TextStyle(fontWeight: FontWeight.w700),
-            ),
+            const Text('课后练习', style: TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 8),
-            const Text(
-              '- \u667a\u80fd\u52a9\u6559\u51fa\u9898\u5185\u5bb9\uff08\u5f85\u8865\u5145\uff09',
-            ),
-            const Text(
-              '- \u4f5c\u4e1a\u6e05\u5355\u4e0e\u5b8c\u6210\u72b6\u6001\uff08\u5f85\u8865\u5145\uff09',
+            Text('当前课程会优先匹配 ${lesson.subject} / ${lesson.topic} 相关题目，直接进入作答。'),
+            const SizedBox(height: 4),
+            const Text('若当前题库尚未存在匹配题目，会明确提示“暂无已绑定课后作业”，避免继续随机抽题。'),
+            const SizedBox(height: 10),
+            FilledButton.icon(
+              onPressed: () => _openLessonHomework(context, lesson),
+              icon: const Icon(Icons.play_arrow),
+              label: const Text('进入课后作业'),
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: () => _openPracticePrompt(lesson),
               icon: const Icon(Icons.auto_awesome),
-              label: const Text('\u751f\u6210\u7ec3\u4e60\u63d0\u793a\u8bcd'),
+              label: const Text('查看出题提示词'),
             ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _openLessonHomework(
+    BuildContext context,
+    _CourseLesson lesson,
+  ) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PracticeSessionScreen(
+          sessionTitle: '${lesson.subject} · 课后作业',
+          lessonSubject: lesson.subject,
+          lessonTopic: lesson.topic,
+        ),
+      ),
+    );
+    if (!context.mounted) {
+      return;
+    }
+    await context.read<AppProvider>().fetchAttempts(force: true);
   }
 
   Widget _masteryCard(BuildContext context, _CourseLesson lesson) {

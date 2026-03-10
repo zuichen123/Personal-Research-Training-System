@@ -19,7 +19,16 @@ import '../widgets/practice_multimodal_answer_input.dart';
 enum PracticeOrderMode { sequential, random }
 
 class PracticeSessionScreen extends StatefulWidget {
-  const PracticeSessionScreen({super.key});
+  const PracticeSessionScreen({
+    super.key,
+    this.sessionTitle,
+    this.lessonSubject,
+    this.lessonTopic,
+  });
+
+  final String? sessionTitle;
+  final String? lessonSubject;
+  final String? lessonTopic;
 
   @override
   State<PracticeSessionScreen> createState() => _PracticeSessionScreenState();
@@ -57,6 +66,7 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
   int _elapsedSeconds = 0;
   int _answeredCount = 0;
   int _draftResetToken = 0;
+  int _scopedQuestionCount = 0;
 
   Question? get _currentQuestion {
     if (_pendingQuestions.isEmpty) {
@@ -66,6 +76,29 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
       return _pendingQuestions.first;
     }
     return _pendingQuestions[_currentIndex];
+  }
+
+  bool get _isLessonScoped {
+    return (widget.lessonSubject ?? '').trim().isNotEmpty ||
+        (widget.lessonTopic ?? '').trim().isNotEmpty;
+  }
+
+  String get _sessionTitle {
+    final explicit = (widget.sessionTitle ?? '').trim();
+    if (explicit.isNotEmpty) {
+      return explicit;
+    }
+    return _isLessonScoped ? '课后作业' : '练习会话';
+  }
+
+  String get _lessonScopeLabel {
+    final parts = <String>[
+      if ((widget.lessonSubject ?? '').trim().isNotEmpty)
+        widget.lessonSubject!.trim(),
+      if ((widget.lessonTopic ?? '').trim().isNotEmpty)
+        widget.lessonTopic!.trim(),
+    ];
+    return parts.join(' · ');
   }
 
   @override
@@ -87,7 +120,7 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
     final question = _currentQuestion;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('练习会话'),
+        title: Text(_sessionTitle),
         actions: [
           if (question != null && !_boardMode)
             IconButton(
@@ -154,14 +187,24 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
           children: [
             const Icon(Icons.emoji_events_outlined, size: 64),
             const SizedBox(height: 12),
-            const Text(
-              '没有未作答题目了',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            Text(
+              _isLessonScoped
+                  ? (_scopedQuestionCount == 0
+                        ? '当前课程暂无已绑定课后作业'
+                        : '当前课程课后作业已完成')
+                  : '没有未作答题目了',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
-              '本次会话已作答：$_answeredCount',
+              _isLessonScoped
+                  ? (_lessonScopeLabel.isEmpty
+                        ? '本次会话已作答：$_answeredCount'
+                        : '当前范围：$_lessonScopeLabel  |  已作答：$_answeredCount')
+                  : '本次会话已作答：$_answeredCount',
               style: const TextStyle(color: Colors.grey),
+              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20),
             FilledButton.icon(
@@ -790,6 +833,13 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
               '剩余 ${_pendingQuestions.length}  已作答 $_answeredCount',
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
+            if (_isLessonScoped && _lessonScopeLabel.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                '当前作业范围：$_lessonScopeLabel',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
             const SizedBox(height: 8),
             Row(
               children: [
@@ -964,18 +1014,25 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
         .where((id) => id.trim().isNotEmpty)
         .toSet();
 
-    final available = provider.questions
+    final unattempted = provider.questions
         .where((question) {
           return !attemptedQuestionIDs.contains(question.id);
         })
         .toList(growable: true);
+    final scopedAvailable = _isLessonScoped
+        ? _filterQuestionsForLesson(unattempted)
+        : unattempted;
+    final scopedTotal = _isLessonScoped
+        ? _filterQuestionsForLesson(provider.questions).length
+        : provider.questions.length;
 
-    final ordered = _sortedQuestions(available, _orderMode);
+    final ordered = _sortedQuestions(scopedAvailable, _orderMode);
 
     setState(() {
       _pendingQuestions = ordered;
       _currentIndex = 0;
       _elapsedSeconds = 0;
+      _scopedQuestionCount = scopedTotal;
       _loading = false;
     });
 
@@ -1018,6 +1075,139 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
       _pendingQuestions = <Question>[current, ...reordered];
       _currentIndex = 0;
     });
+  }
+
+  List<Question> _filterQuestionsForLesson(Iterable<Question> questions) {
+    final all = questions.toList(growable: false);
+    if (!_isLessonScoped) {
+      return all.toList(growable: true);
+    }
+    final topic = (widget.lessonTopic ?? '').trim();
+    if (topic.isEmpty) {
+      return all
+          .where((question) => _matchesLessonSubject(question))
+          .toList(growable: true);
+    }
+
+    final strict = all
+        .where(
+          (question) =>
+              _matchesLessonSubject(question) &&
+              _matchesLessonTopic(question, topic),
+        )
+        .toList(growable: false);
+    if (strict.isNotEmpty) {
+      return strict.toList(growable: true);
+    }
+
+    return all
+        .where((question) => _matchesLessonTopic(question, topic))
+        .toList(growable: true);
+  }
+
+  bool _matchesLessonSubject(Question question) {
+    final subjectKeywords = _subjectKeywords(widget.lessonSubject ?? '');
+    if (subjectKeywords.isEmpty) {
+      return true;
+    }
+    final haystack = [
+      question.subject,
+      question.source,
+      question.title,
+      question.stem,
+      ...question.tags,
+    ].join('\n').toLowerCase();
+    return _containsAnyKeyword(haystack, subjectKeywords);
+  }
+
+  bool _matchesLessonTopic(Question question, String topic) {
+    final normalizedTopic = topic.trim().toLowerCase();
+    if (normalizedTopic.isEmpty) {
+      return true;
+    }
+
+    final unit = _extractQuestionUnit(question).toLowerCase();
+    if (unit.isNotEmpty && unit == normalizedTopic) {
+      return true;
+    }
+
+    final haystack = [
+      question.source,
+      question.title,
+      question.stem,
+      ...question.tags,
+    ].join('\n').toLowerCase();
+    return haystack.contains(normalizedTopic);
+  }
+
+  String _extractQuestionUnit(Question question) {
+    for (final raw in question.tags) {
+      final tag = raw.trim();
+      if (tag.isEmpty) {
+        continue;
+      }
+      final lower = tag.toLowerCase();
+      if (lower.startsWith('unit:')) {
+        final value = tag.substring(5).trim();
+        if (value.isNotEmpty) {
+          return value;
+        }
+      }
+      if (tag.startsWith('单元:')) {
+        final value = tag.substring(3).trim();
+        if (value.isNotEmpty) {
+          return value;
+        }
+      }
+    }
+    return '';
+  }
+
+  List<String> _subjectKeywords(String raw) {
+    final value = raw.trim().toLowerCase();
+    switch (value) {
+      case '数学':
+      case 'math':
+        return const <String>['数学', 'math'];
+      case '英语':
+      case 'english':
+        return const <String>['英语', 'english'];
+      case '语文':
+      case 'chinese':
+        return const <String>['语文', 'chinese'];
+      case '物理':
+      case 'physics':
+        return const <String>['物理', 'physics'];
+      case '化学':
+      case 'chemistry':
+        return const <String>['化学', 'chemistry'];
+      case '生物':
+      case 'biology':
+        return const <String>['生物', 'biology'];
+      case '历史':
+      case 'history':
+        return const <String>['历史', 'history'];
+      case '地理':
+      case 'geography':
+        return const <String>['地理', 'geography'];
+      case '政治':
+      case 'politics':
+        return const <String>['政治', 'politics'];
+      default:
+        return value.isEmpty ? const <String>[] : <String>[value];
+    }
+  }
+
+  bool _containsAnyKeyword(String haystack, Iterable<String> keywords) {
+    for (final keyword in keywords) {
+      if (keyword.trim().isEmpty) {
+        continue;
+      }
+      if (haystack.contains(keyword.toLowerCase())) {
+        return true;
+      }
+    }
+    return false;
   }
 
   void _replaceAttachments(List<AIChatAttachmentPayload> next) {
