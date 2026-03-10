@@ -18,6 +18,7 @@ type Service struct {
 	client          Client
 	questionService *question.Service
 	planService     *plan.Service
+	profileService  profileServiceInterface
 	appControl      AppControl
 	fallbackEnabled bool
 	runtime         RuntimeConfig
@@ -102,6 +103,12 @@ func (s *Service) SetAppControl(control AppControl) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.appControl = control
+}
+
+func (s *Service) SetProfileService(profileService profileServiceInterface) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.profileService = profileService
 }
 
 func (s *Service) bindPromptRuntimeLocked() {

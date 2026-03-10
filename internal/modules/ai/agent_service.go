@@ -1351,6 +1351,62 @@ func (s *Service) executeAgentAction(
 				LatencyMS:    0,
 			},
 		}, nil
+	case "get_user_info":
+		userID := firstNonEmptyAsString(params, "user_id", "default")
+		if s.profileService == nil {
+			return actionExecutionResult{}, errs.BadRequest("profile service not available")
+		}
+		userInfo, err := s.GetUserInfo(ctx, userID)
+		if err != nil {
+			return actionExecutionResult{}, err
+		}
+		return actionExecutionResult{
+			Content: fmt.Sprintf("已获取用户信息：%s", userInfo.Nickname),
+			ToolData: map[string]any{
+				"user_info": userInfo,
+			},
+			Meta: agentCallMeta{
+				ProviderUsed: "internal",
+				ModelUsed:    "user_info",
+			},
+		}, nil
+	case "get_course_schedule":
+		date := firstNonEmptyAsString(params, "date", "")
+		lessons, err := s.ListCourseScheduleLessons(ctx, date)
+		if err != nil {
+			return actionExecutionResult{}, err
+		}
+		return actionExecutionResult{
+			Content: fmt.Sprintf("已获取课程表，共 %d 节课。", len(lessons)),
+			ToolData: map[string]any{
+				"lessons": lessons,
+				"date":    date,
+			},
+			Meta: agentCallMeta{
+				ProviderUsed: "internal",
+				ModelUsed:    "course_schedule",
+			},
+		}, nil
+	case "get_plan_list":
+		if s.planService == nil {
+			return actionExecutionResult{}, errs.BadRequest("plan service not available")
+		}
+		planType := firstNonEmptyAsString(params, "plan_type", "")
+		plans, err := s.planService.List(ctx, planType)
+		if err != nil {
+			return actionExecutionResult{}, err
+		}
+		return actionExecutionResult{
+			Content: fmt.Sprintf("已获取计划列表，共 %d 项。", len(plans)),
+			ToolData: map[string]any{
+				"plans":     plans,
+				"plan_type": planType,
+			},
+			Meta: agentCallMeta{
+				ProviderUsed: "internal",
+				ModelUsed:    "plan_list",
+			},
+		}, nil
 	default:
 		return actionExecutionResult{}, errs.BadRequest("unsupported action")
 	}
