@@ -55,6 +55,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 		r.Post("/score", h.score)
 		r.Post("/math/compute", h.mathCompute)
 		r.Post("/math/verify", h.mathVerify)
+		r.Post("/mistakes/analyze", h.analyzeMistakes)
 		r.Get("/course-schedule/lessons", h.listCourseScheduleLessons)
 		r.Post("/course-schedule/lessons", h.createCourseScheduleLesson)
 		r.Put("/course-schedule/lessons/{id}", h.updateCourseScheduleLesson)
@@ -444,4 +445,18 @@ func (h *Handler) reloadPromptTemplates(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, configs)
+}
+
+func (h *Handler) analyzeMistakes(w http.ResponseWriter, r *http.Request) {
+	var req AnalyzeMistakesRequest
+	if err := httpx.DecodeJSON(r, &req); err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	result, err := h.service.AnalyzeMistakes(r.Context(), req)
+	if err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, result)
 }
