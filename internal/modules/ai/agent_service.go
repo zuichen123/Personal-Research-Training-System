@@ -2299,7 +2299,7 @@ func buildGenerateRequest(params map[string]any) GenerateRequest {
 	subject := firstNonEmptyAsString(params, "subject", "general")
 	scope := firstNonEmptyAsString(params, "scope", "agent_chat")
 	count := clampInt(asInt(params["count"], 5), 1, 20)
-	difficulty := clampInt(asInt(params["difficulty"], 3), 1, 5)
+	difficulty := clampInt(asInt(params["difficulty"], 5), 1, 10)
 	return GenerateRequest{
 		Topic:      topic,
 		Subject:    subject,

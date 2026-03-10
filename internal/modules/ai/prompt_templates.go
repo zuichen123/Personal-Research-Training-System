@@ -117,7 +117,7 @@ Keep each item specific, answerable, and suitable for self-study.`,
       "options":[{"key":"A","text":"...","score":0}],
       "answer_key":["string"],
       "tags":["string"],
-      "difficulty":1-5,
+      "difficulty":1-10,
       "mastery_level":0-100
     }
   ]
@@ -266,7 +266,7 @@ Use question/context, answer key and user answer to produce both single and comp
       "source":"wrong_book",
       "answer_key":["string"],
       "tags":["retest"],
-      "difficulty":1-5,
+      "difficulty":1-10,
       "mastery_level":0
     }
   ]
