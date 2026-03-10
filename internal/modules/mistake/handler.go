@@ -61,6 +61,29 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 			}
 			return items[i].Subject < items[j].Subject
 		})
+	case "unit":
+		sort.Slice(items, func(i, j int) bool {
+			if order == "desc" {
+				return items[i].Unit > items[j].Unit
+			}
+			return items[i].Unit < items[j].Unit
+		})
+	case "subject_unit":
+		sort.Slice(items, func(i, j int) bool {
+			if items[i].Subject != items[j].Subject {
+				if order == "desc" {
+					return items[i].Subject > items[j].Subject
+				}
+				return items[i].Subject < items[j].Subject
+			}
+			if items[i].Unit != items[j].Unit {
+				if order == "desc" {
+					return items[i].Unit > items[j].Unit
+				}
+				return items[i].Unit < items[j].Unit
+			}
+			return items[i].CreatedAt.After(items[j].CreatedAt)
+		})
 	case "difficulty":
 		sort.Slice(items, func(i, j int) bool {
 			if order == "desc" {
