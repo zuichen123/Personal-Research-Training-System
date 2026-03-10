@@ -33,6 +33,7 @@ type Config struct {
 	AIClaudeModelSet    bool
 	DatabasePath        string
 	UploadMaxBytes      int64
+	UploadDir           string
 	AppEnv              string
 	LogLevel            string
 	LogFormat           string
@@ -87,6 +88,7 @@ func Load() Config {
 		AIClaudeModelSet:    claudeModelSet,
 		DatabasePath:        getEnv("SQLITE_PATH", "./data/self-study.db"),
 		UploadMaxBytes:      getEnvInt64("UPLOAD_MAX_BYTES", 20*1024*1024),
+		UploadDir:           getEnv("UPLOAD_DIR", "./data/uploads"),
 		AppEnv:              getEnv("APP_ENV", "development"),
 		LogLevel:            strings.ToLower(getEnv("LOG_LEVEL", "info")),
 		LogFormat:           strings.ToLower(getEnv("LOG_FORMAT", "json")),

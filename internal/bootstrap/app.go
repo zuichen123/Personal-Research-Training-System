@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"self-study-tool/internal/config"
 	"self-study-tool/internal/modules/ai"
+	"self-study-tool/internal/modules/material"
 	"self-study-tool/internal/modules/mistake"
 	"self-study-tool/internal/modules/plan"
 	"self-study-tool/internal/modules/pomodoro"
@@ -54,6 +55,7 @@ func NewApp(cfg config.Config) (*App, error) {
 	practiceRepo := practice.NewSQLiteRepository(db)
 	resourceRepo := resource.NewSQLiteRepository(db)
 	profileRepo := profile.NewSQLiteRepository(db)
+	materialRepo := material.NewSQLiteRepository(db)
 
 	questionService := question.NewService(questionRepo)
 	mistakeService := mistake.NewService(mistakeRepo)
@@ -61,6 +63,7 @@ func NewApp(cfg config.Config) (*App, error) {
 	pomodoroService := pomodoro.NewService(pomodoroRepo)
 	resourceService := resource.NewService(resourceRepo, questionService)
 	profileService := profile.NewService(profileRepo)
+	materialService := material.NewService(materialRepo)
 	aiConfigRepo := ai.NewSQLiteProviderConfigRepository(db)
 	aiAgentRepo := ai.NewSQLiteAgentRepository(db)
 
@@ -111,6 +114,7 @@ func NewApp(cfg config.Config) (*App, error) {
 	practiceHandler := practice.NewHandler(practiceService)
 	resourceHandler := resource.NewHandler(resourceService, cfg.UploadMaxBytes)
 	profileHandler := profile.NewHandler(profileService)
+	materialHandler := material.NewHandler(materialService, cfg.UploadDir)
 	systemHandler := system.NewHandler()
 
 	effectiveWriteTimeout := cfg.WriteTimeout
@@ -145,6 +149,7 @@ func NewApp(cfg config.Config) (*App, error) {
 			practiceHandler.RegisterRoutes(r)
 			resourceHandler.RegisterRoutes(r)
 			profileHandler.RegisterRoutes(r)
+			materialHandler.RegisterRoutes(r)
 		})
 	})
 
