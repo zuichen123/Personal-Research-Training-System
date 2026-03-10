@@ -35,6 +35,50 @@ type App struct {
 	db     *sql.DB
 }
 
+type questionClientAdapter struct{ c ai.Client }
+
+func (a questionClientAdapter) Chat(ctx context.Context, req question.ChatRequest) (question.ChatResponse, error) {
+	msgs := make([]ai.ChatMessage, len(req.Messages))
+	for i, m := range req.Messages {
+		msgs[i] = ai.ChatMessage{Role: m.Role, Content: m.Content}
+	}
+	resp, err := a.c.Chat(ctx, ai.ChatRequest{Messages: msgs})
+	return question.ChatResponse{Content: resp.Content}, err
+}
+
+type practiceClientAdapter struct{ c ai.Client }
+
+func (a practiceClientAdapter) Chat(ctx context.Context, req practice.ChatRequest) (practice.ChatResponse, error) {
+	msgs := make([]ai.ChatMessage, len(req.Messages))
+	for i, m := range req.Messages {
+		msgs[i] = ai.ChatMessage{Role: m.Role, Content: m.Content}
+	}
+	resp, err := a.c.Chat(ctx, ai.ChatRequest{Messages: msgs})
+	return practice.ChatResponse{Content: resp.Content}, err
+}
+
+type materialClientAdapter struct{ c ai.Client }
+
+func (a materialClientAdapter) Chat(ctx context.Context, req material.ChatRequest) (material.ChatResponse, error) {
+	msgs := make([]ai.ChatMessage, len(req.Messages))
+	for i, m := range req.Messages {
+		msgs[i] = ai.ChatMessage{Role: m.Role, Content: m.Content}
+	}
+	resp, err := a.c.Chat(ctx, ai.ChatRequest{Messages: msgs})
+	return material.ChatResponse{Content: resp.Content}, err
+}
+
+type mistakeClientAdapter struct{ c ai.Client }
+
+func (a mistakeClientAdapter) Chat(ctx context.Context, req mistake.ChatRequest) (mistake.ChatResponse, error) {
+	msgs := make([]ai.ChatMessage, len(req.Messages))
+	for i, m := range req.Messages {
+		msgs[i] = ai.ChatMessage{Role: m.Role, Content: m.Content}
+	}
+	resp, err := a.c.Chat(ctx, ai.ChatRequest{Messages: msgs})
+	return mistake.ChatResponse{Content: resp.Content}, err
+}
+
 func NewApp(cfg config.Config) (*App, error) {
 	if err := ensureDatabaseDir(cfg.DatabasePath); err != nil {
 		return nil, err
@@ -97,6 +141,22 @@ func NewApp(cfg config.Config) (*App, error) {
 		return nil, err
 	}
 	practiceService := practice.NewService(practiceRepo, questionService, aiService, mistakeService)
+
+	difficultyService := question.NewDifficultyService(db, questionClientAdapter{aiClient})
+	questionService.SetDifficultyService(difficultyService)
+
+	gradingService := practice.NewGradingService(practiceClientAdapter{aiClient})
+	practiceService.SetGradingService(gradingService)
+
+	paperGenerator := practice.NewPaperGenerator(practiceClientAdapter{aiClient})
+	practiceService.SetPaperGenerator(paperGenerator)
+
+	parserService := material.NewParserService(materialClientAdapter{aiClient})
+	materialService.SetParserService(parserService)
+
+	analysisService := mistake.NewAnalysisService(mistakeClientAdapter{aiClient})
+	mistakeService.SetAnalysisService(analysisService)
+
 	aiService.SetAppControl(newAIAppControl(
 		aiService,
 		questionService,
