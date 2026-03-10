@@ -33,6 +33,7 @@ type Question struct {
 	Type         QuestionType   `json:"type"`
 	Subject      string         `json:"subject"`
 	Source       QuestionSource `json:"source"`
+	LessonID     string         `json:"lesson_id,omitempty"`
 	Options      []Option       `json:"options,omitempty"`
 	AnswerKey    []string       `json:"answer_key,omitempty"`
 	Tags         []string       `json:"tags,omitempty"`
@@ -48,6 +49,7 @@ type CreateInput struct {
 	Type         QuestionType   `json:"type"`
 	Subject      string         `json:"subject"`
 	Source       QuestionSource `json:"source"`
+	LessonID     string         `json:"lesson_id"`
 	Options      []Option       `json:"options"`
 	AnswerKey    []string       `json:"answer_key"`
 	Tags         []string       `json:"tags"`
@@ -61,6 +63,7 @@ type UpdateInput struct {
 	Type         QuestionType   `json:"type"`
 	Subject      string         `json:"subject"`
 	Source       QuestionSource `json:"source"`
+	LessonID     string         `json:"lesson_id"`
 	Options      []Option       `json:"options"`
 	AnswerKey    []string       `json:"answer_key"`
 	Tags         []string       `json:"tags"`

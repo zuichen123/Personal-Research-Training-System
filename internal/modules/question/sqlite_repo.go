@@ -34,9 +34,9 @@ func (r *SQLiteRepository) Create(ctx context.Context, item Question) (Question,
 
 	_, err = r.db.ExecContext(ctx, `
 		INSERT INTO questions (
-			id, title, stem, type, subject, source, options_json, answer_key_json, tags_json,
+			id, title, stem, type, subject, source, lesson_id, options_json, answer_key_json, tags_json,
 			difficulty, mastery_level, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		item.ID,
 		item.Title,
@@ -44,6 +44,7 @@ func (r *SQLiteRepository) Create(ctx context.Context, item Question) (Question,
 		string(item.Type),
 		item.Subject,
 		string(item.Source),
+		item.LessonID,
 		string(optionsJSON),
 		string(answerJSON),
 		string(tagsJSON),
@@ -60,7 +61,7 @@ func (r *SQLiteRepository) Create(ctx context.Context, item Question) (Question,
 
 func (r *SQLiteRepository) GetByID(ctx context.Context, id string) (Question, error) {
 	row := r.db.QueryRowContext(ctx, `
-		SELECT id, title, stem, type, subject, source, options_json, answer_key_json, tags_json,
+		SELECT id, title, stem, type, subject, source, COALESCE(lesson_id, ''), options_json, answer_key_json, tags_json,
 			difficulty, mastery_level, created_at, updated_at
 		FROM questions WHERE id = ?
 	`, id)
@@ -78,7 +79,7 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, id string) (Question, er
 
 func (r *SQLiteRepository) List(ctx context.Context) ([]Question, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, title, stem, type, subject, source, options_json, answer_key_json, tags_json,
+		SELECT id, title, stem, type, subject, source, COALESCE(lesson_id, ''), options_json, answer_key_json, tags_json,
 			difficulty, mastery_level, created_at, updated_at
 		FROM questions
 		ORDER BY created_at DESC
@@ -120,7 +121,7 @@ func (r *SQLiteRepository) Update(ctx context.Context, item Question) (Question,
 
 	res, err := r.db.ExecContext(ctx, `
 		UPDATE questions
-		SET title = ?, stem = ?, type = ?, subject = ?, source = ?, options_json = ?,
+		SET title = ?, stem = ?, type = ?, subject = ?, source = ?, lesson_id = ?, options_json = ?,
 			answer_key_json = ?, tags_json = ?, difficulty = ?, mastery_level = ?, updated_at = ?
 		WHERE id = ?
 	`,
@@ -129,6 +130,7 @@ func (r *SQLiteRepository) Update(ctx context.Context, item Question) (Question,
 		string(item.Type),
 		item.Subject,
 		string(item.Source),
+		item.LessonID,
 		string(optionsJSON),
 		string(answerJSON),
 		string(tagsJSON),
@@ -172,6 +174,7 @@ func scanQuestion(s questionScanner) (Question, error) {
 		item       Question
 		typeValue  string
 		source     string
+		lessonID   string
 		optionsRaw string
 		answerRaw  string
 		tagsRaw    string
@@ -186,6 +189,7 @@ func scanQuestion(s questionScanner) (Question, error) {
 		&typeValue,
 		&item.Subject,
 		&source,
+		&lessonID,
 		&optionsRaw,
 		&answerRaw,
 		&tagsRaw,
@@ -199,6 +203,7 @@ func scanQuestion(s questionScanner) (Question, error) {
 
 	item.Type = QuestionType(typeValue)
 	item.Source = QuestionSource(source)
+	item.LessonID = lessonID
 	if err := json.Unmarshal([]byte(optionsRaw), &item.Options); err != nil {
 		return Question{}, err
 	}
