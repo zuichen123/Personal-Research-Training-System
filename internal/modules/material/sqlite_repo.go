@@ -69,6 +69,11 @@ func (r *SQLiteRepository) List(ctx context.Context, filter ListFilter) ([]Mater
 		query += " AND file_type = ?"
 		args = append(args, filter.FileType)
 	}
+	if filter.Keyword != "" {
+		query += " AND (title LIKE ? OR content_text LIKE ?)"
+		keyword := "%" + filter.Keyword + "%"
+		args = append(args, keyword, keyword)
+	}
 	query += " ORDER BY created_at DESC"
 	if filter.Limit > 0 {
 		query += " LIMIT ?"

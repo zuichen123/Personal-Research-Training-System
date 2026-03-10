@@ -96,11 +96,13 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	userID := r.URL.Query().Get("user_id")
 	subject := r.URL.Query().Get("subject")
 	fileType := r.URL.Query().Get("file_type")
+	keyword := r.URL.Query().Get("keyword")
 
 	items, err := h.service.List(r.Context(), ListFilter{
 		UserID:   userID,
 		Subject:  subject,
 		FileType: fileType,
+		Keyword:  keyword,
 	})
 	if err != nil {
 		httpx.WriteError(w, err)

@@ -32,9 +32,10 @@ type UpdateInput struct {
 }
 
 type ListFilter struct {
-	UserID  string
-	Subject string
+	UserID   string
+	Subject  string
 	FileType string
-	Limit   int
-	Offset  int
+	Keyword  string
+	Limit    int
+	Offset   int
 }
