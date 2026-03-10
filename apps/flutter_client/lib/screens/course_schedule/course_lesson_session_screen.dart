@@ -8,6 +8,7 @@ import '../../providers/ai_agent_provider.dart';
 import '../../providers/app_provider.dart';
 import '../../widgets/ai_formula_text.dart';
 import '../../widgets/ai_multimodal_message_input.dart';
+import '../practice_session_screen.dart';
 
 class CourseLessonSessionScreen extends StatefulWidget {
   const CourseLessonSessionScreen({
@@ -138,6 +139,18 @@ class _CourseLessonSessionScreenState extends State<CourseLessonSessionScreen> {
     );
   }
 
+  Future<void> _startInClassPractice() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PracticeSessionScreen(
+          sessionTitle: '${widget.lessonTitle} · 当堂练习',
+          lessonSubject: 'general',
+          lessonTopic: widget.lessonTopic,
+        ),
+      ),
+    );
+  }
+
   Future<void> _endClass() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -251,11 +264,22 @@ class _CourseLessonSessionScreenState extends State<CourseLessonSessionScreen> {
             top: false,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-              child: AIMultimodalMessageInput(
-                sending: _sending || provider.sending,
-                hintText: '输入要发送给上课助教的内容...',
-                sendLabel: '发送',
-                onSend: _send,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _startInClassPractice,
+                    icon: const Icon(Icons.quiz_outlined),
+                    label: const Text('开始当堂练习'),
+                  ),
+                  const SizedBox(height: 8),
+                  AIMultimodalMessageInput(
+                    sending: _sending || provider.sending,
+                    hintText: '输入要发送给上课助教的内容...',
+                    sendLabel: '发送',
+                    onSend: _send,
+                  ),
+                ],
               ),
             ),
           ),
