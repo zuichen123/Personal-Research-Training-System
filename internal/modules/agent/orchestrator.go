@@ -29,7 +29,7 @@ func (o *Orchestrator) CreateHeadTeacher(ctx context.Context, userID int64) (*Ag
 		UserID:  userID,
 		Type:    "head_teacher",
 		Name:    "班主任",
-		Context: "负责统筹管理所有学科教师和学习计划",
+		Context: GetHeadTeacherPrompt(),
 	}
 	if err := o.repo.Create(ctx, agent); err != nil {
 		return nil, err
@@ -43,13 +43,28 @@ func (o *Orchestrator) CreateSubjectAgent(ctx context.Context, userID int64, sub
 		templateID = 0
 	}
 
+	prompt := GetSubjectTeacherPrompt(
+		subject,
+		"学生",
+		"待评估",
+		"提升成绩，掌握知识",
+		"待分析",
+		"待发现",
+		"综合型",
+		fmt.Sprintf("系统讲解%s知识，培养学科思维，提升应试能力", subject),
+		"严谨专业，深入浅出，注重方法指导",
+		"高考",
+		"30-45",
+		"亲切耐心",
+	)
+
 	agent := &Agent{
 		UserID:           userID,
 		Type:             "subject_teacher",
 		Subject:          subject,
 		Name:             fmt.Sprintf("%s教师", subject),
 		PromptTemplateID: templateID,
-		Context:          fmt.Sprintf("专业%s教师，负责%s科目的教学", subject, subject),
+		Context:          prompt,
 	}
 	if err := o.repo.Create(ctx, agent); err != nil {
 		return nil, err
