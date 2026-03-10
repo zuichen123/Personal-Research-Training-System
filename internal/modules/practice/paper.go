@@ -167,3 +167,23 @@ func (g *PaperGenerator) parsePaper(content string) ([]PaperQuestion, error) {
 	}
 	return questions, nil
 }
+
+func (g *PaperGenerator) ValidatePaper(questions []PaperQuestion, req GeneratePaperRequest) error {
+	if len(questions) != req.QuestionCount {
+		return fmt.Errorf("question count mismatch: expected %d, got %d", req.QuestionCount, len(questions))
+	}
+	totalPoints := 0
+	for _, q := range questions {
+		if q.Question == "" || q.Answer == "" {
+			return fmt.Errorf("invalid question: missing question or answer")
+		}
+		if q.Points <= 0 {
+			return fmt.Errorf("invalid question: points must be positive")
+		}
+		totalPoints += q.Points
+	}
+	if totalPoints < 90 || totalPoints > 110 {
+		return fmt.Errorf("total points out of range: %d (expected 90-110)", totalPoints)
+	}
+	return nil
+}

@@ -20,6 +20,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 		r.Post("/submit", h.submit)
 		r.Get("/attempts", h.listAttempts)
 		r.Delete("/attempts/{id}", h.deleteAttempt)
+		r.Post("/generate-paper", h.generatePaper)
 	})
 }
 
@@ -53,4 +54,18 @@ func (h *Handler) deleteAttempt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+func (h *Handler) generatePaper(w http.ResponseWriter, r *http.Request) {
+	var req GeneratePaperRequest
+	if err := httpx.DecodeJSON(r, &req); err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	questions, err := h.service.GeneratePaper(r.Context(), req)
+	if err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, questions)
 }

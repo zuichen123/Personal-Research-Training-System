@@ -18,6 +18,7 @@ type Service struct {
 	aiService       *ai.Service
 	mistakeService  *mistake.Service
 	gradingService  *GradingService
+	paperGenerator  *PaperGenerator
 }
 
 func NewService(repo Repository, questionService *question.Service, aiService *ai.Service, mistakeService *mistake.Service) *Service {
@@ -31,6 +32,10 @@ func NewService(repo Repository, questionService *question.Service, aiService *a
 
 func (s *Service) SetGradingService(gs *GradingService) {
 	s.gradingService = gs
+}
+
+func (s *Service) SetPaperGenerator(pg *PaperGenerator) {
+	s.paperGenerator = pg
 }
 
 func (s *Service) Submit(ctx context.Context, in SubmitInput) (Attempt, error) {
@@ -102,6 +107,20 @@ func (s *Service) Submit(ctx context.Context, in SubmitInput) (Attempt, error) {
 	}
 
 	return stored, nil
+}
+
+func (s *Service) GeneratePaper(ctx context.Context, req GeneratePaperRequest) ([]PaperQuestion, error) {
+	if s.paperGenerator == nil {
+		return nil, errs.Internal("paper generator not initialized")
+	}
+	questions, err := s.paperGenerator.GeneratePaper(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.paperGenerator.ValidatePaper(questions, req); err != nil {
+		return nil, errs.BadRequest("paper validation failed: " + err.Error())
+	}
+	return questions, nil
 }
 
 func (s *Service) ListAttempts(ctx context.Context) ([]Attempt, error) {
