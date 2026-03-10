@@ -69,6 +69,9 @@ func (s *Service) Upsert(ctx context.Context, in UpsertInput) (UserProfile, erro
 	item.WeakSubjects = normalizeStringList(in.WeakSubjects)
 	item.TargetDestination = strings.TrimSpace(in.TargetDestination)
 	item.Notes = strings.TrimSpace(in.Notes)
+	item.SubjectProfiles = in.SubjectProfiles
+	item.OverallProfile = in.OverallProfile
+	item.LifeProfile = in.LifeProfile
 	item.UpdatedAt = now
 
 	return s.repo.Upsert(ctx, item)

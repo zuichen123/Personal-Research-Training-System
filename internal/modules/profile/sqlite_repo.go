@@ -21,7 +21,9 @@ func NewSQLiteRepository(db *sql.DB) *SQLiteRepository {
 func (r *SQLiteRepository) GetByUserID(ctx context.Context, userID string) (UserProfile, error) {
 	row := r.db.QueryRowContext(ctx, `
 		SELECT user_id, nickname, age, academic_status, goals_json, goal_target_date,
-		       daily_study_minutes, weak_subjects_json, target_destination, notes, created_at, updated_at
+		       daily_study_minutes, weak_subjects_json, target_destination, notes,
+		       COALESCE(subject_profiles_json, '{}'), COALESCE(overall_profile_json, '{}'), COALESCE(life_profile_json, '{}'),
+		       created_at, updated_at
 		FROM user_profiles
 		WHERE user_id = ?
 	`, userID)
@@ -45,12 +47,26 @@ func (r *SQLiteRepository) Upsert(ctx context.Context, item UserProfile) (UserPr
 	if err != nil {
 		return UserProfile{}, errs.Internal("failed to encode weak_subjects")
 	}
+	subjectProfilesJSON, err := json.Marshal(item.SubjectProfiles)
+	if err != nil {
+		return UserProfile{}, errs.Internal("failed to encode subject_profiles")
+	}
+	overallProfileJSON, err := json.Marshal(item.OverallProfile)
+	if err != nil {
+		return UserProfile{}, errs.Internal("failed to encode overall_profile")
+	}
+	lifeProfileJSON, err := json.Marshal(item.LifeProfile)
+	if err != nil {
+		return UserProfile{}, errs.Internal("failed to encode life_profile")
+	}
 
 	_, err = r.db.ExecContext(ctx, `
 		INSERT INTO user_profiles (
 			user_id, nickname, age, academic_status, goals_json, goal_target_date,
-			daily_study_minutes, weak_subjects_json, target_destination, notes, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			daily_study_minutes, weak_subjects_json, target_destination, notes,
+			subject_profiles_json, overall_profile_json, life_profile_json,
+			created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(user_id) DO UPDATE SET
 			nickname = excluded.nickname,
 			age = excluded.age,
@@ -61,6 +77,9 @@ func (r *SQLiteRepository) Upsert(ctx context.Context, item UserProfile) (UserPr
 			weak_subjects_json = excluded.weak_subjects_json,
 			target_destination = excluded.target_destination,
 			notes = excluded.notes,
+			subject_profiles_json = excluded.subject_profiles_json,
+			overall_profile_json = excluded.overall_profile_json,
+			life_profile_json = excluded.life_profile_json,
 			updated_at = excluded.updated_at
 	`,
 		item.UserID,
@@ -73,6 +92,9 @@ func (r *SQLiteRepository) Upsert(ctx context.Context, item UserProfile) (UserPr
 		string(weakSubjectsJSON),
 		item.TargetDestination,
 		item.Notes,
+		string(subjectProfilesJSON),
+		string(overallProfileJSON),
+		string(lifeProfileJSON),
 		item.CreatedAt.Format(time.RFC3339Nano),
 		item.UpdatedAt.Format(time.RFC3339Nano),
 	)
@@ -88,12 +110,15 @@ type profileScanner interface {
 
 func scanProfile(s profileScanner) (UserProfile, error) {
 	var (
-		item            UserProfile
-		goalsRaw        string
-		weakSubjectsRaw string
-		goalTargetDate  sql.NullString
-		createdRaw      string
-		updatedRaw      string
+		item               UserProfile
+		goalsRaw           string
+		weakSubjectsRaw    string
+		goalTargetDate     sql.NullString
+		subjectProfilesRaw string
+		overallProfileRaw  string
+		lifeProfileRaw     string
+		createdRaw         string
+		updatedRaw         string
 	)
 
 	if err := s.Scan(
@@ -107,6 +132,9 @@ func scanProfile(s profileScanner) (UserProfile, error) {
 		&weakSubjectsRaw,
 		&item.TargetDestination,
 		&item.Notes,
+		&subjectProfilesRaw,
+		&overallProfileRaw,
+		&lifeProfileRaw,
 		&createdRaw,
 		&updatedRaw,
 	); err != nil {
@@ -121,6 +149,15 @@ func scanProfile(s profileScanner) (UserProfile, error) {
 	}
 	if goalTargetDate.Valid {
 		item.GoalTargetDate = goalTargetDate.String
+	}
+	if err := json.Unmarshal([]byte(subjectProfilesRaw), &item.SubjectProfiles); err != nil {
+		return UserProfile{}, err
+	}
+	if err := json.Unmarshal([]byte(overallProfileRaw), &item.OverallProfile); err != nil {
+		return UserProfile{}, err
+	}
+	if err := json.Unmarshal([]byte(lifeProfileRaw), &item.LifeProfile); err != nil {
+		return UserProfile{}, err
 	}
 
 	createdAt, err := time.Parse(time.RFC3339Nano, createdRaw)
