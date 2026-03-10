@@ -85,6 +85,13 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 			}
 			return items[i].Subject < items[j].Subject
 		})
+	case "chapter":
+		sort.Slice(items, func(i, j int) bool {
+			if order == "desc" {
+				return items[i].Chapter > items[j].Chapter
+			}
+			return items[i].Chapter < items[j].Chapter
+		})
 	case "created_at":
 		sort.Slice(items, func(i, j int) bool {
 			if order == "desc" {

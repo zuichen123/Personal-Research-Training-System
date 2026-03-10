@@ -32,6 +32,7 @@ type Question struct {
 	Stem         string         `json:"stem"`
 	Type         QuestionType   `json:"type"`
 	Subject      string         `json:"subject"`
+	Chapter      string         `json:"chapter,omitempty"`
 	Source       QuestionSource `json:"source"`
 	LessonID     string         `json:"lesson_id,omitempty"`
 	Options      []Option       `json:"options,omitempty"`
@@ -48,6 +49,7 @@ type CreateInput struct {
 	Stem         string         `json:"stem"`
 	Type         QuestionType   `json:"type"`
 	Subject      string         `json:"subject"`
+	Chapter      string         `json:"chapter"`
 	Source       QuestionSource `json:"source"`
 	LessonID     string         `json:"lesson_id"`
 	Options      []Option       `json:"options"`
@@ -62,6 +64,7 @@ type UpdateInput struct {
 	Stem         string         `json:"stem"`
 	Type         QuestionType   `json:"type"`
 	Subject      string         `json:"subject"`
+	Chapter      string         `json:"chapter"`
 	Source       QuestionSource `json:"source"`
 	LessonID     string         `json:"lesson_id"`
 	Options      []Option       `json:"options"`
