@@ -21,6 +21,10 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Get("/agents/{type}", h.get)
 	r.Post("/agents/{id}/dispatch", h.dispatch)
 	r.Get("/agents/{id}/history", h.history)
+	r.Post("/agents/head-teacher", h.createHeadTeacher)
+	r.Post("/agents/subject", h.createSubjectAgent)
+	r.Post("/agents/{id}/bind-schedule", h.bindSchedule)
+	r.Get("/agents/list", h.listAgents)
 }
 
 func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
@@ -79,4 +83,63 @@ func (h *Handler) history(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, history)
+}
+
+func (h *Handler) createHeadTeacher(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		UserID int64 `json:"user_id"`
+	}
+	if err := httpx.DecodeJSON(r, &req); err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	agent, err := h.service.CreateHeadTeacher(r.Context(), req.UserID)
+	if err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusCreated, agent)
+}
+
+func (h *Handler) createSubjectAgent(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		UserID  int64  `json:"user_id"`
+		Subject string `json:"subject"`
+	}
+	if err := httpx.DecodeJSON(r, &req); err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	agent, err := h.service.CreateSubjectAgent(r.Context(), req.UserID, req.Subject)
+	if err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusCreated, agent)
+}
+
+func (h *Handler) bindSchedule(w http.ResponseWriter, r *http.Request) {
+	agentID, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	var req struct {
+		ScheduleID int64 `json:"schedule_id"`
+	}
+	if err := httpx.DecodeJSON(r, &req); err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	if err := h.service.BindScheduleToAgent(r.Context(), agentID, req.ScheduleID); err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]bool{"success": true})
+}
+
+func (h *Handler) listAgents(w http.ResponseWriter, r *http.Request) {
+	userID, _ := strconv.ParseInt(r.URL.Query().Get("user_id"), 10, 64)
+	agents, err := h.service.ListAgents(r.Context(), userID)
+	if err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, agents)
 }

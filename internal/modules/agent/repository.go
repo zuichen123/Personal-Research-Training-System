@@ -44,6 +44,38 @@ func (r *Repository) Create(ctx context.Context, agent *Agent) error {
 	return nil
 }
 
+func (r *Repository) GetByID(ctx context.Context, id int64) (*Agent, error) {
+	query := `SELECT id, user_id, type, subject, name, prompt_template_id, context, created_at
+		FROM agents WHERE id = ?`
+	var agent Agent
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&agent.ID, &agent.UserID, &agent.Type, &agent.Subject, &agent.Name,
+		&agent.PromptTemplateID, &agent.Context, &agent.CreatedAt,
+	)
+	return &agent, err
+}
+
+func (r *Repository) ListByUser(ctx context.Context, userID int64) ([]Agent, error) {
+	query := `SELECT id, user_id, type, subject, name, prompt_template_id, context, created_at
+		FROM agents WHERE user_id = ? ORDER BY created_at DESC`
+	rows, err := r.db.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var agents []Agent
+	for rows.Next() {
+		var agent Agent
+		if err := rows.Scan(&agent.ID, &agent.UserID, &agent.Type, &agent.Subject, &agent.Name,
+			&agent.PromptTemplateID, &agent.Context, &agent.CreatedAt); err != nil {
+			return nil, err
+		}
+		agents = append(agents, agent)
+	}
+	return agents, nil
+}
+
 func (r *Repository) GetByUserAndType(ctx context.Context, userID int64, agentType string) (*Agent, error) {
 	query := `SELECT id, user_id, type, subject, name, prompt_template_id, context, created_at
 		FROM agents WHERE user_id = ? AND type = ? LIMIT 1`
