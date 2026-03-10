@@ -511,8 +511,27 @@ class PracticeScreen extends StatelessWidget {
   }
 
   Future<void> _showUnitAIPaperDialog(BuildContext context) async {
-    final subjectController = TextEditingController(text: 'math');
-    final topicController = TextEditingController();
+    String defaultSubject = 'math';
+    String defaultTopic = '';
+
+    final provider = context.read<AppProvider>();
+    try {
+      final today = DateTime.now();
+      final todayStr = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+      final lessons = await provider.apiService.listAICourseScheduleLessons(
+        date: todayStr,
+      );
+      if (lessons.isNotEmpty) {
+        final lesson = lessons.first;
+        defaultSubject = lesson['subject']?.toString() ?? defaultSubject;
+        defaultTopic = lesson['topic']?.toString() ?? defaultTopic;
+      }
+    } catch (_) {}
+
+    if (!context.mounted) return;
+
+    final subjectController = TextEditingController(text: defaultSubject);
+    final topicController = TextEditingController(text: defaultTopic);
 
     await showDialog<void>(
       context: context,
