@@ -12,6 +12,12 @@ import (
 const (
 	PromptKeyGenerateQuestions = "generate_questions"
 	PromptKeyGradeAnswer       = "grade_answer"
+	PromptKeyGradeAnswerMath   = "grade_answer_math"
+	PromptKeyGradeAnswerEnglish = "grade_answer_english"
+	PromptKeyGradeAnswerChinese = "grade_answer_chinese"
+	PromptKeyGradeAnswerPhysics = "grade_answer_physics"
+	PromptKeyGradeAnswerChemistry = "grade_answer_chemistry"
+	PromptKeyGradeAnswerBiology = "grade_answer_biology"
 	PromptKeyBuildLearningPlan = "build_learning_plan"
 	PromptKeyOptimizeLearning  = "optimize_learning_plan"
 	PromptKeyEvaluateLearning  = "evaluate_learning"
@@ -371,6 +377,12 @@ var promptTemplatePresetByKey = func() map[string]promptTemplatePreset {
 var promptPresetDirByKey = map[string]string{
 	PromptKeyGenerateQuestions: filepath.Join("prompts", "ai", "generate_questions"),
 	PromptKeyGradeAnswer:       filepath.Join("prompts", "ai", "grade_answer"),
+	PromptKeyGradeAnswerMath:   filepath.Join("prompts", "ai", "grade_answer_math"),
+	PromptKeyGradeAnswerEnglish: filepath.Join("prompts", "ai", "grade_answer_english"),
+	PromptKeyGradeAnswerChinese: filepath.Join("prompts", "ai", "grade_answer_chinese"),
+	PromptKeyGradeAnswerPhysics: filepath.Join("prompts", "ai", "grade_answer_physics"),
+	PromptKeyGradeAnswerChemistry: filepath.Join("prompts", "ai", "grade_answer_chemistry"),
+	PromptKeyGradeAnswerBiology: filepath.Join("prompts", "ai", "grade_answer_biology"),
 	PromptKeyBuildLearningPlan: filepath.Join("prompts", "ai", "build_learning_plan"),
 	PromptKeyOptimizeLearning:  filepath.Join("prompts", "ai", "optimize_learning_plan"),
 	PromptKeyEvaluateLearning:  filepath.Join("prompts", "ai", "evaluate_learning"),

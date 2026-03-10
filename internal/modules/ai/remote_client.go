@@ -115,6 +115,26 @@ func (c *remoteLLMClient) GenerateQuestions(ctx context.Context, req GenerateReq
 	return payload.Items, nil
 }
 
+func gradePromptKeyForSubject(subject string) string {
+	normalized := strings.ToLower(strings.TrimSpace(subject))
+	switch normalized {
+	case "math", "数学":
+		return PromptKeyGradeAnswerMath
+	case "english", "英语":
+		return PromptKeyGradeAnswerEnglish
+	case "chinese", "语文":
+		return PromptKeyGradeAnswerChinese
+	case "physics", "物理":
+		return PromptKeyGradeAnswerPhysics
+	case "chemistry", "化学":
+		return PromptKeyGradeAnswerChemistry
+	case "biology", "生物":
+		return PromptKeyGradeAnswerBiology
+	default:
+		return PromptKeyGradeAnswer
+	}
+}
+
 func (c *remoteLLMClient) GradeAnswer(ctx context.Context, req GradeRequest) (GradeResult, error) {
 	if err := c.ensureReady(); err != nil {
 		return GradeResult{}, err
@@ -126,7 +146,7 @@ func (c *remoteLLMClient) GradeAnswer(ctx context.Context, req GradeRequest) (Gr
 		promptField{key: "user_answer", value: req.UserAnswer},
 		promptField{key: "attachment_files", value: len(req.Attachments)},
 	)
-	prompt := c.buildOperationPrompt(PromptKeyGradeAnswer, userInput, PromptRuntimePatch{})
+	prompt := c.buildOperationPrompt(gradePromptKeyForSubject(req.Question.Subject), userInput, PromptRuntimePatch{})
 	var out GradeResult
 	if err := c.invokeJSON(ctx, "grade_answer", prompt, req.Attachments, &out); err != nil {
 		return GradeResult{}, err
