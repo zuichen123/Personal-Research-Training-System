@@ -89,6 +89,7 @@ func NewApp(cfg config.Config) (*App, error) {
 		aiRuntime,
 		aiConfigRepo,
 		aiAgentRepo,
+		materialService,
 	)
 	if err := aiService.LoadPromptTemplates(context.Background()); err != nil {
 		_ = db.Close()

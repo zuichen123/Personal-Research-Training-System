@@ -19,6 +19,7 @@ type Service struct {
 	questionService *question.Service
 	planService     *plan.Service
 	profileService  profileServiceInterface
+	materialService materialServiceInterface
 	appControl      AppControl
 	fallbackEnabled bool
 	runtime         RuntimeConfig
@@ -67,6 +68,7 @@ func NewServiceWithStore(
 		runtime,
 		configStore,
 		nil,
+		nil,
 	)
 }
 
@@ -78,6 +80,7 @@ func NewServiceWithStoreAndDeps(
 	runtime RuntimeConfig,
 	configStore ProviderConfigStore,
 	agentStore AgentChatStore,
+	materialService materialServiceInterface,
 ) *Service {
 	var promptStore PromptTemplateStore
 	if s, ok := configStore.(PromptTemplateStore); ok {
@@ -88,6 +91,7 @@ func NewServiceWithStoreAndDeps(
 		client:          client,
 		questionService: questionService,
 		planService:     planService,
+		materialService: materialService,
 		fallbackEnabled: fallbackEnabled,
 		runtime:         runtime,
 		configStore:     configStore,
