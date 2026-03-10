@@ -17,6 +17,7 @@ type Service struct {
 	questionService *question.Service
 	aiService       *ai.Service
 	mistakeService  *mistake.Service
+	gradingService  *GradingService
 }
 
 func NewService(repo Repository, questionService *question.Service, aiService *ai.Service, mistakeService *mistake.Service) *Service {
@@ -26,6 +27,10 @@ func NewService(repo Repository, questionService *question.Service, aiService *a
 		aiService:       aiService,
 		mistakeService:  mistakeService,
 	}
+}
+
+func (s *Service) SetGradingService(gs *GradingService) {
+	s.gradingService = gs
 }
 
 func (s *Service) Submit(ctx context.Context, in SubmitInput) (Attempt, error) {
@@ -44,23 +49,39 @@ func (s *Service) Submit(ctx context.Context, in SubmitInput) (Attempt, error) {
 		return Attempt{}, err
 	}
 
-	gradeResult, err := s.aiService.Grade(ctx, ai.GradeRequest{
-		Question:   q,
-		UserAnswer: in.UserAnswer,
-	})
-	if err != nil {
-		return Attempt{}, err
+	var gradeResult *GradingResult
+	if s.gradingService != nil {
+		gradeResult, err = s.gradingService.GradeAnswer(ctx, q.Subject, q.Stem, strings.Join(q.AnswerKey, ","), strings.Join(in.UserAnswer, ","))
+		if err != nil {
+			return Attempt{}, err
+		}
+	} else {
+		aiGradeResult, err := s.aiService.Grade(ctx, ai.GradeRequest{
+			Question:   q,
+			UserAnswer: in.UserAnswer,
+		})
+		if err != nil {
+			return Attempt{}, err
+		}
+		gradeResult = &GradingResult{
+			Score:     int(aiGradeResult.Score),
+			IsCorrect: aiGradeResult.Correct,
+			Feedback:  aiGradeResult.Feedback,
+		}
 	}
 
 	attempt := Attempt{
-		ID:             uuid.NewString(),
-		QuestionID:     q.ID,
-		UserAnswer:     in.UserAnswer,
-		ElapsedSeconds: in.ElapsedSeconds,
-		Score:          gradeResult.Score,
-		Correct:        gradeResult.Correct,
-		Feedback:       gradeResult.Feedback,
-		SubmittedAt:    time.Now().UTC(),
+		ID:               uuid.NewString(),
+		QuestionID:       q.ID,
+		UserAnswer:       in.UserAnswer,
+		ElapsedSeconds:   in.ElapsedSeconds,
+		Score:            float64(gradeResult.Score),
+		Correct:          gradeResult.IsCorrect,
+		Feedback:         gradeResult.Feedback,
+		ErrorAnalysis:    gradeResult.ErrorAnalysis,
+		Suggestions:      gradeResult.Suggestions,
+		DetailedSolution: gradeResult.DetailedSolution,
+		SubmittedAt:      time.Now().UTC(),
 	}
 
 	stored, err := s.repo.Create(ctx, attempt)
@@ -68,7 +89,7 @@ func (s *Service) Submit(ctx context.Context, in SubmitInput) (Attempt, error) {
 		return Attempt{}, err
 	}
 
-	if !gradeResult.Correct {
+	if !gradeResult.IsCorrect {
 		_, _ = s.mistakeService.Create(ctx, mistake.CreateInput{
 			QuestionID:   q.ID,
 			Subject:      q.Subject,
@@ -76,7 +97,7 @@ func (s *Service) Submit(ctx context.Context, in SubmitInput) (Attempt, error) {
 			MasteryLevel: q.MasteryLevel,
 			UserAnswer:   in.UserAnswer,
 			Feedback:     gradeResult.Feedback,
-			Reason:       gradeResult.WrongReason,
+			Reason:       gradeResult.ErrorAnalysis,
 		})
 	}
 
