@@ -59,11 +59,23 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
                 const Icon(Icons.psychology_outlined, size: 42),
                 const SizedBox(height: 8),
                 const Text('暂无已配置智能体'),
+                const SizedBox(height: 8),
+                const Text(
+                  '先创建一个默认班主任Agent，后续再继续扩展课程、练习和批阅专用智能体。',
+                  textAlign: TextAlign.center,
+                ),
                 const SizedBox(height: 12),
                 FilledButton.icon(
+                  onPressed: () =>
+                      _showCreateAgentDialog(context, presetHomeroom: true),
+                  icon: const Icon(Icons.school_outlined),
+                  label: const Text('创建班主任Agent'),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
                   onPressed: () => _showCreateAgentDialog(context),
                   icon: const Icon(Icons.add),
-                  label: const Text('新建智能体'),
+                  label: const Text('自定义智能体'),
                 ),
               ],
             ),
@@ -161,7 +173,36 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
     ).push(MaterialPageRoute(builder: (_) => const AIScreen()));
   }
 
-  Future<void> _showCreateAgentDialog(BuildContext context) async {
+  void _applyHomeroomPreset({
+    required TextEditingController nameController,
+    required TextEditingController roleController,
+    required TextEditingController taskController,
+    required TextEditingController toolController,
+    required TextEditingController rulesController,
+    required TextEditingController extraController,
+  }) {
+    nameController.text = '班主任Agent';
+    roleController.text =
+        '''你是用户的班主任Agent，也是整个自学系统的总控教师、学习教练和任务协调者。你要长期陪伴用户，主动统筹课程、计划、练习、复盘与画像更新。''';
+    taskController.text = '''1. 首次对话时，优先引导用户完成初始化信息采集，逐步确认目标、基础、时间安排、薄弱点与偏好。
+2. 根据用户状态拆解接下来最重要的学习动作，并把复杂目标转成可执行的小步。
+3. 当用户提出课程、练习、计划、请假、调课、复习等需求时，优先给出可落地方案，再调用系统能力执行。
+4. 你的默认目标不是闲聊，而是帮助用户持续学习并提高结果质量。''';
+    toolController.text = '''- 主动使用系统内可用的课程表、计划、练习、题库、资料、批阅与画像能力。
+- 需要生成或修改应用内数据时，优先调用对应工具，而不是只给口头建议。
+- 当信息不足时，先追问关键缺失项；当信息足够时，直接推进下一步。''';
+    rulesController.text = '''- 不得编造用户画像、课程安排、练习结果或系统内不存在的数据。
+- 所有建议必须尽量具体，避免空泛口号。
+- 做任务编排时，优先考虑用户当前进度、可用时间与长期目标。
+- 如某项操作失败，需要解释原因并给出下一步补救方案。''';
+    extraController.text =
+        '''初始化阶段优先使用短问题逐项确认信息；完成初始化后，再进入课程安排、学习计划和专属学科Agent的后续编排。''';
+  }
+
+  Future<void> _showCreateAgentDialog(
+    BuildContext context, {
+    bool presetHomeroom = false,
+  }) async {
     final agentProvider = context.read<AIAgentProvider>();
     final appProvider = context.read<AppProvider>();
     if (!context.mounted) {
@@ -219,12 +260,24 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
     );
     var protocol = initialData.protocol;
     var enabled = initialData.enabled;
+    if (presetHomeroom) {
+      _applyHomeroomPreset(
+        nameController: nameController,
+        roleController: systemPromptRoleController,
+        taskController: systemPromptTaskController,
+        toolController: systemPromptToolController,
+        rulesController: systemPromptRulesController,
+        extraController: systemPromptExtraController,
+      );
+    }
+    final dialogTitle = presetHomeroom ? '创建班主任Agent' : '新建智能体';
+    final submitLabel = presetHomeroom ? '创建班主任Agent' : '创建';
 
     await showDialog<void>(
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          title: const Text('新建智能体'),
+          title: Text(dialogTitle),
           content: SizedBox(
             width: 560,
             child: SingleChildScrollView(
@@ -340,7 +393,7 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
                   messenger.showSnackBar(SnackBar(content: Text(msg)));
                 }
               },
-              child: const Text('创建'),
+              child: Text(submitLabel),
             ),
           ],
         );
