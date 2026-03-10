@@ -2,6 +2,8 @@ package mistake
 
 import (
 	"net/http"
+	"sort"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"self-study-tool/internal/shared/httpx"
@@ -44,6 +46,41 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, err)
 		return
 	}
+
+	sortBy := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("sort_by")))
+	order := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("order")))
+	if order == "" {
+		order = "desc"
+	}
+
+	switch sortBy {
+	case "subject":
+		sort.Slice(items, func(i, j int) bool {
+			if order == "desc" {
+				return items[i].Subject > items[j].Subject
+			}
+			return items[i].Subject < items[j].Subject
+		})
+	case "difficulty":
+		sort.Slice(items, func(i, j int) bool {
+			if order == "desc" {
+				return items[i].Difficulty > items[j].Difficulty
+			}
+			return items[i].Difficulty < items[j].Difficulty
+		})
+	case "created_at":
+		sort.Slice(items, func(i, j int) bool {
+			if order == "desc" {
+				return items[i].CreatedAt.After(items[j].CreatedAt)
+			}
+			return items[i].CreatedAt.Before(items[j].CreatedAt)
+		})
+	default:
+		sort.Slice(items, func(i, j int) bool {
+			return items[i].CreatedAt.After(items[j].CreatedAt)
+		})
+	}
+
 	httpx.WriteJSON(w, http.StatusOK, items)
 }
 
