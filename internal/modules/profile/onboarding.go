@@ -8,7 +8,7 @@ import (
 )
 
 type OnboardingService struct {
-	repo *Repository
+	db *sql.DB
 }
 
 type OnboardingQuestion struct {
@@ -24,8 +24,8 @@ type OnboardingState struct {
 	Completed   bool              `json:"completed"`
 }
 
-func NewOnboardingService(repo *Repository) *OnboardingService {
-	return &OnboardingService{repo: repo}
+func NewOnboardingService(db *sql.DB) *OnboardingService {
+	return &OnboardingService{db: db}
 }
 
 func (s *OnboardingService) GetNextQuestion(ctx context.Context, userID int64, step int) (*OnboardingQuestion, error) {
@@ -83,7 +83,7 @@ func (s *OnboardingService) SaveResponse(ctx context.Context, userID int64, step
 			responses = excluded.responses,
 			updated_at = CURRENT_TIMESTAMP`
 
-	_, err = s.repo.db.ExecContext(ctx, query, userID, state.CurrentStep, string(responsesJSON), state.Completed)
+	_, err = s.db.ExecContext(ctx, query, userID, state.CurrentStep, string(responsesJSON), state.Completed)
 	return err
 }
 
@@ -93,7 +93,7 @@ func (s *OnboardingService) GetState(ctx context.Context, userID int64) (*Onboar
 	var state OnboardingState
 	var responsesJSON string
 
-	err := s.repo.db.QueryRowContext(ctx, query, userID).Scan(
+	err := s.db.QueryRowContext(ctx, query, userID).Scan(
 		&state.UserID,
 		&state.CurrentStep,
 		&responsesJSON,
@@ -112,7 +112,7 @@ func (s *OnboardingService) GetState(ctx context.Context, userID int64) (*Onboar
 }
 
 func (s *OnboardingService) CompleteOnboarding(ctx context.Context, userID int64) error {
-	tx, err := s.repo.db.BeginTx(ctx, nil)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}

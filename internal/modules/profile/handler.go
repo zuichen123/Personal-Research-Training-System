@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"self-study-tool/internal/shared/httpx"
+	"self-study-tool/internal/shared/errs"
 )
 
 type Handler struct {
@@ -54,7 +55,7 @@ func (h *Handler) upsert(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) getNextQuestion(w http.ResponseWriter, r *http.Request) {
 	userID := r.URL.Query().Get("user_id")
 	if userID == "" {
-		httpx.WriteError(w, httpx.NewError(http.StatusBadRequest, "user_id required"))
+		httpx.WriteError(w, errs.BadRequest("user_id required"))
 		return
 	}
 

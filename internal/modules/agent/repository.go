@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"time"
 )
 

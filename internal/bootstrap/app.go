@@ -114,7 +114,8 @@ func NewApp(cfg config.Config) (*App, error) {
 	aiHandler := ai.NewHandler(aiService)
 	practiceHandler := practice.NewHandler(practiceService)
 	resourceHandler := resource.NewHandler(resourceService, cfg.UploadMaxBytes)
-	profileHandler := profile.NewHandler(profileService)
+	onboardingService := profile.NewOnboardingService(db)
+	profileHandler := profile.NewHandler(profileService, onboardingService)
 	materialHandler := material.NewHandler(materialService, cfg.UploadDir)
 	systemHandler := system.NewHandler()
 
