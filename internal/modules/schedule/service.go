@@ -44,9 +44,27 @@ func (s *Service) GetDailySchedule(ctx context.Context, userID int64, date strin
 	return s.repo.GetDailySchedule(ctx, userID, date)
 }
 
-func (s *Service) RequestAdjustment(ctx context.Context, scheduleID int64, reason string) error {
-	// Simplified: just mark as pending adjustment
-	return s.repo.UpdateStatus(ctx, scheduleID, "pending_adjustment")
+func (s *Service) RequestAdjustment(ctx context.Context, userID int64, scheduleID int64, reason string, adjustmentType string) error {
+	schedule, err := s.repo.GetByID(ctx, scheduleID)
+	if err != nil {
+		return err
+	}
+
+	switch adjustmentType {
+	case "postpone":
+		schedule.Date = addDays(schedule.Date, 1)
+	case "advance":
+		schedule.Date = addDays(schedule.Date, -1)
+	case "cancel":
+		return s.repo.Delete(ctx, scheduleID)
+	}
+
+	return s.repo.Update(ctx, schedule)
+}
+
+func addDays(dateStr string, days int) string {
+	t, _ := time.Parse("2006-01-02", dateStr)
+	return t.AddDate(0, 0, days).Format("2006-01-02")
 }
 
 type mockAIService struct{}

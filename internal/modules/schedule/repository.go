@@ -63,3 +63,26 @@ func (r *Repository) UpdateStatus(ctx context.Context, id int64, status string) 
 	_, err := r.db.ExecContext(ctx, query, status, id)
 	return err
 }
+
+func (r *Repository) GetByID(ctx context.Context, id int64) (*Schedule, error) {
+	query := `SELECT id, user_id, date, subject, topic, duration_minutes, start_time, status, created_at
+		FROM schedules WHERE id = ?`
+	var s Schedule
+	err := r.db.QueryRowContext(ctx, query, id).Scan(&s.ID, &s.UserID, &s.Date, &s.Subject, &s.Topic, &s.DurationMinutes, &s.StartTime, &s.Status, &s.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
+func (r *Repository) Update(ctx context.Context, s *Schedule) error {
+	query := `UPDATE schedules SET date = ?, subject = ?, topic = ?, duration_minutes = ?, start_time = ?, status = ? WHERE id = ?`
+	_, err := r.db.ExecContext(ctx, query, s.Date, s.Subject, s.Topic, s.DurationMinutes, s.StartTime, s.Status, s.ID)
+	return err
+}
+
+func (r *Repository) Delete(ctx context.Context, id int64) error {
+	query := `DELETE FROM schedules WHERE id = ?`
+	_, err := r.db.ExecContext(ctx, query, id)
+	return err
+}

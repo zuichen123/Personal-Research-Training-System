@@ -55,15 +55,17 @@ func (h *Handler) getDailySchedule(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) requestAdjustment(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		ScheduleID int64  `json:"schedule_id"`
-		Reason     string `json:"reason"`
+		UserID         int64  `json:"user_id"`
+		ScheduleID     int64  `json:"schedule_id"`
+		Reason         string `json:"reason"`
+		AdjustmentType string `json:"adjustment_type"`
 	}
 	if err := httpx.DecodeJSON(r, &req); err != nil {
 		httpx.WriteError(w, err)
 		return
 	}
 
-	if err := h.service.RequestAdjustment(r.Context(), req.ScheduleID, req.Reason); err != nil {
+	if err := h.service.RequestAdjustment(r.Context(), req.UserID, req.ScheduleID, req.Reason, req.AdjustmentType); err != nil {
 		httpx.WriteError(w, err)
 		return
 	}
