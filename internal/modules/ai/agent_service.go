@@ -1524,10 +1524,13 @@ func (s *Service) chatWithFallback(
 
 	fallbackClient, fallbackErr := s.buildAgentClient(agent.Protocol, agent.Fallback)
 	if fallbackErr != nil || !fallbackClient.IsReady() {
+		fallbackClient = NewMockClient(s.runtime.MockLatency)
 		if err != nil {
-			return ChatResponse{}, meta, err
+			logx.LoggerFromContext(ctx).Warn("both primary and fallback failed, using mock",
+				slog.String("event", "ai.agent.mock_fallback"),
+				slog.String("agent_id", agent.ID),
+			)
 		}
-		return ChatResponse{}, meta, errs.BadRequest("fallback provider is not ready")
 	}
 	start := time.Now()
 	resp, callErr := fallbackClient.Chat(ctx, req)
@@ -1570,10 +1573,13 @@ func (s *Service) generateQuestionsWithFallback(
 	}
 	fallbackClient, fallbackErr := s.buildAgentClient(agent.Protocol, agent.Fallback)
 	if fallbackErr != nil || !fallbackClient.IsReady() {
+		fallbackClient = NewMockClient(s.runtime.MockLatency)
 		if err != nil {
-			return nil, agentCallMeta{}, err
+			logx.LoggerFromContext(ctx).Warn("both primary and fallback failed, using mock",
+				slog.String("event", "ai.agent.mock_fallback"),
+				slog.String("agent_id", agent.ID),
+			)
 		}
-		return nil, agentCallMeta{}, errs.BadRequest("fallback provider is not ready")
 	}
 	start := time.Now()
 	items, callErr := fallbackClient.GenerateQuestions(ctx, req)
@@ -1616,10 +1622,13 @@ func (s *Service) buildPlanWithFallback(
 	}
 	fallbackClient, fallbackErr := s.buildAgentClient(agent.Protocol, agent.Fallback)
 	if fallbackErr != nil || !fallbackClient.IsReady() {
+		fallbackClient = NewMockClient(s.runtime.MockLatency)
 		if err != nil {
-			return LearnResult{}, agentCallMeta{}, err
+			logx.LoggerFromContext(ctx).Warn("both primary and fallback failed, using mock",
+				slog.String("event", "ai.agent.mock_fallback"),
+				slog.String("agent_id", agent.ID),
+			)
 		}
-		return LearnResult{}, agentCallMeta{}, errs.BadRequest("fallback provider is not ready")
 	}
 	start := time.Now()
 	planResult, callErr := fallbackClient.BuildLearningPlan(ctx, req)
