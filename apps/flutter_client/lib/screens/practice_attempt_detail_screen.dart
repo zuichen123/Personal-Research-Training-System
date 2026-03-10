@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../models/practice.dart';
 import '../models/question.dart';
@@ -38,11 +38,9 @@ class PracticeAttemptDetailScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _statusCard(context),
-          const SizedBox(height: 12),
           _questionCard(context),
           const SizedBox(height: 12),
-          _answerCard(context),
+          _resultCard(context),
           const SizedBox(height: 12),
           _aiFeedbackCard(context),
           if (sameQuestionAttempts.length > 1) ...[
@@ -56,7 +54,7 @@ class PracticeAttemptDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _statusCard(BuildContext context) {
+  Widget _resultCard(BuildContext context) {
     final scoreColor = attempt.score >= 80
         ? Colors.green
         : attempt.score >= 60
@@ -64,6 +62,16 @@ class PracticeAttemptDetailScreen extends StatelessWidget {
         : Colors.red;
     final statusText = attempt.correct ? '正确' : '错误';
     final statusColor = attempt.correct ? Colors.green : Colors.red;
+    final answerWidgets = attempt.userAnswer.isEmpty
+        ? <Widget>[const Text('-')]
+        : attempt.userAnswer
+              .map(
+                (answer) => Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: AIFormulaText(answer, selectable: true),
+                ),
+              )
+              .toList(growable: false);
 
     return Card(
       child: Padding(
@@ -71,6 +79,8 @@ class PracticeAttemptDetailScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Text('作答结果', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 8),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -88,6 +98,31 @@ class PracticeAttemptDetailScreen extends StatelessWidget {
                 ),
               ],
             ),
+            const SizedBox(height: 8),
+            Text('我的作答', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 8),
+            ...answerWidgets,
+            if (question != null) ...[
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton.icon(
+                  onPressed: () {
+                    if (question == null) return;
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => QuestionDetailScreen(
+                          question: question!,
+                          questionNumber: 1,
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.replay),
+                  label: const Text('重新作答'),
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -123,58 +158,6 @@ class PracticeAttemptDetailScreen extends StatelessWidget {
                   padding: const EdgeInsets.only(bottom: 4),
                   child: AIFormulaText('${option.key}. ${option.text}'),
                 ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _answerCard(BuildContext context) {
-    final answerWidgets = attempt.userAnswer.isEmpty
-        ? <Widget>[const Text('-')]
-        : attempt.userAnswer
-              .map(
-                (answer) => Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: AIFormulaText(answer, selectable: true),
-                ),
-              )
-              .toList(growable: false);
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('我的作答', style: Theme.of(context).textTheme.titleSmall),
-                  const SizedBox(height: 8),
-                  ...answerWidgets,
-                ],
-              ),
-            ),
-            if (question != null) ...[
-              const SizedBox(width: 12),
-              FilledButton.icon(
-                onPressed: () {
-                  if (question == null) return;
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => QuestionDetailScreen(
-                        question: question!,
-                        questionNumber: 1,
-                      ),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.replay),
-                label: const Text('重新作答'),
               ),
             ],
           ],
@@ -258,30 +241,85 @@ class PracticeAttemptDetailScreen extends StatelessWidget {
               final color = item.correct ? Colors.green : Colors.red;
               return Padding(
                 padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        _formatTime(item.submittedAt),
-                        style: const TextStyle(fontSize: 12),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: isCurrent
+                        ? null
+                        : () => _openAttemptDetail(context, item),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        color: isCurrent
+                            ? Theme.of(
+                                context,
+                              ).colorScheme.surfaceContainerHighest
+                            : null,
+                        border: Border.all(
+                          color: isCurrent
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).dividerColor,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _formatTime(item.submittedAt),
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  item.correct ? '正确' : '错误',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: color,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Text(
+                            item.score.toStringAsFixed(1),
+                            style: TextStyle(
+                              color: color,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          if (isCurrent)
+                            const Text('当前', style: TextStyle(fontSize: 12))
+                          else
+                            const Icon(Icons.chevron_right, size: 18),
+                        ],
                       ),
                     ),
-                    Text(
-                      item.score.toStringAsFixed(1),
-                      style: TextStyle(
-                        color: color,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    if (isCurrent) ...[
-                      const SizedBox(width: 8),
-                      const Text('当前', style: TextStyle(fontSize: 12)),
-                    ],
-                  ],
+                  ),
                 ),
               );
             }),
           ],
+        ),
+      ),
+    );
+  }
+
+  void _openAttemptDetail(BuildContext context, PracticeAttempt nextAttempt) {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => PracticeAttemptDetailScreen(
+          attempt: nextAttempt,
+          question: question,
+          allAttempts: allAttempts,
         ),
       ),
     );
