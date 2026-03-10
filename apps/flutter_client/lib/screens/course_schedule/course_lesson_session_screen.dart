@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/ai_agent_chat.dart';
 import '../../providers/ai_agent_provider.dart';
+import '../../providers/app_provider.dart';
 import '../../widgets/ai_formula_text.dart';
 import '../../widgets/ai_multimodal_message_input.dart';
 
@@ -137,6 +138,48 @@ class _CourseLessonSessionScreenState extends State<CourseLessonSessionScreen> {
     );
   }
 
+  Future<void> _endClass() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('结束上课'),
+        content: const Text('确认结束本节课并生成家庭作业？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('确认'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final appProvider = context.read<AppProvider>();
+    try {
+      await appProvider.generateAIQuestions({
+        'topic': widget.lessonTopic,
+        'subject': 'general',
+        'scope': 'unit',
+        'count': 3,
+        'difficulty': 3,
+      }, persist: true);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('家庭作业已生成')),
+      );
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('生成失败：$e')),
+      );
+    }
+  }
+
   String _formatElapsed(int seconds) {
     final mins = (seconds ~/ 60).toString().padLeft(2, '0');
     final secs = (seconds % 60).toString().padLeft(2, '0');
@@ -162,6 +205,11 @@ class _CourseLessonSessionScreenState extends State<CourseLessonSessionScreen> {
             onPressed: _prepareSession,
             tooltip: '刷新会话',
             icon: const Icon(Icons.refresh),
+          ),
+          IconButton(
+            onPressed: _endClass,
+            tooltip: '结束上课',
+            icon: const Icon(Icons.exit_to_app),
           ),
         ],
       ),
