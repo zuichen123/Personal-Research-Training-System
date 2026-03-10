@@ -52,4 +52,5 @@ func (s *Service) GetUserInfo(ctx context.Context, userID string) (UserInfoResul
 
 type profileServiceInterface interface {
 	Get(ctx context.Context, userID string) (profile.UserProfile, error)
+	Upsert(ctx context.Context, in profile.UpsertInput) (profile.UserProfile, error)
 }

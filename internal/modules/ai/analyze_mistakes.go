@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"self-study-tool/internal/modules/mistake"
+	"self-study-tool/internal/modules/profile"
 	"self-study-tool/internal/shared/errs"
 )
 
@@ -67,4 +69,50 @@ func buildMistakeSummary(mistakes []mistake.Record, subjectFilter string) string
 		sb.WriteString(fmt.Sprintf("%d. 科目：%s，难度：%d，原因：%s\n", i+1, m.Subject, m.Difficulty, m.Reason))
 	}
 	return sb.String()
+}
+
+func (s *Service) AnalyzeMistakesAndUpdateProfile(ctx context.Context, req AnalyzeMistakesRequest) (AnalyzeMistakesResult, error) {
+	result, err := s.AnalyzeMistakes(ctx, req)
+	if err != nil {
+		return result, err
+	}
+
+	if s.profileService == nil {
+		return result, nil
+	}
+
+	userProfile, err := s.profileService.Get(ctx, req.UserID)
+	if err != nil && errs.FromError(err).Code != "not_found" {
+		return result, nil
+	}
+
+	if userProfile.SubjectProfiles == nil {
+		userProfile.SubjectProfiles = make(map[string]interface{})
+	}
+
+	analysisData := map[string]interface{}{
+		"weak_points":      result.WeakPoints,
+		"common_reasons":   result.CommonReasons,
+		"strengths":        result.Strengths,
+		"recommendations":  result.Recommendations,
+		"subject_insights": result.SubjectInsights,
+		"updated_at":       time.Now().UTC().Format(time.RFC3339),
+	}
+
+	if req.Subject != "" {
+		userProfile.SubjectProfiles[req.Subject] = analysisData
+	} else {
+		userProfile.SubjectProfiles["overall_mistakes"] = analysisData
+	}
+
+	_, _ = s.profileService.Upsert(ctx, profile.UpsertInput{
+		UserID:          req.UserID,
+		Nickname:        userProfile.Nickname,
+		Age:             userProfile.Age,
+		AcademicStatus:  userProfile.AcademicStatus,
+		Goals:           userProfile.Goals,
+		SubjectProfiles: userProfile.SubjectProfiles,
+	})
+
+	return result, nil
 }
