@@ -563,7 +563,7 @@ Future<void> _showQuestionEditDialog(
               _dialogInput(sourceController, '来源'),
               _dialogInput(answerKeyController, '答案关键点(逗号分隔)'),
               _dialogInput(tagsController, '标签(逗号分隔)'),
-              _dialogInput(difficultyController, '难度(1-5)'),
+              _dialogInput(difficultyController, '难度(1-10)'),
               _dialogInput(masteryController, '掌握度(0-100)'),
             ],
           ),
@@ -648,7 +648,7 @@ Future<void> _showAICreateDialog(
                   _dialogInput(unitController, '单元（可选）'),
                   _dialogInput(topicController, '主题（可选，默认取单元）'),
                   _dialogInput(countController, '题目数量'),
-                  _dialogInput(difficultyController, '难度(1-5)'),
+                  _dialogInput(difficultyController, '难度(1-10)'),
                   if (generating)
                     Container(
                       width: double.infinity,

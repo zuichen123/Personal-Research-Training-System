@@ -439,7 +439,7 @@ class _AIScreenState extends State<AIScreen> {
           _input(_genTopicController, '主题'),
           _input(_genSubjectController, '科目'),
           _input(_genCountController, '数量'),
-          _input(_genDifficultyController, '难度(1-5)'),
+          _input(_genDifficultyController, '难度(1-10)'),
           SwitchListTile(
             value: _persist,
             title: const Text('同时写入题库'),
