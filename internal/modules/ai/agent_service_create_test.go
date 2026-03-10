@@ -79,6 +79,7 @@ func newCreateAgentTestService(t *testing.T, runtime RuntimeConfig) (*Service, *
 		runtime,
 		nil,
 		repo,
+		nil,
 	)
 	return svc, repo
 }

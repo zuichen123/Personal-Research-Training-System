@@ -157,6 +157,7 @@ func newCompressTestService(t *testing.T) (*Service, *SQLiteAgentRepository) {
 		},
 		nil,
 		repo,
+		nil,
 	)
 	return svc, repo
 }

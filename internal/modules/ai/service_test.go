@@ -689,6 +689,7 @@ func TestService_Learn_AppliesLearningSchedulePromptPatch(t *testing.T) {
 		RuntimeConfig{Provider: "mock"},
 		nil,
 		nil,
+		nil,
 	)
 
 	_, err := svc.Learn(context.Background(), LearnRequest{
@@ -741,6 +742,7 @@ func TestService_OptimizeLearningPlan_AppliesLearningSchedulePromptPatch(t *test
 		planService,
 		false,
 		RuntimeConfig{Provider: "mock"},
+		nil,
 		nil,
 		nil,
 	)
