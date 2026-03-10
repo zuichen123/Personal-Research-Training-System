@@ -200,6 +200,7 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 		`ALTER TABLE mistakes ADD COLUMN subject TEXT NOT NULL DEFAULT 'general';`,
 		`ALTER TABLE mistakes ADD COLUMN difficulty INTEGER NOT NULL DEFAULT 1;`,
 		`ALTER TABLE mistakes ADD COLUMN mastery_level INTEGER NOT NULL DEFAULT 0;`,
+		`ALTER TABLE mistakes ADD COLUMN unit TEXT NOT NULL DEFAULT '';`,
 		`ALTER TABLE practice_attempts ADD COLUMN elapsed_seconds INTEGER NOT NULL DEFAULT 0;`,
 		`ALTER TABLE plans ADD COLUMN source TEXT NOT NULL DEFAULT 'manual';`,
 		`ALTER TABLE ai_agent_sessions ADD COLUMN context_summary_text TEXT NOT NULL DEFAULT '';`,
