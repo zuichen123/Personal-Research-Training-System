@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -35,10 +37,15 @@ class _CourseLessonSessionScreenState extends State<CourseLessonSessionScreen> {
   bool _preparing = true;
   bool _sending = false;
   bool _autoOpeningTriggered = false;
+  Timer? _timer;
+  int _elapsedSeconds = 0;
 
   @override
   void initState() {
     super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => _elapsedSeconds++);
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _prepareSession();
     });
@@ -46,6 +53,7 @@ class _CourseLessonSessionScreenState extends State<CourseLessonSessionScreen> {
 
   @override
   void dispose() {
+    _timer?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
@@ -129,6 +137,12 @@ class _CourseLessonSessionScreenState extends State<CourseLessonSessionScreen> {
     );
   }
 
+  String _formatElapsed(int seconds) {
+    final mins = (seconds ~/ 60).toString().padLeft(2, '0');
+    final secs = (seconds % 60).toString().padLeft(2, '0');
+    return '$mins:$secs';
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AIAgentProvider>();
@@ -142,7 +156,7 @@ class _CourseLessonSessionScreenState extends State<CourseLessonSessionScreen> {
         .toList(growable: false);
     return Scaffold(
       appBar: AppBar(
-        title: Text('${widget.lessonTitle} · 上课会话'),
+        title: Text('${widget.lessonTitle} · 已上课 ${_formatElapsed(_elapsedSeconds)}'),
         actions: [
           IconButton(
             onPressed: _prepareSession,
