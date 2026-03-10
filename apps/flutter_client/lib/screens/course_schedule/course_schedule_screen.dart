@@ -20,7 +20,7 @@ class CourseScheduleScreen extends StatefulWidget {
 }
 
 class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
-  CourseScheduleView _view = CourseScheduleView.year;
+  CourseScheduleView _view = CourseScheduleView.day;
   DateTime _focusDate = DateUtils.dateOnly(DateTime.now());
   _CourseLesson? _selectedLesson;
   bool _startingLesson = false;
@@ -784,10 +784,10 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
                         onPressed: completed
                             ? null
                             : () => _markPlanCompleted(
-                                  context,
-                                  appProvider,
-                                  item.id,
-                                ),
+                                context,
+                                appProvider,
+                                item.id,
+                              ),
                         child: Text(completed ? '已完成' : '标记完成'),
                       ),
                     ],
@@ -807,17 +807,20 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
   ) {
     final subject = lesson.subject.toLowerCase();
     final topic = lesson.topic.toLowerCase();
-    final related = plans.where((item) {
-      final title = item.title.toLowerCase();
-      final content = item.content.toLowerCase();
-      if (item.source == 'ai_agent' && item.targetDate == _dateLabel(lesson.date)) {
-        return true;
-      }
-      return title.contains(subject) ||
-          title.contains(topic) ||
-          content.contains(subject) ||
-          content.contains(topic);
-    }).toList(growable: false);
+    final related = plans
+        .where((item) {
+          final title = item.title.toLowerCase();
+          final content = item.content.toLowerCase();
+          if (item.source == 'ai_agent' &&
+              item.targetDate == _dateLabel(lesson.date)) {
+            return true;
+          }
+          return title.contains(subject) ||
+              title.contains(topic) ||
+              content.contains(subject) ||
+              content.contains(topic);
+        })
+        .toList(growable: false);
     related.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     return related;
   }
@@ -847,15 +850,17 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
       if (!context.mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已标记计划完成')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已标记计划完成')));
     } catch (_) {
       if (!context.mounted) {
         return;
       }
       final message = appProvider.errorMessage ?? '更新计划状态失败';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
@@ -1042,7 +1047,9 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
 
   void _openPracticePrompt(_CourseLesson lesson) {
     final hasSession = _lessonSessions.containsKey(lesson.id);
-    final actionLabel = hasSession ? '\u8fdb\u5165\u4f1a\u8bdd' : '\u5f00\u59cb\u4e0a\u8bfe';
+    final actionLabel = hasSession
+        ? '\u8fdb\u5165\u4f1a\u8bdd'
+        : '\u5f00\u59cb\u4e0a\u8bfe';
     final message =
         '\u5df2\u751f\u6210\u7ec3\u4e60\u63d0\u793a\u8bcd\uff1a${lesson.subject} - ${lesson.topic}\u3002'
         '\u53ef\u76f4\u63a5\u70b9\u51fb\u201c$actionLabel\u201d\u53d1\u9001\u4e0a\u4e0b\u6587\u7ed9\u667a\u80fd\u52a9\u6559\u3002';
@@ -1110,13 +1117,25 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
       lines.add('student_profile=not_provided');
     } else {
       lines.add('student_id=${profile.userId}');
-      lines.add('student_nickname=${profile.nickname.trim().isEmpty ? "-" : profile.nickname.trim()}');
-      lines.add('academic_status=${profile.academicStatus.trim().isEmpty ? "-" : profile.academicStatus.trim()}');
+      lines.add(
+        'student_nickname=${profile.nickname.trim().isEmpty ? "-" : profile.nickname.trim()}',
+      );
+      lines.add(
+        'academic_status=${profile.academicStatus.trim().isEmpty ? "-" : profile.academicStatus.trim()}',
+      );
       lines.add('daily_study_minutes=${profile.dailyStudyMinutes}');
-      lines.add('goals=${profile.goals.isEmpty ? "-" : profile.goals.join(", ")}');
-      lines.add('weak_subjects=${profile.weakSubjects.isEmpty ? "-" : profile.weakSubjects.join(", ")}');
-      lines.add('target_destination=${profile.targetDestination.trim().isEmpty ? "-" : profile.targetDestination.trim()}');
-      lines.add('notes=${profile.notes.trim().isEmpty ? "-" : profile.notes.trim()}');
+      lines.add(
+        'goals=${profile.goals.isEmpty ? "-" : profile.goals.join(", ")}',
+      );
+      lines.add(
+        'weak_subjects=${profile.weakSubjects.isEmpty ? "-" : profile.weakSubjects.join(", ")}',
+      );
+      lines.add(
+        'target_destination=${profile.targetDestination.trim().isEmpty ? "-" : profile.targetDestination.trim()}',
+      );
+      lines.add(
+        'notes=${profile.notes.trim().isEmpty ? "-" : profile.notes.trim()}',
+      );
     }
     return lines.join('; ');
   }
