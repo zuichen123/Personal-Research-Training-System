@@ -26,12 +26,13 @@ func (r *SQLiteRepository) Create(ctx context.Context, item Record) (Record, err
 
 	_, err = r.db.ExecContext(ctx, `
 		INSERT INTO mistakes (
-			id, question_id, subject, difficulty, mastery_level, user_answer_json, feedback, reason, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+			id, question_id, subject, unit, difficulty, mastery_level, user_answer_json, feedback, reason, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		item.ID,
 		item.QuestionID,
 		item.Subject,
+		item.Unit,
 		item.Difficulty,
 		item.MasteryLevel,
 		string(answerJSON),
@@ -48,7 +49,7 @@ func (r *SQLiteRepository) Create(ctx context.Context, item Record) (Record, err
 
 func (r *SQLiteRepository) GetByID(ctx context.Context, id string) (Record, error) {
 	row := r.db.QueryRowContext(ctx, `
-		SELECT id, question_id, subject, difficulty, mastery_level, user_answer_json, feedback, reason, created_at
+		SELECT id, question_id, subject, COALESCE(unit, ''), difficulty, mastery_level, user_answer_json, feedback, reason, created_at
 		FROM mistakes
 		WHERE id = ?
 	`, id)
@@ -64,7 +65,7 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, id string) (Record, erro
 
 func (r *SQLiteRepository) List(ctx context.Context) ([]Record, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, question_id, subject, difficulty, mastery_level, user_answer_json, feedback, reason, created_at
+		SELECT id, question_id, subject, COALESCE(unit, ''), difficulty, mastery_level, user_answer_json, feedback, reason, created_at
 		FROM mistakes
 		ORDER BY created_at DESC
 	`)
@@ -91,7 +92,7 @@ func (r *SQLiteRepository) List(ctx context.Context) ([]Record, error) {
 
 func (r *SQLiteRepository) ListByQuestionID(ctx context.Context, questionID string) ([]Record, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, question_id, subject, difficulty, mastery_level, user_answer_json, feedback, reason, created_at
+		SELECT id, question_id, subject, COALESCE(unit, ''), difficulty, mastery_level, user_answer_json, feedback, reason, created_at
 		FROM mistakes
 		WHERE question_id = ?
 		ORDER BY created_at DESC
@@ -144,6 +145,7 @@ func scanMistake(s mistakeScanner) (Record, error) {
 		&item.ID,
 		&item.QuestionID,
 		&item.Subject,
+		&item.Unit,
 		&item.Difficulty,
 		&item.MasteryLevel,
 		&answerRaw,

@@ -1,0 +1,1 @@
+ALTER TABLE mistakes ADD COLUMN unit TEXT DEFAULT '';

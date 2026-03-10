@@ -6,6 +6,7 @@ type Record struct {
 	ID           string    `json:"id"`
 	QuestionID   string    `json:"question_id"`
 	Subject      string    `json:"subject"`
+	Unit         string    `json:"unit"`
 	Difficulty   int       `json:"difficulty"`
 	MasteryLevel int       `json:"mastery_level"`
 	UserAnswer   []string  `json:"user_answer"`
@@ -17,6 +18,7 @@ type Record struct {
 type CreateInput struct {
 	QuestionID   string   `json:"question_id"`
 	Subject      string   `json:"subject"`
+	Unit         string   `json:"unit"`
 	Difficulty   int      `json:"difficulty"`
 	MasteryLevel int      `json:"mastery_level"`
 	UserAnswer   []string `json:"user_answer"`
