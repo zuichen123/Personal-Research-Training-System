@@ -23,6 +23,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 		r.Get("/", h.list)
 		r.Put("/{id}", h.update)
 		r.Delete("/{id}", h.delete)
+		r.Post("/{id}/assess-difficulty", h.assessDifficulty)
 	})
 }
 
@@ -125,4 +126,12 @@ func (h *Handler) delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+func (h *Handler) assessDifficulty(w http.ResponseWriter, r *http.Request) {
+	if err := h.service.AssessDifficulty(r.Context(), chi.URLParam(r, "id")); err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "assessed"})
 }

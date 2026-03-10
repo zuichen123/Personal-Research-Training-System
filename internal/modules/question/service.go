@@ -10,11 +10,16 @@ import (
 )
 
 type Service struct {
-	repo Repository
+	repo              Repository
+	difficultyService *DifficultyService
 }
 
 func NewService(repo Repository) *Service {
 	return &Service{repo: repo}
+}
+
+func (s *Service) SetDifficultyService(ds *DifficultyService) {
+	s.difficultyService = ds
 }
 
 func (s *Service) Create(ctx context.Context, in CreateInput) (Question, error) {
@@ -88,6 +93,24 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	return s.repo.Delete(ctx, id)
 }
 
+func (s *Service) AssessDifficulty(ctx context.Context, id string) error {
+	if s.difficultyService == nil {
+		return errs.Internal("difficulty service not initialized")
+	}
+	q, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	level, err := s.difficultyService.AssessDifficulty(ctx, q.Stem, q.Subject)
+	if err != nil {
+		return err
+	}
+	q.Difficulty = level
+	q.UpdatedAt = time.Now().UTC()
+	_, err = s.repo.Update(ctx, q)
+	return err
+}
+
 func validateInput(title, stem string, qType QuestionType, answerKey []string) error {
 	if strings.TrimSpace(title) == "" {
 		return errs.BadRequest("title is required")
@@ -125,8 +148,8 @@ func normalizeDifficulty(v int) int {
 	if v < 1 {
 		return 1
 	}
-	if v > 5 {
-		return 5
+	if v > 10 {
+		return 10
 	}
 	return v
 }
