@@ -2,6 +2,7 @@ package question
 
 import (
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -49,22 +50,51 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 
 	subjectFilter := strings.TrimSpace(r.URL.Query().Get("subject"))
 	sourceFilter := strings.TrimSpace(r.URL.Query().Get("source"))
-	if subjectFilter == "" && sourceFilter == "" {
-		httpx.WriteJSON(w, http.StatusOK, items)
-		return
+	if subjectFilter != "" || sourceFilter != "" {
+		filtered := make([]Question, 0, len(items))
+		for _, item := range items {
+			if subjectFilter != "" && !strings.EqualFold(item.Subject, subjectFilter) {
+				continue
+			}
+			if sourceFilter != "" && !strings.EqualFold(string(item.Source), sourceFilter) {
+				continue
+			}
+			filtered = append(filtered, item)
+		}
+		items = filtered
 	}
 
-	filtered := make([]Question, 0, len(items))
-	for _, item := range items {
-		if subjectFilter != "" && !strings.EqualFold(item.Subject, subjectFilter) {
-			continue
-		}
-		if sourceFilter != "" && !strings.EqualFold(string(item.Source), sourceFilter) {
-			continue
-		}
-		filtered = append(filtered, item)
+	sortBy := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("sort_by")))
+	order := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("order")))
+	if order == "" {
+		order = "asc"
 	}
-	httpx.WriteJSON(w, http.StatusOK, filtered)
+
+	switch sortBy {
+	case "difficulty":
+		sort.Slice(items, func(i, j int) bool {
+			if order == "desc" {
+				return items[i].Difficulty > items[j].Difficulty
+			}
+			return items[i].Difficulty < items[j].Difficulty
+		})
+	case "subject":
+		sort.Slice(items, func(i, j int) bool {
+			if order == "desc" {
+				return items[i].Subject > items[j].Subject
+			}
+			return items[i].Subject < items[j].Subject
+		})
+	case "created_at":
+		sort.Slice(items, func(i, j int) bool {
+			if order == "desc" {
+				return items[i].CreatedAt.After(items[j].CreatedAt)
+			}
+			return items[i].CreatedAt.Before(items[j].CreatedAt)
+		})
+	}
+
+	httpx.WriteJSON(w, http.StatusOK, items)
 }
 
 func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
