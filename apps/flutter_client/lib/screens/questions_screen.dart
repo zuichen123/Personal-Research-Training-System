@@ -313,25 +313,48 @@ class _SubjectUnitsScreen extends StatelessWidget {
   }
 }
 
-class _UnitQuestionsScreen extends StatelessWidget {
+class _UnitQuestionsScreen extends StatefulWidget {
   const _UnitQuestionsScreen({required this.subject, required this.unit});
 
   final String subject;
   final String unit;
 
   @override
+  State<_UnitQuestionsScreen> createState() => _UnitQuestionsScreenState();
+}
+
+class _UnitQuestionsScreenState extends State<_UnitQuestionsScreen> {
+  String _sortBy = 'default';
+
+  @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
     final loading = provider.isSectionLoading(DataSection.questions);
-    final questions = provider.questions
-        .where((q) => _sameText(_normalizeSubject(q.subject), subject))
-        .where((q) => _sameText(_extractUnit(q), unit))
+    var questions = provider.questions
+        .where((q) => _sameText(_normalizeSubject(q.subject), widget.subject))
+        .where((q) => _sameText(_extractUnit(q), widget.unit))
         .toList(growable: false);
+
+    if (_sortBy == 'difficulty_asc') {
+      questions.sort((a, b) => a.difficulty.compareTo(b.difficulty));
+    } else if (_sortBy == 'difficulty_desc') {
+      questions.sort((a, b) => b.difficulty.compareTo(a.difficulty));
+    }
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('$subject / $unit'),
+        title: Text('${widget.subject} / ${widget.unit}'),
         actions: [
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.sort),
+            tooltip: '排序',
+            onSelected: (value) => setState(() => _sortBy = value),
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'default', child: Text('默认排序')),
+              PopupMenuItem(value: 'difficulty_asc', child: Text('难度升序')),
+              PopupMenuItem(value: 'difficulty_desc', child: Text('难度降序')),
+            ],
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () =>
@@ -342,8 +365,8 @@ class _UnitQuestionsScreen extends StatelessWidget {
             tooltip: 'AI创建题目',
             onPressed: () => _showAICreateDialog(
               context,
-              presetSubject: subject,
-              presetUnit: unit == _unknownUnit ? '' : unit,
+              presetSubject: widget.subject,
+              presetUnit: widget.unit == _unknownUnit ? '' : widget.unit,
             ),
           ),
         ],
@@ -354,11 +377,11 @@ class _UnitQuestionsScreen extends StatelessWidget {
         child: _buildBody(context, provider, questions, loading),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'unit-create-$subject-$unit',
+        heroTag: 'unit-create-${widget.subject}-${widget.unit}',
         onPressed: () => _showQuestionEditDialog(
           context,
-          presetSubject: subject,
-          presetUnit: unit == _unknownUnit ? '' : unit,
+          presetSubject: widget.subject,
+          presetUnit: widget.unit == _unknownUnit ? '' : widget.unit,
         ),
         icon: const Icon(Icons.add),
         label: const Text('新建题目'),
