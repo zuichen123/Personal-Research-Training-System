@@ -9,11 +9,16 @@ import (
 )
 
 type Service struct {
-	repo Repository
+	repo          Repository
+	parserService *ParserService
 }
 
 func NewService(repo Repository) *Service {
 	return &Service{repo: repo}
+}
+
+func (s *Service) SetParserService(ps *ParserService) {
+	s.parserService = ps
 }
 
 func (s *Service) Create(ctx context.Context, in CreateInput) (Material, error) {
@@ -80,6 +85,29 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (Materi
 
 func (s *Service) Delete(ctx context.Context, id string) error {
 	return s.repo.Delete(ctx, id)
+}
+
+func (s *Service) ParseAndCreate(ctx context.Context, userID, filename, content string) (Material, error) {
+	if s.parserService == nil {
+		return Material{}, errs.Internal("parser service not initialized")
+	}
+	parsed, err := s.parserService.ParseFile(ctx, filename, content)
+	if err != nil {
+		return Material{}, err
+	}
+	return s.Create(ctx, CreateInput{
+		UserID:      userID,
+		Title:       parsed.Title,
+		FilePath:    filename,
+		FileType:    parsed.Format,
+		ContentText: parsed.Content,
+		Subject:     parsed.Subject,
+	})
+}
+
+func (s *Service) QueryMaterials(ctx context.Context, subject, keyword string) ([]Material, error) {
+	filter := ListFilter{Subject: subject, Keyword: keyword, Limit: 50}
+	return s.repo.List(ctx, filter)
 }
 
 func normalizeStringList(items []string) []string {
