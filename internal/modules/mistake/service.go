@@ -10,11 +10,16 @@ import (
 )
 
 type Service struct {
-	repo Repository
+	repo            Repository
+	analysisService *AnalysisService
 }
 
 func NewService(repo Repository) *Service {
 	return &Service{repo: repo}
+}
+
+func (s *Service) SetAnalysisService(as *AnalysisService) {
+	s.analysisService = as
 }
 
 func (s *Service) Create(ctx context.Context, in CreateInput) (Record, error) {
@@ -56,6 +61,27 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 		return errs.BadRequest("mistake id is required")
 	}
 	return s.repo.Delete(ctx, strings.TrimSpace(id))
+}
+
+func (s *Service) AnalyzeMistakes(ctx context.Context, userID int64, subject string) (*AnalysisResult, error) {
+	if s.analysisService == nil {
+		return nil, errs.Internal("analysis service not initialized")
+	}
+	records, err := s.repo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var mistakes []string
+	for _, r := range records {
+		if subject != "" && r.Subject != subject {
+			continue
+		}
+		mistakes = append(mistakes, r.Reason)
+	}
+	if len(mistakes) == 0 {
+		return nil, errs.BadRequest("no mistakes found for analysis")
+	}
+	return s.analysisService.AnalyzeMistakes(ctx, userID, subject, mistakes)
 }
 
 func normalizeSubject(v string) string {
