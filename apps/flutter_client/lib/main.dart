@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'core/logging/app_logger.dart';
 import 'providers/ai_agent_provider.dart';
 import 'providers/app_provider.dart';
+import 'widgets/stylus_pointer_interceptor.dart';
 import 'screens/agent_chat_hub_screen.dart';
 import 'screens/course_schedule/course_schedule_screen.dart';
 import 'screens/mistakes_screen.dart';
@@ -93,13 +94,15 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AppProvider()),
         ChangeNotifierProvider(create: (_) => AIAgentProvider()),
       ],
-      child: MaterialApp(
-        title: '\u81ea\u5b66\u5de5\u5177',
-        debugShowCheckedModeBanner: false,
-        theme: _buildTheme(Brightness.light),
-        darkTheme: _buildTheme(Brightness.dark),
-        themeMode: ThemeMode.system,
-        home: const MainScreen(),
+      child: StylusPointerInterceptor(
+        child: MaterialApp(
+          title: '\u81ea\u5b66\u5de5\u5177',
+          debugShowCheckedModeBanner: false,
+          theme: _buildTheme(Brightness.light),
+          darkTheme: _buildTheme(Brightness.dark),
+          themeMode: ThemeMode.system,
+          home: const MainScreen(),
+        ),
       ),
     );
   }

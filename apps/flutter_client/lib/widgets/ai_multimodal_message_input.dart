@@ -2,12 +2,13 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/gestures.dart' show kPrimaryButton;
+import 'package:flutter/gestures.dart' show PointerDeviceKind, kPrimaryButton;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:signature/signature.dart';
 
 import '../utils/signature_canvas_utils.dart';
+import 'stylus_gesture_eater.dart';
 
 class AIChatAttachmentPayload {
   AIChatAttachmentPayload({
@@ -59,7 +60,7 @@ class _AIMultimodalMessageInputState extends State<AIMultimodalMessageInput> {
   final SignatureController _signatureController = SignatureController(
     disabled: true,
     penColor: Colors.black,
-    penStrokeWidth: 2.4,
+    penStrokeWidth: 3.2,
     exportBackgroundColor: Colors.white,
   );
 
@@ -68,6 +69,7 @@ class _AIMultimodalMessageInputState extends State<AIMultimodalMessageInput> {
   bool _localSending = false;
   bool _eraserMode = false;
   int? _signaturePointerId;
+  int? _stylusPointerId;
   bool _toolsExpanded = false;
   bool _showHandwritingPanel = false;
 
@@ -245,22 +247,42 @@ class _AIMultimodalMessageInputState extends State<AIMultimodalMessageInput> {
           ),
           const SizedBox(height: 6),
           SizedBox(
-            height: 160,
+            height: 260,
             width: double.infinity,
             child: DecoratedBox(
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                ),
               ),
-              child: Listener(
-                behavior: HitTestBehavior.opaque,
-                onPointerDown: _handleSignaturePointerDown,
-                onPointerMove: _handleSignaturePointerMove,
-                onPointerUp: _handleSignaturePointerEnd,
-                onPointerCancel: _handleSignaturePointerEnd,
-                child: Signature(
-                  controller: _signatureController,
-                  backgroundColor: Colors.white,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: StylusGestureEater(
+                  child: InteractiveViewer(
+                    constrained: false,
+                    minScale: 0.5,
+                    maxScale: 6,
+                    child: SizedBox(
+                      width: 2400,
+                      height: 1600,
+                      child: ColoredBox(
+                        color: Colors.white,
+                        child: Listener(
+                          behavior: HitTestBehavior.opaque,
+                          onPointerDown: _handleSignaturePointerDown,
+                          onPointerMove: _handleSignaturePointerMove,
+                          onPointerUp: _handleSignaturePointerEnd,
+                          onPointerCancel: _handleSignaturePointerEnd,
+                          child: Signature(
+                            controller: _signatureController,
+                            backgroundColor: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -415,12 +437,20 @@ class _AIMultimodalMessageInputState extends State<AIMultimodalMessageInput> {
   }
 
   void _handleSignaturePointerDown(PointerDownEvent event) {
-    if (_busy || !_isPrimaryButtonPressed(event.buttons)) {
+    if (_isStylus(event)) {
+      _stylusPointerId = event.pointer;
+    } else if (_stylusPointerId != null) {
+      _signaturePointerId = null;
+      return;
+    }
+
+    if (_busy || !_isDrawingContact(event)) {
       _signaturePointerId = null;
       return;
     }
     _signaturePointerId = event.pointer;
-    if (_eraserMode) {
+    final useEraser = _eraserMode || _isInvertedStylus(event);
+    if (useEraser) {
       SignatureCanvasUtils.eraseAt(_signatureController, event.localPosition);
       return;
     }
@@ -433,10 +463,14 @@ class _AIMultimodalMessageInputState extends State<AIMultimodalMessageInput> {
   }
 
   void _handleSignaturePointerMove(PointerMoveEvent event) {
-    if (_signaturePointerId != event.pointer || !_isPrimaryButtonPressed(event.buttons)) {
+    if (_stylusPointerId != null && !_isStylus(event)) {
       return;
     }
-    if (_eraserMode) {
+    if (_signaturePointerId != event.pointer || !_isDrawingContact(event)) {
+      return;
+    }
+    final useEraser = _eraserMode || _isInvertedStylus(event);
+    if (useEraser) {
       SignatureCanvasUtils.eraseAt(_signatureController, event.localPosition);
       return;
     }
@@ -451,6 +485,30 @@ class _AIMultimodalMessageInputState extends State<AIMultimodalMessageInput> {
   void _handleSignaturePointerEnd(PointerEvent event) {
     if (_signaturePointerId == event.pointer) {
       _signaturePointerId = null;
+    }
+    if (_stylusPointerId == event.pointer) {
+      _stylusPointerId = null;
+    }
+  }
+
+  bool _isStylus(PointerEvent event) =>
+      event.kind == PointerDeviceKind.stylus ||
+      event.kind == PointerDeviceKind.invertedStylus;
+
+  bool _isInvertedStylus(PointerEvent event) =>
+      event.kind == PointerDeviceKind.invertedStylus;
+
+  bool _isDrawingContact(PointerEvent event) {
+    if (event is PointerMoveEvent && !event.down) {
+      return false;
+    }
+    switch (event.kind) {
+      case PointerDeviceKind.touch:
+      case PointerDeviceKind.stylus:
+      case PointerDeviceKind.invertedStylus:
+        return true;
+      default:
+        return _isPrimaryButtonPressed(event.buttons);
     }
   }
 

@@ -2,12 +2,13 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/gestures.dart' show kPrimaryButton;
+import 'package:flutter/gestures.dart' show PointerDeviceKind, kPrimaryButton;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:signature/signature.dart';
 
 import '../utils/signature_canvas_utils.dart';
+import 'stylus_gesture_eater.dart';
 import 'ai_formula_text.dart';
 import 'ai_multimodal_message_input.dart' show AIChatAttachmentPayload;
 
@@ -70,19 +71,20 @@ class PracticeMultimodalAnswerInput extends StatefulWidget {
 
 class _PracticeMultimodalAnswerInputState
     extends State<PracticeMultimodalAnswerInput> {
-  static const double _handwritingCanvasWidth = 2400;
-  static const double _handwritingCanvasHeight = 1600;
+  static const double _handwritingCanvasWidth = 3600;
+  static const double _handwritingCanvasHeight = 2400;
 
   final ImagePicker _imagePicker = ImagePicker();
   final SignatureController _signatureController = SignatureController(
     disabled: true,
     penColor: Colors.black,
-    penStrokeWidth: 2.4,
+    penStrokeWidth: 3.2,
     exportBackgroundColor: Colors.white,
   );
 
   bool _eraserMode = false;
   int? _signaturePointerId;
+  int? _stylusPointerId;
   bool _toolsExpanded = false;
   bool _showHandwritingPanel = false;
 
@@ -457,12 +459,20 @@ class _PracticeMultimodalAnswerInputState
   }
 
   void _handleSignaturePointerDown(PointerDownEvent event) {
-    if (!widget.enabled || !_isPrimaryButtonPressed(event.buttons)) {
+    if (_isStylus(event)) {
+      _stylusPointerId = event.pointer;
+    } else if (_stylusPointerId != null) {
+      _signaturePointerId = null;
+      return;
+    }
+
+    if (!widget.enabled || !_isDrawingContact(event)) {
       _signaturePointerId = null;
       return;
     }
     _signaturePointerId = event.pointer;
-    if (_eraserMode) {
+    final useEraser = _eraserMode || _isInvertedStylus(event);
+    if (useEraser) {
       SignatureCanvasUtils.eraseAt(_signatureController, event.localPosition);
       return;
     }
@@ -475,11 +485,14 @@ class _PracticeMultimodalAnswerInputState
   }
 
   void _handleSignaturePointerMove(PointerMoveEvent event) {
-    if (_signaturePointerId != event.pointer ||
-        !_isPrimaryButtonPressed(event.buttons)) {
+    if (_stylusPointerId != null && !_isStylus(event)) {
       return;
     }
-    if (_eraserMode) {
+    if (_signaturePointerId != event.pointer || !_isDrawingContact(event)) {
+      return;
+    }
+    final useEraser = _eraserMode || _isInvertedStylus(event);
+    if (useEraser) {
       SignatureCanvasUtils.eraseAt(_signatureController, event.localPosition);
       return;
     }
@@ -494,6 +507,30 @@ class _PracticeMultimodalAnswerInputState
   void _handleSignaturePointerEnd(PointerEvent event) {
     if (_signaturePointerId == event.pointer) {
       _signaturePointerId = null;
+    }
+    if (_stylusPointerId == event.pointer) {
+      _stylusPointerId = null;
+    }
+  }
+
+  bool _isStylus(PointerEvent event) =>
+      event.kind == PointerDeviceKind.stylus ||
+      event.kind == PointerDeviceKind.invertedStylus;
+
+  bool _isInvertedStylus(PointerEvent event) =>
+      event.kind == PointerDeviceKind.invertedStylus;
+
+  bool _isDrawingContact(PointerEvent event) {
+    if (event is PointerMoveEvent && !event.down) {
+      return false;
+    }
+    switch (event.kind) {
+      case PointerDeviceKind.touch:
+      case PointerDeviceKind.stylus:
+      case PointerDeviceKind.invertedStylus:
+        return true;
+      default:
+        return _isPrimaryButtonPressed(event.buttons);
     }
   }
 
@@ -570,6 +607,7 @@ class _PracticeHandwritingFullscreenPageState
 
   bool _eraserMode = false;
   int? _signaturePointerId;
+  int? _stylusPointerId;
   late int _attachmentCount;
   late String _referenceKey;
 
@@ -793,12 +831,20 @@ class _PracticeHandwritingFullscreenPageState
   }
 
   void _handleSignaturePointerDown(PointerDownEvent event) {
-    if (!_isPrimaryButtonPressed(event.buttons)) {
+    if (_isStylus(event)) {
+      _stylusPointerId = event.pointer;
+    } else if (_stylusPointerId != null) {
+      _signaturePointerId = null;
+      return;
+    }
+
+    if (!_isDrawingContact(event)) {
       _signaturePointerId = null;
       return;
     }
     _signaturePointerId = event.pointer;
-    if (_eraserMode) {
+    final useEraser = _eraserMode || _isInvertedStylus(event);
+    if (useEraser) {
       SignatureCanvasUtils.eraseAt(widget.controller, event.localPosition);
       return;
     }
@@ -811,11 +857,14 @@ class _PracticeHandwritingFullscreenPageState
   }
 
   void _handleSignaturePointerMove(PointerMoveEvent event) {
-    if (_signaturePointerId != event.pointer ||
-        !_isPrimaryButtonPressed(event.buttons)) {
+    if (_stylusPointerId != null && !_isStylus(event)) {
       return;
     }
-    if (_eraserMode) {
+    if (_signaturePointerId != event.pointer || !_isDrawingContact(event)) {
+      return;
+    }
+    final useEraser = _eraserMode || _isInvertedStylus(event);
+    if (useEraser) {
       SignatureCanvasUtils.eraseAt(widget.controller, event.localPosition);
       return;
     }
@@ -830,6 +879,30 @@ class _PracticeHandwritingFullscreenPageState
   void _handleSignaturePointerEnd(PointerEvent event) {
     if (_signaturePointerId == event.pointer) {
       _signaturePointerId = null;
+    }
+    if (_stylusPointerId == event.pointer) {
+      _stylusPointerId = null;
+    }
+  }
+
+  bool _isStylus(PointerEvent event) =>
+      event.kind == PointerDeviceKind.stylus ||
+      event.kind == PointerDeviceKind.invertedStylus;
+
+  bool _isInvertedStylus(PointerEvent event) =>
+      event.kind == PointerDeviceKind.invertedStylus;
+
+  bool _isDrawingContact(PointerEvent event) {
+    if (event is PointerMoveEvent && !event.down) {
+      return false;
+    }
+    switch (event.kind) {
+      case PointerDeviceKind.touch:
+      case PointerDeviceKind.stylus:
+      case PointerDeviceKind.invertedStylus:
+        return true;
+      default:
+        return _isPrimaryButtonPressed(event.buttons);
     }
   }
 
@@ -890,24 +963,26 @@ class _HandwritingBoardCanvas extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
-        child: InteractiveViewer(
-          constrained: false,
-          minScale: 0.5,
-          maxScale: 6,
-          child: SizedBox(
-            width: canvasWidth,
-            height: canvasHeight,
-            child: ColoredBox(
-              color: Colors.white,
-              child: Listener(
-                behavior: HitTestBehavior.opaque,
-                onPointerDown: onPointerDown,
-                onPointerMove: onPointerMove,
-                onPointerUp: onPointerUp,
-                onPointerCancel: onPointerCancel,
-                child: Signature(
-                  controller: controller,
-                  backgroundColor: Colors.white,
+        child: StylusGestureEater(
+          child: InteractiveViewer(
+            constrained: false,
+            minScale: 0.5,
+            maxScale: 6,
+            child: SizedBox(
+              width: canvasWidth,
+              height: canvasHeight,
+              child: ColoredBox(
+                color: Colors.white,
+                child: Listener(
+                  behavior: HitTestBehavior.opaque,
+                  onPointerDown: onPointerDown,
+                  onPointerMove: onPointerMove,
+                  onPointerUp: onPointerUp,
+                  onPointerCancel: onPointerCancel,
+                  child: Signature(
+                    controller: controller,
+                    backgroundColor: Colors.white,
+                  ),
                 ),
               ),
             ),

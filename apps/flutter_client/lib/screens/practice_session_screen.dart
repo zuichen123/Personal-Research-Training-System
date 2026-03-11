@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:flutter/gestures.dart' show kPrimaryButton;
+import 'package:flutter/gestures.dart' show PointerDeviceKind, kPrimaryButton;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:signature/signature.dart';
@@ -15,6 +15,7 @@ import '../widgets/ai_formula_text.dart';
 import '../widgets/ai_multimodal_message_input.dart'
     show AIChatAttachmentPayload;
 import '../widgets/practice_multimodal_answer_input.dart';
+import '../widgets/stylus_gesture_eater.dart';
 
 enum PracticeOrderMode { sequential, random }
 
@@ -41,7 +42,7 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
   final SignatureController _boardController = SignatureController(
     disabled: true,
     penColor: Colors.black,
-    penStrokeWidth: 2.4,
+    penStrokeWidth: 3.2,
     exportBackgroundColor: Colors.white,
   );
 
@@ -54,6 +55,7 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
   bool _boardFullScreen = false;
   bool _boardEraserMode = false;
   int? _boardPointerId;
+  int? _boardStylusPointerId;
   Offset _boardOffset = const Offset(24, 120);
   String _boardReferenceKey = 'question';
   PracticeOrderMode _orderMode = PracticeOrderMode.sequential;
@@ -311,8 +313,8 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
                 minScale: 0.5,
                 maxScale: 6,
                 child: SizedBox(
-                  width: 2400,
-                  height: 1600,
+                  width: 3600,
+                  height: 2400,
                   child: ColoredBox(
                     color: Colors.white,
                     child: Listener(
@@ -691,24 +693,26 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(10),
-        child: InteractiveViewer(
-          constrained: false,
-          minScale: 0.5,
-          maxScale: 6,
-          child: SizedBox(
-            width: 2400,
-            height: 1600,
-            child: ColoredBox(
-              color: Colors.white,
-              child: Listener(
-                behavior: HitTestBehavior.opaque,
-                onPointerDown: _handleBoardPointerDown,
-                onPointerMove: _handleBoardPointerMove,
-                onPointerUp: _handleBoardPointerEnd,
-                onPointerCancel: _handleBoardPointerEnd,
-                child: Signature(
-                  controller: _boardController,
-                  backgroundColor: Colors.white,
+        child: StylusGestureEater(
+          child: InteractiveViewer(
+            constrained: false,
+            minScale: 0.5,
+            maxScale: 6,
+            child: SizedBox(
+              width: 3600,
+              height: 2400,
+              child: ColoredBox(
+                color: Colors.white,
+                child: Listener(
+                  behavior: HitTestBehavior.opaque,
+                  onPointerDown: _handleBoardPointerDown,
+                  onPointerMove: _handleBoardPointerMove,
+                  onPointerUp: _handleBoardPointerEnd,
+                  onPointerCancel: _handleBoardPointerEnd,
+                  child: Signature(
+                    controller: _boardController,
+                    backgroundColor: Colors.white,
+                  ),
                 ),
               ),
             ),
@@ -1466,14 +1470,20 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
   }
 
   void _handleBoardPointerDown(PointerDownEvent event) {
-    if (_submitting ||
-        _currentSubmitted ||
-        !_isPrimaryButtonPressed(event.buttons)) {
+    if (_isStylus(event)) {
+      _boardStylusPointerId = event.pointer;
+    } else if (_boardStylusPointerId != null) {
+      _boardPointerId = null;
+      return;
+    }
+
+    if (_submitting || _currentSubmitted || !_isDrawingContact(event)) {
       _boardPointerId = null;
       return;
     }
     _boardPointerId = event.pointer;
-    if (_boardEraserMode) {
+    final useEraser = _boardEraserMode || _isInvertedStylus(event);
+    if (useEraser) {
       SignatureCanvasUtils.eraseAt(_boardController, event.localPosition);
       return;
     }
@@ -1486,11 +1496,14 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
   }
 
   void _handleBoardPointerMove(PointerMoveEvent event) {
-    if (_boardPointerId != event.pointer ||
-        !_isPrimaryButtonPressed(event.buttons)) {
+    if (_boardStylusPointerId != null && !_isStylus(event)) {
       return;
     }
-    if (_boardEraserMode) {
+    if (_boardPointerId != event.pointer || !_isDrawingContact(event)) {
+      return;
+    }
+    final useEraser = _boardEraserMode || _isInvertedStylus(event);
+    if (useEraser) {
       SignatureCanvasUtils.eraseAt(_boardController, event.localPosition);
       return;
     }
@@ -1505,6 +1518,30 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
   void _handleBoardPointerEnd(PointerEvent event) {
     if (_boardPointerId == event.pointer) {
       _boardPointerId = null;
+    }
+    if (_boardStylusPointerId == event.pointer) {
+      _boardStylusPointerId = null;
+    }
+  }
+
+  bool _isStylus(PointerEvent event) =>
+      event.kind == PointerDeviceKind.stylus ||
+      event.kind == PointerDeviceKind.invertedStylus;
+
+  bool _isInvertedStylus(PointerEvent event) =>
+      event.kind == PointerDeviceKind.invertedStylus;
+
+  bool _isDrawingContact(PointerEvent event) {
+    if (event is PointerMoveEvent && !event.down) {
+      return false;
+    }
+    switch (event.kind) {
+      case PointerDeviceKind.touch:
+      case PointerDeviceKind.stylus:
+      case PointerDeviceKind.invertedStylus:
+        return true;
+      default:
+        return _isPrimaryButtonPressed(event.buttons);
     }
   }
 
