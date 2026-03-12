@@ -149,12 +149,18 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                _smallChip('\u672c\u6708\u8bfe\u7a0b: $monthLessons'),
-                _smallChip('\u5f53\u65e5\u8bfe\u7a0b: $dayLessons'),
+                _smallChip('本月课程: $monthLessons'),
+                _smallChip('当日课程: $dayLessons'),
                 _smallChip(
-                  '\u638c\u63e1\u8bb0\u5f55: ${_masteryRecords.length}',
+                  '掌握记录: ${_masteryRecords.length}',
                 ),
               ],
+            ),
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              onPressed: () => _showLessonsManagementDialog(context),
+              icon: const Icon(Icons.edit_calendar_outlined),
+              label: const Text('管理课程'),
             ),
           ],
         ),
@@ -1321,15 +1327,274 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
     return '$y-$m-$d';
   }
 
-  String _toDateKey(DateTime date) {
-    final y = date.year.toString().padLeft(4, '0');
-    final m = date.month.toString().padLeft(2, '0');
-    final d = date.day.toString().padLeft(2, '0');
-    return '$y$m$d';
-  }
-
   String _toDateString(DateTime date) {
     return _dateLabel(DateUtils.dateOnly(date));
+  }
+
+  Future<void> _showLessonsManagementDialog(BuildContext context) async {
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('管理课程'),
+        content: SizedBox(
+          width: 500,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FilledButton.icon(
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  _showCreateLessonDialog(context);
+                },
+                icon: const Icon(Icons.add),
+                label: const Text('新建课程'),
+              ),
+              const SizedBox(height: 8),
+              if (_lessons.isEmpty)
+                const Text('暂无课程')
+              else
+                Flexible(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: _lessons.length,
+                    itemBuilder: (context, index) {
+                      final lesson = _lessons[index];
+                      return ListTile(
+                        dense: true,
+                        title: Text(lesson.topic),
+                        subtitle: Text('${lesson.subject} - ${lesson.date} ${lesson.startTime}-${lesson.endTime}'),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit_outlined),
+                              onPressed: () {
+                                Navigator.of(ctx).pop();
+                                _showEditLessonDialog(context, lesson);
+                              },
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline),
+                              onPressed: () {
+                                Navigator.of(ctx).pop();
+                                _deleteLesson(context, lesson);
+                              },
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showCreateLessonDialog(BuildContext context) async {
+    final topicController = TextEditingController();
+    final subjectController = TextEditingController();
+    final dateController = TextEditingController(text: _dateLabel(_focusDate));
+    final startTimeController = TextEditingController(text: '09:00');
+    final messenger = ScaffoldMessenger.of(context);
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('新建课程'),
+        content: SizedBox(
+          width: 400,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: topicController,
+                decoration: const InputDecoration(labelText: '主题'),
+              ),
+              TextField(
+                controller: subjectController,
+                decoration: const InputDecoration(labelText: '科目'),
+              ),
+              TextField(
+                controller: dateController,
+                decoration: const InputDecoration(labelText: '日期 (YYYY-MM-DD)'),
+              ),
+              TextField(
+                controller: startTimeController,
+                decoration: const InputDecoration(labelText: '开始时间 (HH:MM)'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              if (topicController.text.trim().isEmpty) {
+                messenger.showSnackBar(const SnackBar(content: Text('请输入主题')));
+                return;
+              }
+              if (subjectController.text.trim().isEmpty) {
+                messenger.showSnackBar(const SnackBar(content: Text('请输入科目')));
+                return;
+              }
+              if (dateController.text.trim().isEmpty) {
+                messenger.showSnackBar(const SnackBar(content: Text('请输入日期')));
+                return;
+              }
+              Navigator.of(ctx).pop();
+              try {
+                final api = context.read<AppProvider>().apiService;
+                await api.createCourseScheduleLesson({
+                  'topic': topicController.text.trim(),
+                  'subject': subjectController.text.trim(),
+                  'date': dateController.text.trim(),
+                  'start_time': startTimeController.text.trim(),
+                });
+                await _fetchLessons();
+                if (!mounted) return;
+                messenger.showSnackBar(const SnackBar(content: Text('课程创建成功')));
+              } catch (e) {
+                if (!mounted) return;
+                messenger.showSnackBar(SnackBar(content: Text('创建失败: $e')));
+              }
+            },
+            child: const Text('创建'),
+          ),
+        ],
+      ),
+    );
+    topicController.dispose();
+    subjectController.dispose();
+    dateController.dispose();
+    startTimeController.dispose();
+  }
+
+  Future<void> _showEditLessonDialog(BuildContext context, CourseLesson lesson) async {
+    final topicController = TextEditingController(text: lesson.topic);
+    final subjectController = TextEditingController(text: lesson.subject);
+    final dateController = TextEditingController(text: lesson.date);
+    final startTimeController = TextEditingController(text: lesson.startTime);
+    final messenger = ScaffoldMessenger.of(context);
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('编辑课程'),
+        content: SizedBox(
+          width: 400,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: topicController,
+                decoration: const InputDecoration(labelText: '主题'),
+              ),
+              TextField(
+                controller: subjectController,
+                decoration: const InputDecoration(labelText: '科目'),
+              ),
+              TextField(
+                controller: dateController,
+                decoration: const InputDecoration(labelText: '日期 (YYYY-MM-DD)'),
+              ),
+              TextField(
+                controller: startTimeController,
+                decoration: const InputDecoration(labelText: '开始时间 (HH:MM)'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              if (topicController.text.trim().isEmpty) {
+                messenger.showSnackBar(const SnackBar(content: Text('请输入主题')));
+                return;
+              }
+              if (subjectController.text.trim().isEmpty) {
+                messenger.showSnackBar(const SnackBar(content: Text('请输入科目')));
+                return;
+              }
+              if (dateController.text.trim().isEmpty) {
+                messenger.showSnackBar(const SnackBar(content: Text('请输入日期')));
+                return;
+              }
+              Navigator.of(ctx).pop();
+              try {
+                final api = context.read<AppProvider>().apiService;
+                await api.updateCourseScheduleLesson(lesson.id, {
+                  'topic': topicController.text.trim(),
+                  'subject': subjectController.text.trim(),
+                  'date': dateController.text.trim(),
+                  'start_time': startTimeController.text.trim(),
+                });
+                await _fetchLessons();
+                if (!mounted) return;
+                messenger.showSnackBar(const SnackBar(content: Text('课程更新成功')));
+              } catch (e) {
+                if (!mounted) return;
+                messenger.showSnackBar(SnackBar(content: Text('更新失败: $e')));
+              }
+            },
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    topicController.dispose();
+    subjectController.dispose();
+    dateController.dispose();
+    startTimeController.dispose();
+  }
+
+  Future<void> _deleteLesson(BuildContext context, CourseLesson lesson) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('删除课程'),
+        content: Text('确认删除课程 "${lesson.topic}" 吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      final api = context.read<AppProvider>().apiService;
+      await api.deleteCourseScheduleLesson(lesson.id);
+      await _fetchLessons();
+      if (!mounted) return;
+      messenger.showSnackBar(const SnackBar(content: Text('课程删除成功')));
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text('删除失败: $e')));
+    }
   }
 }
 
