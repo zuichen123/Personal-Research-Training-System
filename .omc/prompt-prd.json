@@ -1,0 +1,289 @@
+{
+  "title": "Prompt Optimization - Master-Level AI Tutoring System",
+  "version": "1.0",
+  "created": "2026-03-12T16:59:41.226Z",
+  "description": "Transform all 15 AI prompts from placeholder-level to production-grade, pedagogically sound prompts",
+  "stories": [
+    {
+      "id": "US-P01",
+      "title": "agent_chat Core Segments",
+      "phase": 1,
+      "priority": 1,
+      "complexity": "standard",
+      "acceptanceCriteria": [
+        "persona.md has minimum 200 words with warm, Socratic teaching style",
+        "persona.md includes growth mindset language and cultural sensitivity",
+        "identity.md defines expert tutor with multilingual support",
+        "identity.md emphasizes adaptive teaching and 24/7 availability",
+        "scoring_criteria.md includes Bloom's taxonomy levels",
+        "scoring_criteria.md defines partial credit rubrics and improvement tracking",
+        "rules.md includes never give direct answers guide discovery",
+        "rules.md defines appropriate boundaries no personal medical legal advice"
+      ],
+      "dependencies": [],
+      "passes": true
+    },
+    {
+      "id": "US-P02",
+      "title": "agent_chat Tool Instructions",
+      "phase": 1,
+      "priority": 2,
+      "complexity": "simple",
+      "acceptanceCriteria": [
+        "tool_instructions.md documents when to use manage_app for course scheduling",
+        "tool_instructions.md explains how to create practice sessions",
+        "tool_instructions.md defines when to generate vs retrieve questions",
+        "tool_instructions.md includes progress tracking and plan updates"
+      ],
+      "dependencies": [
+        "US-P01"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-P03",
+      "title": "grade_answer_math Master Prompt",
+      "phase": 1,
+      "priority": 3,
+      "complexity": "standard",
+      "acceptanceCriteria": [
+        "persona.md has minimum 500 words with math domain expertise",
+        "persona.md covers multiple solution methods algebraic geometric numerical",
+        "persona.md addresses common errors sign mistakes order of operations",
+        "persona.md includes visualization suggestions and real-world applications",
+        "task_prompt.md defines grading workflow with positive reinforcement first",
+        "task_prompt.md includes hint provision not full solutions",
+        "output_format.md structures feedback with correct elements explanations hints"
+      ],
+      "dependencies": [],
+      "passes": true
+    },
+    {
+      "id": "US-P04",
+      "title": "grade_answer_english Master Prompt",
+      "phase": 1,
+      "priority": 4,
+      "complexity": "standard",
+      "acceptanceCriteria": [
+        "persona.md has minimum 500 words with English language expertise",
+        "persona.md covers grammar vocabulary reading comprehension writing",
+        "persona.md includes literary devices and cultural context",
+        "task_prompt.md defines grading with constructive feedback approach",
+        "output_format.md structures feedback for language learning"
+      ],
+      "dependencies": [],
+      "passes": true
+    },
+    {
+      "id": "US-P05",
+      "title": "grade_answer_chinese Master Prompt",
+      "phase": 1,
+      "priority": 5,
+      "complexity": "standard",
+      "acceptanceCriteria": [
+        "persona.md has minimum 500 words with Chinese language expertise",
+        "persona.md covers character structure radicals tones pronunciation",
+        "persona.md includes grammar patterns and cultural context",
+        "persona.md addresses classical vs modern usage",
+        "task_prompt.md defines grading with stroke order and tone guidance",
+        "output_format.md structures feedback for Chinese learning"
+      ],
+      "dependencies": [],
+      "passes": true
+    },
+    {
+      "id": "US-P06",
+      "title": "generate_questions Master Prompt",
+      "phase": 1,
+      "priority": 6,
+      "complexity": "standard",
+      "acceptanceCriteria": [
+        "persona.md defines question design expertise with Blooms taxonomy",
+        "persona.md includes difficulty calibration and distractor creation",
+        "task_prompt.md specifies generating questions at specified difficulty",
+        "task_prompt.md includes worked solutions and explanations",
+        "task_prompt.md defines multiple question types MCQ short answer problem-solving",
+        "task_prompt.md aligns with learning objectives",
+        "output_format.md structures question output with metadata"
+      ],
+      "dependencies": [],
+      "passes": true
+    },
+    {
+      "id": "US-P07",
+      "title": "grade_answer_physics Master Prompt",
+      "phase": 2,
+      "priority": 7,
+      "complexity": "standard",
+      "acceptanceCriteria": [
+        "persona.md has minimum 500 words with physics domain expertise",
+        "persona.md covers conceptual understanding vs formula application",
+        "persona.md includes unit analysis and dimensional reasoning",
+        "persona.md addresses common misconceptions force vs acceleration",
+        "persona.md includes free body diagrams and experimental design",
+        "task_prompt.md defines physics-specific grading approach",
+        "output_format.md structures feedback for physics learning"
+      ],
+      "dependencies": [],
+      "passes": true
+    },
+    {
+      "id": "US-P08",
+      "title": "grade_answer_chemistry Master Prompt",
+      "phase": 2,
+      "priority": 8,
+      "complexity": "standard",
+      "acceptanceCriteria": [
+        "persona.md has minimum 500 words with chemistry domain expertise",
+        "persona.md covers molecular visualization and bonding",
+        "persona.md includes stoichiometry and unit conversions",
+        "persona.md addresses lab safety and procedures",
+        "persona.md includes common errors balancing equations significant figures",
+        "task_prompt.md defines chemistry-specific grading approach",
+        "output_format.md structures feedback for chemistry learning"
+      ],
+      "dependencies": [],
+      "passes": true
+    },
+    {
+      "id": "US-P09",
+      "title": "grade_answer_biology Master Prompt",
+      "phase": 2,
+      "priority": 9,
+      "complexity": "standard",
+      "acceptanceCriteria": [
+        "persona.md has minimum 500 words with biology domain expertise",
+        "persona.md covers systems thinking and interconnections",
+        "persona.md includes evolution and adaptation reasoning",
+        "persona.md addresses experimental design and data interpretation",
+        "persona.md includes common misconceptions evolution genetics ecology",
+        "task_prompt.md defines biology-specific grading approach",
+        "output_format.md structures feedback for biology learning"
+      ],
+      "dependencies": [],
+      "passes": true
+    },
+    {
+      "id": "US-P10",
+      "title": "grade_answer General Master Prompt",
+      "phase": 2,
+      "priority": 10,
+      "complexity": "simple",
+      "acceptanceCriteria": [
+        "persona.md has minimum 300 words with general grading expertise",
+        "persona.md covers cross-disciplinary feedback principles",
+        "task_prompt.md defines general grading workflow",
+        "task_prompt.md includes positive reinforcement and constructive feedback",
+        "output_format.md structures general feedback format"
+      ],
+      "dependencies": [],
+      "passes": true
+    },
+    {
+      "id": "US-P11",
+      "title": "build_learning_plan Master Prompt",
+      "phase": 3,
+      "priority": 11,
+      "complexity": "standard",
+      "acceptanceCriteria": [
+        "persona.md defines curriculum design expertise",
+        "persona.md includes learning science principles and time management",
+        "task_prompt.md defines SMART goal setting",
+        "task_prompt.md includes logical topic sequencing prerequisites first",
+        "task_prompt.md defines spaced repetition schedule",
+        "task_prompt.md includes review and assessment checkpoints",
+        "output_format.md structures learning plan output"
+      ],
+      "dependencies": [],
+      "passes": true
+    },
+    {
+      "id": "US-P12",
+      "title": "optimize_learning_plan Master Prompt",
+      "phase": 3,
+      "priority": 12,
+      "complexity": "standard",
+      "acceptanceCriteria": [
+        "persona.md defines plan optimization expertise",
+        "task_prompt.md analyzes performance patterns",
+        "task_prompt.md identifies struggling areas need more practice",
+        "task_prompt.md identifies mastered areas can advance",
+        "task_prompt.md adjusts pacing and difficulty",
+        "task_prompt.md maintains motivation and engagement",
+        "output_format.md structures optimization recommendations"
+      ],
+      "dependencies": [
+        "US-P11"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-P13",
+      "title": "evaluate_learning Master Prompt",
+      "phase": 3,
+      "priority": 13,
+      "complexity": "standard",
+      "acceptanceCriteria": [
+        "persona.md defines assessment expertise",
+        "persona.md includes data-driven decision making",
+        "scoring_criteria.md defines multiple dimensions accuracy speed consistency improvement",
+        "scoring_criteria.md includes mastery thresholds 80 percent for moving forward",
+        "scoring_criteria.md defines trend analysis improving plateauing declining",
+        "task_prompt.md defines evaluation workflow",
+        "output_format.md structures evaluation report"
+      ],
+      "dependencies": [],
+      "passes": true
+    },
+    {
+      "id": "US-P14",
+      "title": "score_learning Master Prompt",
+      "phase": 3,
+      "priority": 14,
+      "complexity": "simple",
+      "acceptanceCriteria": [
+        "persona.md defines scoring expertise",
+        "scoring_criteria.md includes numerical scoring rubrics",
+        "task_prompt.md defines scoring workflow with justification",
+        "output_format.md structures score output with breakdown"
+      ],
+      "dependencies": [
+        "US-P13"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-P15",
+      "title": "detect_intent Master Prompt",
+      "phase": 4,
+      "priority": 15,
+      "complexity": "simple",
+      "acceptanceCriteria": [
+        "persona.md defines intent classification expertise",
+        "task_prompt.md defines intent categories question practice schedule plan help chat",
+        "task_prompt.md includes confidence thresholds",
+        "task_prompt.md handles ambiguity and multi-intent detection",
+        "output_format.md structures intent classification output"
+      ],
+      "dependencies": [],
+      "passes": true
+    },
+    {
+      "id": "US-P16",
+      "title": "compress_session Master Prompt",
+      "phase": 4,
+      "priority": 16,
+      "complexity": "simple",
+      "acceptanceCriteria": [
+        "persona.md defines conversation summarization expertise",
+        "task_prompt.md preserves learning progress and insights",
+        "task_prompt.md maintains student questions and concerns",
+        "task_prompt.md keeps action items and commitments",
+        "task_prompt.md summarizes key concepts covered",
+        "output_format.md structures compression output"
+      ],
+      "dependencies": [],
+      "passes": true
+    }
+  ]
+}

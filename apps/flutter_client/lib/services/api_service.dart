@@ -1401,9 +1401,9 @@ class ApiService {
     late http.Response response;
     const maxRetries = 3;
     const retryDelays = [
-      Duration(seconds: 1),
-      Duration(seconds: 2),
-      Duration(seconds: 4),
+      Duration(seconds: 5),
+      Duration(seconds: 5),
+      Duration(seconds: 5),
     ];
 
     for (var attempt = 0; attempt <= maxRetries; attempt++) {

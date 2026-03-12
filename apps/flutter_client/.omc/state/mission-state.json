@@ -1,0 +1,77 @@
+{
+  "updatedAt": "2026-03-12T14:22:07.234Z",
+  "missions": [
+    {
+      "id": "session:8da34d60-93df-45ba-b924-8aad656ace38:none",
+      "source": "session",
+      "name": "none",
+      "objective": "Session mission",
+      "createdAt": "2026-03-12T01:15:20.553Z",
+      "updatedAt": "2026-03-12T14:22:07.234Z",
+      "status": "done",
+      "workerCount": 1,
+      "taskCounts": {
+        "total": 1,
+        "pending": 0,
+        "blocked": 0,
+        "inProgress": 0,
+        "completed": 1,
+        "failed": 0
+      },
+      "agents": [
+        {
+          "name": "code-reviewer:a074a36",
+          "role": "code-reviewer",
+          "ownership": "a074a36e4334c270a",
+          "status": "done",
+          "currentStep": null,
+          "latestUpdate": "completed",
+          "completedSummary": null,
+          "updatedAt": "2026-03-12T14:22:07.234Z"
+        }
+      ],
+      "timeline": [
+        {
+          "id": "session-start:a074a36e4334c270a:2026-03-12T01:15:20.553Z",
+          "at": "2026-03-12T01:15:20.553Z",
+          "kind": "update",
+          "agent": "code-reviewer:a074a36",
+          "detail": "started code-reviewer:a074a36",
+          "sourceKey": "session-start:a074a36e4334c270a"
+        },
+        {
+          "id": "session-stop:a074a36e4334c270a:2026-03-12T01:15:29.559Z",
+          "at": "2026-03-12T01:15:29.559Z",
+          "kind": "completion",
+          "agent": "code-reviewer:a074a36",
+          "detail": "completed",
+          "sourceKey": "session-stop:a074a36e4334c270a"
+        },
+        {
+          "id": "session-stop:aa592dfc8ba17fbf1:2026-03-12T01:16:33.832Z",
+          "at": "2026-03-12T01:16:33.832Z",
+          "kind": "completion",
+          "agent": "code-reviewer:a074a36",
+          "detail": "completed",
+          "sourceKey": "session-stop:aa592dfc8ba17fbf1"
+        },
+        {
+          "id": "session-stop:a38e79256c554be85:2026-03-12T06:22:17.996Z",
+          "at": "2026-03-12T06:22:17.996Z",
+          "kind": "completion",
+          "agent": "code-reviewer:a074a36",
+          "detail": "completed",
+          "sourceKey": "session-stop:a38e79256c554be85"
+        },
+        {
+          "id": "session-stop:a4abadb9cd3e621bf:2026-03-12T14:22:07.234Z",
+          "at": "2026-03-12T14:22:07.234Z",
+          "kind": "completion",
+          "agent": "code-reviewer:a074a36",
+          "detail": "completed",
+          "sourceKey": "session-stop:a4abadb9cd3e621bf"
+        }
+      ]
+    }
+  ]
+}

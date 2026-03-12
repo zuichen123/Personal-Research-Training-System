@@ -1,7 +1,7 @@
 {
-  "tool_name": "Read",
-  "tool_input_preview": "{\"file_path\":\"F:\\\\Code\\\\go\\\\Self-Study-Tool\\\\internal\\\\modules\\\\ai\\\\types.go\"}",
-  "error": "File does not exist. Note: your current working directory is F:\\Code\\go\\Self-Study-Tool.",
-  "timestamp": "2026-03-12T00:42:55.821Z",
-  "retry_count": 1
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"cd \\\"F:/Code/go/Self-Study-Tool\\\" && git commit -m \\\"fix(prompts): expand build_learning_plan persona to meet 300+ word requirement\\\"\",\"description\":\"Commit the expanded persona.md file\"}",
+  "error": "Exit code 1\nOn branch main\nYour branch is ahead of 'origin/main' by 117 commits.\n  (use \"git push\" to publish your local commits)\n\nChanges not staged for commit:\n  (use \"git add <file>...\" to update what will be committed)\n  (use \"git restore <file>...\" to discard changes in working directory)\n\tmodified:   .omc/autopilot/spec.md\n\tmodified:   .omc/plans/autopilot-impl.md\n\tmodified:   .omc/prd.json\n\tmodified:   .omc/project-memory.json\n\tmodified:   .omc/state/agent-replay-8da34d60-93df-45ba-b924-8...",
+  "timestamp": "2026-03-12T17:25:21.173Z",
+  "retry_count": 3
 }

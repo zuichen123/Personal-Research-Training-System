@@ -1,118 +1,401 @@
 {
-  "title": "Self-Study-Tool Core Enhancements",
-  "description": "Complete AI-powered learning platform with intelligent orchestration, adaptive scheduling, professional grading, and comprehensive profiling",
-  "tasks": [
+  "title": "PRTS UI Optimization",
+  "version": "1.0",
+  "created": "2026-03-12T04:16:31.931Z",
+  "description": "Frontend-backend alignment, deprecated code removal, and UI optimization",
+  "stories": [
     {
-      "id": "task-1",
-      "title": "Complete Schedule Service with AI Generation",
-      "description": "Implement AI-powered schedule generation using user profile and course data. Add dynamic adjustment based on user requests.",
-      "status": "done",
-      "priority": "high",
-      "complexity": "medium",
-      "files": [
-        "internal/modules/schedule/service.go",
-        "internal/modules/schedule/handler.go",
-        "internal/modules/schedule/ai_adapter.go",
-        "internal/modules/schedule/repository.go"
+      "id": "US-001",
+      "title": "API Standards Documentation",
+      "phase": 0,
+      "priority": 1,
+      "complexity": "simple",
+      "tasks": ["T001", "T002", "T003", "T004"],
+      "acceptanceCriteria": [
+        "docs/api-standards.md exists with error format (code, message, details, trace_id)",
+        "Pagination standard documented (cursor, has_more, limit)",
+        "Success response format documented (data, meta with timestamp/trace_id)",
+        "API versioning strategy documented with migration plan"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "passes": true
     },
     {
-      "id": "task-2",
-      "title": "Implement Agent Orchestration Service",
-      "description": "Create head teacher agent that manages subject agents, dispatches tasks, and coordinates teaching activities.",
-      "status": "done",
-      "priority": "high",
-      "complexity": "high",
-      "files": [
-        "internal/modules/agent/service.go",
-        "internal/modules/agent/handler.go"
+      "id": "US-002",
+      "title": "Flutter Error Handling",
+      "phase": 0,
+      "priority": 2,
+      "complexity": "standard",
+      "tasks": ["T005", "T006", "T007"],
+      "acceptanceCriteria": [
+        "ApiException has details (Map) and traceId (String?) fields",
+        "error_mapper.dart maps VALIDATION_ERROR, NOT_FOUND, UNAUTHORIZED",
+        "ApiService implements exponential backoff (3 retries: 1s, 2s, 4s)"
       ],
-      "dependencies": []
+      "dependencies": ["US-001"],
+      "passes": true
     },
     {
-      "id": "task-3",
-      "title": "Implement 10-Level Difficulty System",
-      "description": "Create Gaokao-aligned difficulty assessment with 10 levels. Add difficulty assignment to questions.",
-      "status": "done",
-      "priority": "high",
-      "complexity": "medium",
-      "files": [
-        "internal/modules/question/difficulty.go",
-        "internal/modules/question/service.go"
+      "id": "US-003",
+      "title": "Component Library Setup",
+      "phase": 0,
+      "priority": 3,
+      "complexity": "simple",
+      "tasks": ["T008", "T009"],
+      "acceptanceCriteria": [
+        "lib/widgets/common/ directory exists with README.md",
+        "app_theme.dart defines tokens: colors (primary/error/success), spacing (xs/s/m/l/xl), radius (s/m/l)"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "passes": true
     },
     {
-      "id": "task-4",
-      "title": "Implement Professional Grading System",
-      "description": "Create subject-specific grading with detailed feedback, error pinpointing, and scoring aligned with Gaokao standards.",
-      "status": "done",
-      "priority": "high",
-      "complexity": "high",
-      "files": [
-        "internal/modules/practice/grading.go",
-        "internal/modules/ai/grading.go"
+      "id": "US-004",
+      "title": "Core UI Components",
+      "phase": 0,
+      "priority": 4,
+      "complexity": "standard",
+      "tasks": ["T010", "T011", "T012", "T013", "T014", "T015"],
+      "acceptanceCriteria": [
+        "AppButton with loading state and variants (primary/secondary/text)",
+        "AppTextField with validation and error display",
+        "AppCard with padding variants (none/small/medium/large)",
+        "AppLoadingIndicator with optional message",
+        "AppErrorView with retry button",
+        "AppEmptyState with icon/message/action",
+        "Widget tests for AppButton loading and AppTextField validation"
       ],
-      "dependencies": ["task-3"]
+      "dependencies": ["US-003", "US-002"],
+      "passes": true
     },
     {
-      "id": "task-5",
-      "title": "Implement Intelligent Paper Generation",
-      "description": "AI-powered test paper composition based on user progress with validation for correctness.",
-      "status": "done",
-      "priority": "medium",
-      "complexity": "high",
-      "files": [
-        "internal/modules/practice/paper.go",
-        "internal/modules/practice/service.go"
+      "id": "US-005",
+      "title": "Flutter Data Models",
+      "phase": 1,
+      "priority": 5,
+      "complexity": "simple",
+      "tasks": ["T016", "T017", "T018", "T019"],
+      "acceptanceCriteria": [
+        "AgentSession model with fromJson/toJson (id, agentId, title, createdAt, updatedAt)",
+        "Artifact model with fromJson/toJson (id, sessionId, type, title, content, status, createdAt)",
+        "PromptTemplate model with fromJson/toJson (key, name, content, variables)",
+        "AIAgent model updated to match agent_chat_store.go:29-40 schema"
       ],
-      "dependencies": ["task-3", "task-4"]
+      "dependencies": [],
+      "passes": true
     },
     {
-      "id": "task-6",
-      "title": "Add Multi-Format Material Support",
-      "description": "Support PDF, images, MOBI formats with AI-powered classification and querying.",
-      "status": "done",
-      "priority": "medium",
-      "complexity": "medium",
-      "files": [
-        "internal/modules/material/parser.go",
-        "internal/modules/material/service.go"
+      "id": "US-006",
+      "title": "Provider Configuration API",
+      "phase": 1,
+      "priority": 6,
+      "complexity": "simple",
+      "tasks": ["T020", "T021", "T022"],
+      "acceptanceCriteria": [
+        "getProviderStatus() returns Map with provider status",
+        "getDefaultAgentProvider() returns default provider name",
+        "updateProviderConfig() accepts config Map and returns success"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "passes": true
     },
     {
-      "id": "task-7",
-      "title": "Enhance Mistake Analysis with AI",
-      "description": "AI-powered error pattern analysis, weak point identification, and user profiling updates.",
-      "status": "done",
-      "priority": "medium",
-      "complexity": "medium",
-      "files": [
-        "internal/modules/mistake/analysis.go",
-        "internal/modules/mistake/service.go"
+      "id": "US-007",
+      "title": "Prompt Templates API",
+      "phase": 1,
+      "priority": 7,
+      "complexity": "simple",
+      "tasks": ["T023", "T024", "T025"],
+      "acceptanceCriteria": [
+        "listPromptTemplates() returns List<PromptTemplate>",
+        "updatePromptTemplate() updates and returns PromptTemplate",
+        "reloadPromptTemplates() triggers reload and returns success"
       ],
-      "dependencies": []
+      "dependencies": ["US-005"],
+      "passes": true
     },
     {
-      "id": "task-8",
-      "title": "Wire All Services in Bootstrap",
-      "description": "Integrate all new services into bootstrap, register routes, and ensure proper dependency injection.",
-      "status": "done",
-      "priority": "high",
-      "complexity": "low",
-      "files": [
-        "internal/bootstrap/app.go"
+      "id": "US-008",
+      "title": "Agent Sessions API",
+      "phase": 1,
+      "priority": 8,
+      "complexity": "standard",
+      "tasks": ["T026", "T027", "T028"],
+      "acceptanceCriteria": [
+        "getAIAgentSessions() returns List<AIAgentSession> with pagination (limit, cursor)",
+        "createAIAgentSession() creates session with optional title",
+        "deleteAIAgentSession() deletes session and returns success"
       ],
-      "dependencies": ["task-1", "task-2", "task-3", "task-4", "task-5", "task-6", "task-7"]
+      "dependencies": ["US-005", "US-001"],
+      "passes": true
+    },
+    {
+      "id": "US-009",
+      "title": "Session Artifacts API",
+      "phase": 1,
+      "priority": 9,
+      "complexity": "standard",
+      "tasks": ["T029", "T030", "T031"],
+      "acceptanceCriteria": [
+        "listSessionArtifacts() returns List<Artifact> with status filter",
+        "importQuestionsFromArtifact() imports questions and returns result Map",
+        "importPlanFromArtifact() imports plan and returns result Map"
+      ],
+      "dependencies": ["US-005"],
+      "passes": true
+    },
+    {
+      "id": "US-010",
+      "title": "Session Operations API",
+      "phase": 1,
+      "priority": 10,
+      "complexity": "standard",
+      "tasks": ["T032", "T033"],
+      "acceptanceCriteria": [
+        "compressSessionMessages() compresses history with optional targetCount",
+        "confirmSessionAction() confirms agent action and returns result Map"
+      ],
+      "dependencies": [],
+      "passes": true
+    },
+    {
+      "id": "US-011",
+      "title": "Course Schedule Lessons API",
+      "phase": 1,
+      "priority": 11,
+      "complexity": "simple",
+      "tasks": ["T034", "T035", "T036", "T037"],
+      "acceptanceCriteria": [
+        "getCourseScheduleLessons() returns List<CourseLesson> with date/granularity filters",
+        "createCourseScheduleLesson() creates and returns CourseLesson",
+        "updateCourseScheduleLesson() updates and returns void",
+        "deleteCourseScheduleLesson() deletes lesson and returns void"
+      ],
+      "dependencies": [],
+      "passes": true
+    },
+    {
+      "id": "US-012",
+      "title": "Provider Configuration UI",
+      "phase": 1,
+      "priority": 12,
+      "complexity": "standard",
+      "tasks": ["T038", "T039", "T040"],
+      "acceptanceCriteria": [
+        "Settings screen has AI Provider section with API key, model, temperature fields",
+        "Form validates API key format and temperature range (0-1)",
+        "Provider status indicator shows connected/disconnected badge"
+      ],
+      "dependencies": ["US-006", "US-004"],
+      "passes": true
+    },
+    {
+      "id": "US-013",
+      "title": "Session Artifacts UI",
+      "phase": 1,
+      "priority": 13,
+      "complexity": "standard",
+      "tasks": ["T041", "T042", "T043", "T044"],
+      "acceptanceCriteria": [
+        "Agent chat screen has Chat and Artifacts tabs",
+        "Artifacts list view displays artifacts grouped by type with filtering",
+        "Artifact preview dialog shows content with import buttons",
+        "Import actions handle questions/plan import with success/error messages"
+      ],
+      "dependencies": ["US-009", "US-004"],
+      "passes": true
+    },
+    {
+      "id": "US-014",
+      "title": "Course Schedule Lessons UI",
+      "phase": 1,
+      "priority": 14,
+      "complexity": "standard",
+      "tasks": ["T045", "T046", "T047", "T048"],
+      "acceptanceCriteria": [
+        "Course schedule screen shows Manage Lessons button and lessons list",
+        "Create lesson dialog with form (title, description, date, duration)",
+        "Edit lesson dialog pre-populates form and updates on submit",
+        "Delete lesson shows confirmation dialog and refreshes list"
+      ],
+      "dependencies": ["US-011", "US-004"],
+      "passes": true
+    },
+    {
+      "id": "US-015",
+      "title": "Legacy Agent Migration",
+      "phase": 1,
+      "priority": 15,
+      "complexity": "standard",
+      "tasks": ["T049", "T050", "T051", "T052", "T053"],
+      "acceptanceCriteria": [
+        "All /agents endpoint usage documented",
+        "Flutter migrated to /ai/agents endpoints",
+        "Legacy /agents endpoints return X-Deprecated: true header",
+        "Test checklist passes: create (201), start session (201), send message (200), view history (200), delete (204→404)",
+        "API docs updated with deprecation notice and timeline"
+      ],
+      "dependencies": [],
+      "passes": true
+    },
+    {
+      "id": "US-016",
+      "title": "Data Migration Preparation",
+      "phase": 2,
+      "priority": 16,
+      "complexity": "complex",
+      "tasks": ["T054", "T055", "T056"],
+      "acceptanceCriteria": [
+        "036_consolidate_agents.sql creates agents_backup and agent_chat_history_backup tables, then migrates to ai_agents",
+        "Chat history migrated to ai_session_messages with correct associations",
+        "036_consolidate_agents_rollback.sql drops ai_* tables, restores from backups, verifies counts"
+      ],
+      "dependencies": [],
+      "passes": true
+    },
+    {
+      "id": "US-017",
+      "title": "Migration Execution",
+      "phase": 2,
+      "priority": 17,
+      "complexity": "standard",
+      "tasks": ["T057", "T058", "T059", "T060"],
+      "acceptanceCriteria": [
+        "Production database backup created and verified readable",
+        "Migration tested on staging with data integrity verified and report approved",
+        "Migration executed in production with monitoring",
+        "Verification queries pass: agent count matches, message count matches, zero orphaned sessions, all names preserved"
+      ],
+      "dependencies": ["US-016"],
+      "passes": true
+    },
+    {
+      "id": "US-018",
+      "title": "Backend Cleanup",
+      "phase": 2,
+      "priority": 18,
+      "complexity": "simple",
+      "tasks": ["T061", "T062", "T063", "T064", "T065"],
+      "acceptanceCriteria": [
+        "internal/modules/agent/ directory deleted",
+        "Agent module not registered in bootstrap/app.go",
+        "Legacy /agents routes not registered in router.go",
+        "Migration created to drop agents and agent_chat_history tables",
+        "go test ./... passes"
+      ],
+      "dependencies": ["US-017"],
+      "passes": true
+    },
+    {
+      "id": "US-019",
+      "title": "Flutter Cleanup",
+      "phase": 2,
+      "priority": 19,
+      "complexity": "simple",
+      "tasks": ["T066", "T067", "T068", "T069"],
+      "acceptanceCriteria": [
+        "ai_tutor_team.dart deleted with no import errors",
+        "ai_tutor_team_controller.dart assessed and decision documented",
+        "Unused imports removed from api_service.dart",
+        "flutter analyze shows no errors or warnings"
+      ],
+      "dependencies": ["US-017"],
+      "passes": true
+    },
+    {
+      "id": "US-020",
+      "title": "Prompt Template Management UI",
+      "phase": 3,
+      "priority": 20,
+      "complexity": "complex",
+      "tasks": ["T070", "T071", "T072", "T073"],
+      "acceptanceCriteria": [
+        "Prompt templates screen displays all templates with search",
+        "Template detail view shows content with markdown preview and variable highlighting",
+        "Template editor allows markdown editing and saves changes",
+        "Reload button triggers template reload from disk with success message"
+      ],
+      "dependencies": ["US-007", "US-004"],
+      "passes": true
+    },
+    {
+      "id": "US-021",
+      "title": "Enhanced Chat UI",
+      "phase": 3,
+      "priority": 21,
+      "complexity": "standard",
+      "tasks": ["T074", "T075", "T076"],
+      "acceptanceCriteria": [
+        "Chat screen has message compression button in app bar with confirmation dialog",
+        "Action confirmation UI displays action details with confirm/reject buttons",
+        "Message search bar filters messages by text and highlights results"
+      ],
+      "dependencies": ["US-010"],
+      "passes": true
+    },
+    {
+      "id": "US-022",
+      "title": "Additional UI Components",
+      "phase": 3,
+      "priority": 22,
+      "complexity": "standard",
+      "tasks": ["T077", "T078"],
+      "acceptanceCriteria": [
+        "AppDialog component with title, content, and action buttons",
+        "AppBottomSheet component with custom content and drag to dismiss"
+      ],
+      "dependencies": ["US-003", "US-004"],
+      "passes": true
+    },
+    {
+      "id": "US-023",
+      "title": "User Flow Optimization",
+      "phase": 3,
+      "priority": 23,
+      "complexity": "complex",
+      "tasks": ["T079", "T080", "T081", "T082"],
+      "acceptanceCriteria": [
+        "Practice session flow reduced from 4 to 3 screens",
+        "Progress indicator shows current question number and total (e.g., '3 of 10')",
+        "Quick retry button appears after incorrect answer",
+        "Skeleton screens show placeholders while loading list views"
+      ],
+      "dependencies": [],
+      "passes": true
+    },
+    {
+      "id": "US-024",
+      "title": "OpenAPI Specification",
+      "phase": 4,
+      "priority": 24,
+      "complexity": "complex",
+      "tasks": ["T083", "T084", "T085", "T086"],
+      "acceptanceCriteria": [
+        "docs/openapi.yaml exists with valid OpenAPI 3.0 structure",
+        "All /ai/* endpoints documented with request/response schemas and examples",
+        "All active endpoints documented (questions, practice, plans, mistakes, etc.)",
+        "Error codes documented in components/schemas with descriptions"
+      ],
+      "dependencies": ["US-001"],
+      "passes": true
+    },
+    {
+      "id": "US-025",
+      "title": "Migration Guides and Documentation",
+      "phase": 4,
+      "priority": 25,
+      "complexity": "standard",
+      "tasks": ["T087", "T088", "T089", "T090", "T091", "T092"],
+      "acceptanceCriteria": [
+        "migration-agent-consolidation.md documents /agents to /ai/agents migration with code examples",
+        "Database migration process documented with backup, migration, rollback procedures",
+        "README.md updated with current architecture and component library info",
+        "Flutter client README.md documents new components and API methods with usage examples",
+        "developer-onboarding.md allows new developers to set up project from guide",
+        "All public APIs have JSDoc/Dartdoc comments"
+      ],
+      "dependencies": ["US-015", "US-016"],
+      "passes": true
     }
-  ],
-  "acceptance_criteria": [
-    "All services compile without errors",
-    "API endpoints functional and tested",
-    "AI integration working with proper prompts",
-    "Git commit per task with clear messages",
-    "Minimal code implementation throughout"
   ]
 }

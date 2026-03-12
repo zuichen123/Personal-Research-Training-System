@@ -1,0 +1,7 @@
+{"t":0,"agent":"aeb7b3d","agent_type":"unknown","event":"agent_stop","success":true}
+{"t":0,"agent":"a074a36","agent_type":"code-reviewer","event":"agent_start","parent_mode":"none"}
+{"t":0,"agent":"a074a36","agent_type":"code-reviewer","event":"agent_stop","success":true,"duration_ms":9006}
+{"t":0,"agent":"system","event":"skill_invoked","skill_name":"oh-my-claudecode:cancel"}
+{"t":0,"agent":"aa592df","agent_type":"unknown","event":"agent_stop","success":true}
+{"t":0,"agent":"a38e792","agent_type":"unknown","event":"agent_stop","success":true}
+{"t":0,"agent":"a4abadb","agent_type":"unknown","event":"agent_stop","success":true}
