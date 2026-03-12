@@ -20,8 +20,12 @@ class CourseLesson {
   });
 
   factory CourseLesson.fromJson(Map<String, dynamic> json) {
+    final id = json['id']?.toString() ?? '';
+    if (id.isEmpty) {
+      throw FormatException('CourseLesson requires non-empty id');
+    }
     return CourseLesson(
-      id: json['id']?.toString() ?? '',
+      id: id,
       date: json['date']?.toString() ?? '',
       period: (json['period'] as num?)?.toInt() ?? 1,
       subject: json['subject']?.toString() ?? '',

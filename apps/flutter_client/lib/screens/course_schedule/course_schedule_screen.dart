@@ -64,14 +64,17 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
 
       final lessons = await api.getCourseScheduleLessons(dateStr, granularity);
 
-      if (!mounted) return;
-      setState(() => _lessons = lessons);
+      if (mounted) {
+        setState(() => _lessons = lessons);
+      }
     } catch (e) {
-      if (!mounted) return;
-      setState(() => _lessonsError = e.toString());
+      if (mounted) {
+        setState(() => _lessonsError = e.toString());
+      }
     } finally {
-      if (!mounted) return;
-      setState(() => _loadingLessons = false);
+      if (mounted) {
+        setState(() => _loadingLessons = false);
+      }
     }
   }
 
@@ -859,7 +862,8 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('已标记计划完成')));
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Error marking plan completed: $e');
       if (!context.mounted) {
         return;
       }
@@ -882,7 +886,8 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
       if (!appProvider.isSectionLoaded(DataSection.profile)) {
         try {
           await appProvider.fetchUserProfile();
-        } catch (_) {
+        } catch (e) {
+          debugPrint('Failed to fetch user profile: $e');
           // Continue without profile; session context will mark profile as not provided.
         }
       }
@@ -946,13 +951,14 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
       });
 
       await _openLessonSession(lesson, binding);
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Error starting lesson: $e');
       if (!mounted) {
         return;
       }
       final message =
           agentProvider.errorMessage ??
-          '\u542f\u52a8\u8bfe\u7a0b\u4f1a\u8bdd\u5931\u8d25\u3002';
+          '启动课程会话失败。';
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(message)));
@@ -1034,13 +1040,14 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
           ),
         ),
       );
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Error saving mastery: $e');
       if (!mounted) {
         return;
       }
       final message =
           appProvider.errorMessage ??
-          '\u4fdd\u5b58\u638c\u63e1\u5ea6\u8ba1\u5212\u5931\u8d25\u3002';
+          '保存掌握度计划失败。';
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(message)));
@@ -1257,6 +1264,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
       }
       _refreshSelectedLesson();
     });
+    _fetchLessons();
   }
 
   void _refreshSelectedLesson() {
