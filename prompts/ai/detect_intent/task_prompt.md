@@ -1,36 +1,62 @@
-Detect whether the latest user request should trigger a tool action.
-Allowed actions: generate_questions, build_plan, manage_app, none.
-Use manage_app for software management requests such as creating/updating/deleting/listing:
-- agents, sessions, provider config, prompts
-- questions, mistakes, practice attempts, plans, pomodoro sessions, profile, resources
-- math tools and course schedule
-When action is manage_app, extract "module" and "operation" with required fields in params.
-Available manage_app modules and common operations:
-- agent: create/update/delete/get/list
-- session: create/delete/get/list
-- provider: status/config/update
-- prompt: list/update/reload
-- question: create/update/delete/get/list
-- mistake: create/delete/get/list
-- practice: submit/delete/list
-- plan: create/update/delete/delete_all/get/list
-- pomodoro: start/end/delete/list
-- profile: get/upsert/update
-- resource: create/delete/get/list/download
-- math: compute/verify
-- course_schedule: list/get/create/update/delete (aliases: generate/modify/remove)
-If id is unknown for get/update/delete, include searchable fields such as title/name/keyword/target_date/status/source so the backend can resolve the target.
-For creating agents, always provide params.name. If user did not specify one, set params.name="new-agent".
-For creating agents without explicit provider credentials, do not invent fake api_key/model and do not force mock;
-the backend will try configured provider defaults. If provider availability must be confirmed, call module=provider operation=status.
-For id fields, aliases id/agent_id/agentId/session_id/sessionId/item_id/target_id may appear; preserve them in params.
-For prompt management (module=prompt, operation=update), support self-edit actions:
-- modify/overwrite sections via params.segment_updates (object)
-- delete sections via params.segment_deletes (array)
-- overwrite all sections via params.replace_segments=true with segment_updates
-Allowed prompt sections include: persona, identity, user_background, ai_memo, user_profile, scoring_criteria,
-tool_instructions, current_schedule, learning_progress, rules, reserved_slot_1..reserved_slot_5, task_prompt, output_format.
-For bulk-delete requests like "delete all plans / clear all plans", set module=plan, operation=delete_all, and params.all=true.
-If conversation already contains recent [tool_result] messages, decide whether another manage_app tool step is still required.
-If no further tool call is needed, return action=none.
-Return confidence in [0,1] and include key params when possible.
+# Intent Detection Task
+
+Analyze user input and classify it into one of the following intent categories. Apply confidence scoring and handle multi-intent scenarios.
+
+## Intent Categories
+
+**question**: User seeks information or explanation
+- "What is photosynthesis?"
+- "How do I solve this equation?"
+- "Can you explain Newton's laws?"
+- "Why does this happen?"
+
+**practice**: User wants exercises or practice sessions
+- "I want to practice math"
+- "Give me some questions"
+- "Let's do some exercises"
+- "Quiz me on biology"
+
+**schedule**: User queries about timing or calendar
+- "When is my next lesson?"
+- "Show my calendar"
+- "What's my schedule today?"
+- "Do I have class tomorrow?"
+
+**plan**: User requests study planning or preparation
+- "Create a study plan"
+- "Help me prepare for exam"
+- "I need a learning roadmap"
+- "Plan my week"
+
+**help**: User expresses confusion or needs assistance
+- "I'm stuck"
+- "I don't understand"
+- "This is confusing"
+- "Can you help me?"
+
+**chat**: Casual conversation or social interaction
+- "How are you?"
+- "Tell me a joke"
+- "Good morning"
+- "Thanks!"
+
+## Classification Workflow
+
+1. **Analyze Input**: Extract keywords, phrases, and grammatical patterns from user message
+2. **Check Context**: Review conversation history for disambiguation clues
+3. **Score Confidence**: Assign 0-100 confidence score to each potential intent based on:
+   - Keyword match strength
+   - Sentence structure alignment
+   - Contextual relevance
+4. **Handle Multi-Intent**: Detect when multiple intents coexist (e.g., "I want to practice math and check my schedule")
+5. **Apply Thresholds**:
+   - High confidence (>80%): Clear, unambiguous intent
+   - Medium confidence (50-80%): Probable intent with some uncertainty
+   - Low confidence (<50%): Requires clarification
+6. **Return Classification**: Output primary intent, secondary intents if applicable, and suggested action
+
+## Confidence Thresholds
+
+- **>80%**: Proceed with high confidence classification
+- **50-80%**: Proceed with medium confidence, consider context
+- **<50%**: Request user clarification before proceeding

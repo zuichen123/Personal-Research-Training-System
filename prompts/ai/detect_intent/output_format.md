@@ -1,31 +1,27 @@
-Return ONLY JSON:
+# Intent Detection Output Format
+
+Return intent classification results in the following JSON structure:
+
+```json
 {
-  "content":"",
-  "intent":{
-    "action":"generate_questions|build_plan|manage_app|none",
-    "confidence":0.0,
-    "reason":"string",
-    "params":{
-      "module":"agent|session|provider|prompt|question|mistake|practice|plan|pomodoro|profile|resource|math|course_schedule",
-      "operation":"create|update|delete|delete_all|get|list|submit|start|end|reload|upsert|clear|purge|status|config|compute|verify|generate|modify|remove",
-      "all":true,
-      "id":"string",
-      "agentId":"string",
-      "session_id":"string",
-      "sessionId":"string",
-      "name":"string",
-      "title":"string",
-      "keyword":"string",
-      "target_date":"YYYY-MM-DD",
-      "status":"string",
-      "source":"string",
-      "topic":"string",
-      "subject":"string",
-      "count":3,
-      "difficulty":3,
-      "segment_updates":{"task_prompt":"string","rules":"string"},
-      "segment_deletes":["ai_memo"],
-      "replace_segments":false
-    }
-  }
+  "primary_intent": "practice",
+  "confidence": 95,
+  "secondary_intents": [
+    {"intent": "question", "confidence": 30}
+  ],
+  "requires_clarification": false,
+  "suggested_action": "create_practice_session"
 }
+```
+
+## Field Definitions
+
+**primary_intent** (string): The main intent category detected (question, practice, schedule, plan, help, chat)
+
+**confidence** (integer): Confidence score 0-100 for the primary intent
+
+**secondary_intents** (array): Additional intents detected with their confidence scores, ordered by confidence descending
+
+**requires_clarification** (boolean): True if confidence is below 50% or intent is ambiguous
+
+**suggested_action** (string): Recommended system action based on the detected intent
