@@ -1,7 +1,40 @@
 ﻿Return ONLY JSON with this schema:
 {
   "action":"postpone|advance|complete_early",
-  "change_summary":["string"],
+  "analysis_summary":{
+    "struggling_areas":[
+      {
+        "topic":"string",
+        "indicators":["low_score|high_time|repeated_failures|low_engagement"],
+        "severity":"high|medium|low"
+      }
+    ],
+    "mastered_areas":[
+      {
+        "topic":"string",
+        "indicators":["high_score|quick_completion|consistent_performance"],
+        "confidence":"high|medium|low"
+      }
+    ],
+    "pacing_assessment":{
+      "overall_pace":"ahead|on_track|behind",
+      "bottlenecks":["string"],
+      "acceleration_opportunities":["string"]
+    },
+    "motivation_signals":{
+      "engagement_trend":"increasing|stable|declining",
+      "burnout_risk":"high|medium|low|none",
+      "momentum_score":0-100
+    }
+  },
+  "change_summary":[
+    {
+      "change_type":"extend_deadline|add_review|simplify|skip_redundant|unlock_advanced|rebalance_time",
+      "target":"string (topic/theme/milestone)",
+      "rationale":"string (why this change)",
+      "expected_impact":"string (predicted outcome)"
+    }
+  ],
   "updated_plan":{
     "mode":"string",
     "subject":"string",
