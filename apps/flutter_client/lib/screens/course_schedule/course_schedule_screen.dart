@@ -1417,19 +1417,34 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
             children: [
               TextField(
                 controller: topicController,
-                decoration: const InputDecoration(labelText: '主题'),
+                decoration: const InputDecoration(
+                  labelText: '主题 *',
+                  helperText: '必填：课程的具体主题，如"函数的导数"',
+                ),
               ),
+              const SizedBox(height: 8),
               TextField(
                 controller: subjectController,
-                decoration: const InputDecoration(labelText: '科目'),
+                decoration: const InputDecoration(
+                  labelText: '科目 *',
+                  helperText: '必填：学科名称，如"数学"、"英语"',
+                ),
               ),
+              const SizedBox(height: 8),
               TextField(
                 controller: dateController,
-                decoration: const InputDecoration(labelText: '日期 (YYYY-MM-DD)'),
+                decoration: const InputDecoration(
+                  labelText: '日期 *',
+                  helperText: '必填：格式 YYYY-MM-DD，如 2026-03-15',
+                ),
               ),
+              const SizedBox(height: 8),
               TextField(
                 controller: startTimeController,
-                decoration: const InputDecoration(labelText: '开始时间 (HH:MM)'),
+                decoration: const InputDecoration(
+                  labelText: '开始时间',
+                  helperText: '选填：格式 HH:MM，如 09:00',
+                ),
               ),
             ],
           ),
@@ -1499,19 +1514,34 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
             children: [
               TextField(
                 controller: topicController,
-                decoration: const InputDecoration(labelText: '主题'),
+                decoration: const InputDecoration(
+                  labelText: '主题 *',
+                  helperText: '必填：课程的具体主题，如"函数的导数"',
+                ),
               ),
+              const SizedBox(height: 8),
               TextField(
                 controller: subjectController,
-                decoration: const InputDecoration(labelText: '科目'),
+                decoration: const InputDecoration(
+                  labelText: '科目 *',
+                  helperText: '必填：学科名称，如"数学"、"英语"',
+                ),
               ),
+              const SizedBox(height: 8),
               TextField(
                 controller: dateController,
-                decoration: const InputDecoration(labelText: '日期 (YYYY-MM-DD)'),
+                decoration: const InputDecoration(
+                  labelText: '日期 *',
+                  helperText: '必填：格式 YYYY-MM-DD，如 2026-03-15',
+                ),
               ),
+              const SizedBox(height: 8),
               TextField(
                 controller: startTimeController,
-                decoration: const InputDecoration(labelText: '开始时间 (HH:MM)'),
+                decoration: const InputDecoration(
+                  labelText: '开始时间',
+                  helperText: '选填：格式 HH:MM，如 09:00',
+                ),
               ),
             ],
           ),
