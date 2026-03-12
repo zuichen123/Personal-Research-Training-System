@@ -18,8 +18,10 @@ License: AGPL-3.0-or-later
 - `internal/modules`：业务模块（question / practice / plan / ai / profile 等）
 - `internal/shared`：通用错误、HTTP 响应、基础设施辅助
 - `apps/flutter_client`：Flutter 客户端
+  - `lib/widgets/common/`：统一 UI 组件库（AppButton, AppTextField, AppCard, AppDialog, AppBottomSheet 等）
 - `prompts/ai`：AI 提示词分段文件
 - `scripts`：常用构建脚本
+- `docs/`：API 文档、迁移指南、开发者入门
 - `TODO.md`：已废弃，仅保留 Notion 迁移说明
 
 ## 开发前提

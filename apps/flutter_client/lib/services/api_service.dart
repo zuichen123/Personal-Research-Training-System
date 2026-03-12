@@ -18,6 +18,7 @@ import '../models/question.dart';
 import '../models/resource.dart';
 import '../models/user_profile.dart';
 import '../models/course_lesson.dart';
+import '../models/prompt_template.dart';
 
 /// Offload large JSON decoding from the UI isolate to reduce jank (especially on
 /// Android when responses are large).
@@ -28,11 +29,15 @@ class ApiException implements Exception {
     required this.code,
     required this.message,
     required this.statusCode,
+    this.details,
+    this.traceId,
   });
 
   final String code;
   final String message;
   final int statusCode;
+  final Map<String, dynamic>? details;
+  final String? traceId;
 
   @override
   String toString() => '$message (HTTP $statusCode, code=$code)';
@@ -546,12 +551,14 @@ class ApiService {
     return await _extractDataMap(response);
   }
 
-  Future<List<Map<String, dynamic>>> getAIPromptTemplates() async {
+  Future<List<PromptTemplate>> getAIPromptTemplates() async {
     final response = await _request(method: 'GET', path: '/ai/prompts');
-    return await _extractDataList(response);
+    return (await _extractDataList(response))
+        .map(PromptTemplate.fromJson)
+        .toList();
   }
 
-  Future<Map<String, dynamic>> updateAIPromptTemplate({
+  Future<PromptTemplate> updateAIPromptTemplate({
     required String key,
     String? customPrompt,
     String? outputFormatPrompt,
@@ -580,12 +587,14 @@ class ApiService {
       path: '/ai/prompts/$key',
       jsonBody: body,
     );
-    return await _extractDataMap(response);
+    return PromptTemplate.fromJson(await _extractDataMap(response));
   }
 
-  Future<List<Map<String, dynamic>>> reloadAIPromptTemplates() async {
+  Future<List<PromptTemplate>> reloadAIPromptTemplates() async {
     final response = await _request(method: 'POST', path: '/ai/prompts/reload');
-    return await _extractDataList(response);
+    return (await _extractDataList(response))
+        .map(PromptTemplate.fromJson)
+        .toList();
   }
 
   Future<List<AIAgentSummary>> getAIAgents() async {
@@ -1276,6 +1285,8 @@ class ApiService {
           code: errorObj['code']?.toString() ?? 'api_error',
           message: errorObj['message']?.toString() ?? 'AI request failed',
           statusCode: response.statusCode,
+          details: errorObj['details'] as Map<String, dynamic>?,
+          traceId: errorObj['trace_id']?.toString(),
         );
       }
       if (decoded.containsKey('data')) {
@@ -1388,30 +1399,46 @@ class ApiService {
     );
 
     late http.Response response;
-    try {
-      response = await _sendWithIdleTimeout(
-        method: method,
-        uri: uri,
-        traceId: traceId,
-        payload: payload,
-        idleTimeout: timeout,
-      );
-    } catch (e) {
-      final latency = DateTime.now().difference(started).inMilliseconds;
-      _logger.error(
-        module: 'api',
-        event: 'api.call.error',
-        message: '请求异常',
-        data: {
-          'method': method,
-          'path': path,
-          'query': query,
-          'latency_ms': latency,
-          'trace_id': traceId,
-        },
-        error: e.toString(),
-      );
-      rethrow;
+    const maxRetries = 3;
+    const retryDelays = [
+      Duration(seconds: 1),
+      Duration(seconds: 2),
+      Duration(seconds: 4),
+    ];
+
+    for (var attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        response = await _sendWithIdleTimeout(
+          method: method,
+          uri: uri,
+          traceId: traceId,
+          payload: payload,
+          idleTimeout: timeout,
+        );
+        break; // Success, exit retry loop
+      } catch (e) {
+        final isLastAttempt = attempt == maxRetries;
+        if (isLastAttempt) {
+          final latency = DateTime.now().difference(started).inMilliseconds;
+          _logger.error(
+            module: 'api',
+            event: 'api.call.error',
+            message: '请求异常',
+            data: {
+              'method': method,
+              'path': path,
+              'query': query,
+              'latency_ms': latency,
+              'trace_id': traceId,
+              'attempts': attempt + 1,
+            },
+            error: e.toString(),
+          );
+          rethrow;
+        }
+        // Retry with exponential backoff
+        await Future.delayed(retryDelays[attempt]);
+      }
     }
 
     final latency = DateTime.now().difference(started).inMilliseconds;
@@ -1607,5 +1634,66 @@ class ApiService {
     }
     final value = raw.substring(idx + marker.length).trim();
     return value.replaceAll('"', '').trim();
+  }
+
+  Future<List<PromptTemplate>> listPromptTemplates() async {
+    final response = await _request(method: 'GET', path: '/ai/prompt-templates');
+    return (await _extractDataList(response))
+        .map((json) => PromptTemplate.fromJson(json))
+        .toList(growable: false);
+  }
+
+  Future<PromptTemplate> updatePromptTemplate(String key, Map<String, dynamic> updates) async {
+    final response = await _request(
+      method: 'PUT',
+      path: '/ai/prompt-templates/$key',
+      jsonBody: updates,
+    );
+    final data = await _extractDataMap(response);
+    return PromptTemplate.fromJson(data);
+  }
+
+  Future<void> reloadPromptTemplates() async {
+    await _request(method: 'POST', path: '/ai/prompt-templates/reload');
+  }
+
+  Future<void> compressSessionMessages(String sessionId, {int? targetCount}) async {
+    final body = <String, dynamic>{};
+    if (targetCount != null) body['target_count'] = targetCount;
+    await _request(
+      method: 'POST',
+      path: '/ai/sessions/$sessionId/compress',
+      jsonBody: body.isEmpty ? null : body,
+    );
+  }
+
+  Future<Map<String, dynamic>> confirmSessionAction(String sessionId, String actionId) async {
+    final response = await _request(
+      method: 'POST',
+      path: '/ai/sessions/$sessionId/actions/$actionId/confirm',
+    );
+    return await _extractDataMap(response);
+  }
+
+  /// Gets the current AI provider status including active provider and configuration.
+  Future<Map<String, dynamic>> getProviderStatus() async {
+    final response = await _request(method: 'GET', path: '/ai/provider');
+    return await _extractDataMap(response);
+  }
+
+  /// Gets the default AI agent provider name.
+  Future<String> getDefaultAgentProvider() async {
+    final response = await _request(method: 'GET', path: '/ai/provider/default-agent');
+    final data = await _extractDataMap(response);
+    return data['provider']?.toString() ?? '';
+  }
+
+  /// Updates the AI provider configuration with the given settings.
+  Future<void> updateProviderConfig(Map<String, dynamic> config) async {
+    await _request(
+      method: 'PUT',
+      path: '/ai/provider/config',
+      jsonBody: config,
+    );
   }
 }

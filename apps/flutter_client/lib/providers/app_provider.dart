@@ -9,6 +9,7 @@ import '../models/practice.dart';
 import '../models/question.dart';
 import '../models/resource.dart';
 import '../models/user_profile.dart';
+import '../models/prompt_template.dart';
 import '../services/api_service.dart';
 
 enum DataSection {
@@ -99,8 +100,8 @@ class AppProvider with ChangeNotifier {
   Map<String, dynamic> get aiProviderStatus => _aiProviderStatus;
   final Map<String, String> _aiProviderApiKeyCache = <String, String>{};
 
-  List<Map<String, dynamic>> _aiPromptTemplates = [];
-  List<Map<String, dynamic>> get aiPromptTemplates => _aiPromptTemplates;
+  List<PromptTemplate> _aiPromptTemplates = [];
+  List<PromptTemplate> get aiPromptTemplates => _aiPromptTemplates;
 
   String aiProviderApiKeyFor(String provider) {
     final normalized = provider.trim().toLowerCase();
@@ -286,11 +287,12 @@ class AppProvider with ChangeNotifier {
     });
   }
 
-  Future<void> submitPractice(
+  Future<PracticeAttempt> submitPractice(
     String questionId,
     List<String> userAnswers,
     int elapsedSeconds,
   ) async {
+    late PracticeAttempt result;
     await _runAction('提交练习', () async {
       final attempt = await _api.submitPractice(
         questionId,
@@ -302,8 +304,10 @@ class AppProvider with ChangeNotifier {
       if (!attempt.correct) {
         await fetchMistakes(force: true);
       }
+      result = attempt;
       notifyListeners();
     });
+    return result;
   }
 
   Future<void> deletePracticeAttempt(String id) async {
@@ -854,13 +858,13 @@ class AppProvider with ChangeNotifier {
     return value;
   }
 
-  void _upsertPromptTemplate(Map<String, dynamic> template) {
-    final key = (template['key'] ?? '').toString().trim();
+  void _upsertPromptTemplate(PromptTemplate template) {
+    final key = template.key.trim();
     if (key.isEmpty) {
       return;
     }
     final index = _aiPromptTemplates.indexWhere(
-      (item) => (item['key'] ?? '').toString().trim() == key,
+      (item) => item.key.trim() == key,
     );
     if (index >= 0) {
       _aiPromptTemplates[index] = template;

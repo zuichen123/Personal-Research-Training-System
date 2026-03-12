@@ -2,6 +2,7 @@
 import 'package:provider/provider.dart';
 
 import '../models/ai_agent_chat.dart';
+import '../models/prompt_template.dart';
 import '../services/api_service.dart';
 import '../models/user_profile.dart';
 import '../providers/ai_agent_provider.dart';
@@ -10,6 +11,7 @@ import '../utils/agent_form_initial_data.dart';
 import '../utils/agent_form_utils.dart';
 import '../utils/agent_prompt_sections.dart';
 import 'debug_log_screen.dart';
+import 'prompt_templates_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -28,6 +30,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   final _openAIBaseURLController = TextEditingController();
   final _openAIBaseURLFocusNode = FocusNode();
   final _apiKeyController = TextEditingController();
+  final _temperatureController = TextEditingController();
   String _selectedProvider = 'mock';
   bool _providerDirty = false;
   bool _showApiKey = false;
@@ -162,6 +165,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     _openAIBaseURLController.dispose();
     _openAIBaseURLFocusNode.dispose();
     _apiKeyController.dispose();
+    _temperatureController.dispose();
 
     _nicknameController.dispose();
     _ageController.dispose();
@@ -589,6 +593,16 @@ class _SettingsScreenState extends State<SettingsScreen>
                 style: TextStyle(fontSize: 12, color: Colors.grey),
               ),
               const SizedBox(height: 8),
+              _input(
+                _temperatureController,
+                'Temperature（0-1，可选）',
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              ),
+              const Text(
+                '提示：控制输出随机性，0=确定性，1=最大创造性。',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+              const SizedBox(height: 8),
               FilledButton.icon(
                 onPressed: () => _saveProviderConfig(context, provider),
                 icon: const Icon(Icons.save),
@@ -622,9 +636,9 @@ class _SettingsScreenState extends State<SettingsScreen>
                   items: templates
                       .map(
                         (item) => DropdownMenuItem<String>(
-                          value: (item['key'] ?? '').toString(),
+                          value: item.key,
                           child: Text(
-                            '${item['name'] ?? item['key'] ?? ''} (${item['key'] ?? ''})',
+                            '${item.name.isNotEmpty ? item.name : item.key} (${item.key})',
                           ),
                         ),
                       )
@@ -641,12 +655,11 @@ class _SettingsScreenState extends State<SettingsScreen>
                 const SizedBox(height: 8),
                 _readonlyMultiline(
                   label: '预置 Prompt（保底）',
-                  value: (selectedPrompt?['preset_prompt'] ?? '').toString(),
+                  value: selectedPrompt?.presetPrompt ?? '',
                 ),
                 _readonlyMultiline(
                   label: '预置输出格式说明 Prompt（保底）',
-                  value: (selectedPrompt?['preset_output_format_prompt'] ?? '')
-                      .toString(),
+                  value: selectedPrompt?.presetOutputFormatPrompt ?? '',
                 ),
                 const Padding(
                   padding: EdgeInsets.only(bottom: 8),
@@ -690,13 +703,11 @@ class _SettingsScreenState extends State<SettingsScreen>
                 ),
                 _readonlyMultiline(
                   label: '当前生效 Prompt',
-                  value: (selectedPrompt?['effective_prompt'] ?? '').toString(),
+                  value: selectedPrompt?.effectivePrompt ?? '',
                 ),
                 _readonlyMultiline(
                   label: '当前生效输出格式 Prompt',
-                  value:
-                      (selectedPrompt?['effective_output_format_prompt'] ?? '')
-                          .toString(),
+                  value: selectedPrompt?.effectiveOutputFormatPrompt ?? '',
                 ),
                 const SizedBox(height: 4),
                 Wrap(
@@ -732,6 +743,22 @@ class _SettingsScreenState extends State<SettingsScreen>
                 ),
               ],
             ],
+          ),
+        ),
+        _section(
+          title: '提示词模板管理',
+          icon: Icons.description_outlined,
+          child: ListTile(
+            title: const Text('管理提示词模板'),
+            subtitle: const Text('查看、编辑和重新加载所有提示词模板'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const PromptTemplatesScreen(),
+                ),
+              );
+            },
           ),
         ),
         if (provider.errorMessage != null)
@@ -1244,21 +1271,6 @@ class _SettingsScreenState extends State<SettingsScreen>
     return widgets;
   }
 
-  Map<String, String> _asStringMap(dynamic value) {
-    if (value is! Map) {
-      return <String, String>{};
-    }
-    final out = <String, String>{};
-    value.forEach((key, raw) {
-      final normalizedKey = key.toString().trim();
-      if (normalizedKey.isEmpty) {
-        return;
-      }
-      out[normalizedKey] = raw?.toString() ?? '';
-    });
-    return out;
-  }
-
   void _bindProfileDirtyListener(TextEditingController controller) {
     controller.addListener(() {
       if (_syncingProfileForm) return;
@@ -1294,7 +1306,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     _syncingProfileForm = false;
   }
 
-  void _syncPromptTemplate(List<Map<String, dynamic>> templates) {
+  void _syncPromptTemplate(List<PromptTemplate> templates) {
     if (templates.isEmpty) {
       _selectedPromptKey = null;
       _applyPromptForm(null);
@@ -1302,10 +1314,10 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
 
     final keyExists = templates.any(
-      (item) => (item['key'] ?? '').toString() == _selectedPromptKey,
+      (item) => item.key == _selectedPromptKey,
     );
     if (_selectedPromptKey == null || !keyExists) {
-      _selectedPromptKey = (templates.first['key'] ?? '').toString();
+      _selectedPromptKey = templates.first.key;
       _promptDirty = false;
     }
 
@@ -1316,38 +1328,38 @@ class _SettingsScreenState extends State<SettingsScreen>
     _applyPromptForm(_currentPromptConfig(templates));
   }
 
-  Map<String, dynamic>? _currentPromptConfig(
-    List<Map<String, dynamic>> templates,
+  PromptTemplate? _currentPromptConfig(
+    List<PromptTemplate> templates,
   ) {
     final key = _selectedPromptKey;
     if (key == null || key.isEmpty) {
       return null;
     }
     for (final item in templates) {
-      if ((item['key'] ?? '').toString() == key) {
+      if (item.key == key) {
         return item;
       }
     }
     return null;
   }
 
-  void _applyPromptForm(Map<String, dynamic>? config) {
+  void _applyPromptForm(PromptTemplate? config) {
     _syncingPromptForm = true;
-    final overrides = _asStringMap(config?['segment_overrides']);
-    final customPrompt = (config?['custom_prompt'] ?? '').toString().trim();
-    if ((overrides['task_prompt'] ?? '').trim().isEmpty &&
+    final overrides = config?.segmentOverrides ?? <String, String>{};
+    final customPrompt = config?.customPrompt.trim() ?? '';
+    final mutableOverrides = Map<String, String>.from(overrides);
+    if ((mutableOverrides['task_prompt'] ?? '').trim().isEmpty &&
         customPrompt.isNotEmpty) {
-      overrides['task_prompt'] = customPrompt;
+      mutableOverrides['task_prompt'] = customPrompt;
     }
     for (final key in _editablePromptSegmentKeys) {
       final controller = _segmentPromptControllers[key];
       if (controller == null) {
         continue;
       }
-      controller.text = (overrides[key] ?? '').toString();
+      controller.text = mutableOverrides[key] ?? '';
     }
-    _outputPromptController.text = (config?['output_format_prompt'] ?? '')
-        .toString();
+    _outputPromptController.text = config?.outputFormatPrompt ?? '';
     _syncingPromptForm = false;
   }
 
@@ -1422,6 +1434,27 @@ class _SettingsScreenState extends State<SettingsScreen>
     final token = _apiKeyController.text.trim();
     final model = _modelController.text.trim();
     final baseURL = _openAIBaseURLController.text.trim();
+    final tempStr = _temperatureController.text.trim();
+
+    // Validate API key format if provided
+    if (token.isNotEmpty && token.length < 10) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('API Key 格式无效（至少10个字符）')),
+      );
+      return;
+    }
+
+    // Validate temperature if provided
+    if (tempStr.isNotEmpty) {
+      final temp = double.tryParse(tempStr);
+      if (temp == null || temp < 0 || temp > 1) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Temperature 必须在 0-1 范围内')),
+        );
+        return;
+      }
+    }
+
     try {
       await provider.updateAIProviderConfig(
         provider: _selectedProvider,

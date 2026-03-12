@@ -1282,6 +1282,39 @@ func (s *Service) executeAgentAction(
 		}, nil
 	case "build_plan":
 		req := buildLearnRequest(params)
+		if req.ScheduleType == "course_schedule" {
+			duration := 7
+			if d := asInt(params["duration"], 0); d > 0 {
+				duration = d
+			} else if req.StartDate != "" && req.EndDate != "" {
+				start, _ := time.Parse("2006-01-02", req.StartDate)
+				end, _ := time.Parse("2006-01-02", req.EndDate)
+				if !start.IsZero() && !end.IsZero() {
+					duration = int(end.Sub(start).Hours() / 24)
+				}
+			}
+			lessons, err := s.GenerateSchedule(ctx, GenerateScheduleRequest{
+				UserID:   0,
+				Subject:  req.Subject,
+				Duration: duration,
+			})
+			if err != nil {
+				return actionExecutionResult{}, err
+			}
+			logx.LoggerFromContext(ctx).Info("ai agent tool execution success",
+				slog.String("event", "ai.agent.tool_call"),
+				slog.String("session_id", session.ID),
+				slog.String("agent_id", agent.ID),
+				slog.String("action", "build_course_schedule"),
+			)
+			return actionExecutionResult{
+				Content:         fmt.Sprintf("已创建课程表（%d节课）。", len(lessons)),
+				ArtifactType:    "course_schedule",
+				ArtifactPayload: map[string]any{"lessons": lessons},
+				ToolData:        map[string]any{"lesson_count": len(lessons)},
+				Meta:            agentCallMeta{},
+			}, nil
+		}
 		planResult, meta, err := s.buildPlanWithFallback(ctx, agent, req)
 		if err != nil {
 			return actionExecutionResult{}, err
@@ -2337,6 +2370,7 @@ func buildLearnRequest(params map[string]any) LearnRequest {
 		Themes:        themes,
 		Supplement:    firstNonEmptyAsString(params, "supplement", ""),
 		UserID:        firstNonEmptyAsString(params, "user_id", "default"),
+		ScheduleType:  firstNonEmptyAsString(params, "schedule_type", "plan"),
 	}
 }
 

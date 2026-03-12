@@ -12,7 +12,7 @@ func TestPromptTemplateRuntime_Compose_UsesPresetWhenNoCustom(t *testing.T) {
 	if !strings.Contains(prompt, "## 人格设定") {
 		t.Fatalf("expected segment header in composed text, got: %s", prompt)
 	}
-	if !strings.Contains(prompt, "learning score assistant") {
+	if !strings.Contains(prompt, "学习数据科学分析师") {
 		t.Fatalf("expected preset prompt in composed text, got: %s", prompt)
 	}
 	if !strings.Contains(prompt, "\"score\":0-100") {

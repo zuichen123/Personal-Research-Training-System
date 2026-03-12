@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:signature/signature.dart';
 
+import '../models/practice.dart';
 import '../models/question.dart';
 import '../providers/app_provider.dart';
 import '../utils/signature_canvas_utils.dart';
@@ -69,6 +70,7 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
   int _answeredCount = 0;
   int _draftResetToken = 0;
   int _scopedQuestionCount = 0;
+  PracticeAttempt? _lastAttempt;
 
   Question? get _currentQuestion {
     if (_pendingQuestions.isEmpty) {
@@ -275,6 +277,14 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
             ],
           ],
         ),
+        if (_currentSubmitted && _lastAttempt?.correct == false) ...[
+          const SizedBox(height: 8),
+          FilledButton.tonalIcon(
+            onPressed: _retryCurrentQuestion,
+            icon: const Icon(Icons.replay),
+            label: const Text('快速重试'),
+          ),
+        ],
       ],
     );
   }
@@ -827,6 +837,8 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
   }
 
   Widget _buildProgressCard() {
+    final totalQuestions = _pendingQuestions.length + _answeredCount;
+    final currentNumber = _answeredCount + 1;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -834,8 +846,8 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '剩余 ${_pendingQuestions.length}  已作答 $_answeredCount',
-              style: const TextStyle(fontWeight: FontWeight.w600),
+              totalQuestions > 0 ? '$currentNumber of $totalQuestions' : '已作答 $_answeredCount',
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
             ),
             if (_isLessonScoped && _lessonScopeLabel.isNotEmpty) ...[
               const SizedBox(height: 6),
@@ -1291,13 +1303,14 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
 
     final elapsed = _elapsedSeconds;
     try {
-      await provider.submitPractice(question.id, answers, elapsed);
+      final attempt = await provider.submitPractice(question.id, answers, elapsed);
       if (!mounted) {
         return;
       }
       setState(() {
         _answeredCount += 1;
         _currentSubmitted = true;
+        _lastAttempt = attempt;
         _resetQuestionDraft();
       });
       if (_autoNextEnabled) {
@@ -1368,6 +1381,7 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
     setState(() {
       _pendingQuestions.removeAt(_currentIndex);
       _currentSubmitted = false;
+      _lastAttempt = null;
       _elapsedSeconds = 0;
       _resetQuestionDraft();
 
@@ -1386,6 +1400,18 @@ class _PracticeSessionScreenState extends State<PracticeSessionScreen> {
     if (_pendingQuestions.isNotEmpty) {
       _startTimer();
     }
+  }
+
+  void _retryCurrentQuestion() {
+    _stopTimer();
+    setState(() {
+      _currentSubmitted = false;
+      _lastAttempt = null;
+      _elapsedSeconds = 0;
+      _answeredCount = _answeredCount > 0 ? _answeredCount - 1 : 0;
+      _resetQuestionDraft();
+    });
+    _startTimer();
   }
 
   void _startTimer() {

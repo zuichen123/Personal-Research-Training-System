@@ -94,6 +94,11 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
           title: const Text('多智能体对话'),
           actions: [
             IconButton(
+              tooltip: '压缩消息历史',
+              icon: const Icon(Icons.compress),
+              onPressed: () => _showCompressDialog(context, provider),
+            ),
+            IconButton(
               tooltip: '新建智能体',
               icon: const Icon(Icons.add),
               onPressed: () => _showCreateAgentDialog(context),
@@ -197,6 +202,42 @@ class _AgentChatHubScreenState extends State<AgentChatHubScreen> {
 - 如某项操作失败，需要解释原因并给出下一步补救方案。''';
     extraController.text =
         '''初始化阶段优先使用短问题逐项确认信息；完成初始化后，再进入课程安排、学习计划和专属学科Agent的后续编排。''';
+  }
+
+  Future<void> _showCompressDialog(BuildContext context, AIAgentProvider provider) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('压缩消息历史'),
+        content: const Text('确认压缩当前会话的消息历史吗？这将减少消息数量但保留关键信息。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('确认'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    try {
+      await provider.compressCurrentSession(trigger: 'manual');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('消息历史已压缩')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('压缩失败: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _showCreateAgentDialog(
@@ -532,18 +573,32 @@ class _AgentTabPanel extends StatefulWidget {
   State<_AgentTabPanel> createState() => _AgentTabPanelState();
 }
 
-class _AgentTabPanelState extends State<_AgentTabPanel> {
+class _AgentTabPanelState extends State<_AgentTabPanel>
+    with SingleTickerProviderStateMixin {
+  late final TabController _nestedTabController;
   final TextEditingController _scheduleThemeController =
+      TextEditingController();
+  final TextEditingController _messageSearchController =
       TextEditingController();
   String _scheduleMode = 'auto';
   bool _scheduleAutoEnabled = true;
   Set<String> _scheduleManualPlanIds = <String>{};
   String _scheduleSessionId = '';
   bool _scheduleSaving = false;
+  String _artifactTypeFilter = 'all';
+  String _messageSearchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _nestedTabController = TabController(length: 2, vsync: this);
+  }
 
   @override
   void dispose() {
+    _nestedTabController.dispose();
     _scheduleThemeController.dispose();
+    _messageSearchController.dispose();
     super.dispose();
   }
 
@@ -584,10 +639,11 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
       sessions,
       selectedSessionId,
     );
-    final chatPanel = _buildChatPanel(
+    final tabbedContent = _buildTabbedContent(
       context,
       provider,
       messages,
+      artifacts,
       artifactsByMessage,
     );
 
@@ -598,16 +654,47 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
               children: [
                 SizedBox(width: 300, child: sessionList),
                 const SizedBox(width: 10),
-                Expanded(child: chatPanel),
+                Expanded(child: tabbedContent),
               ],
             )
           : Column(
               children: [
                 sessionList,
                 const SizedBox(height: 10),
-                Expanded(child: chatPanel),
+                Expanded(child: tabbedContent),
               ],
             ),
+    );
+  }
+
+  Widget _buildTabbedContent(
+    BuildContext context,
+    AIAgentProvider provider,
+    List<AIAgentMessage> messages,
+    List<AIAgentArtifact> artifacts,
+    Map<String, AIAgentArtifact> artifactsByMessage,
+  ) {
+    return Card(
+      child: Column(
+        children: [
+          TabBar(
+            controller: _nestedTabController,
+            tabs: const [
+              Tab(icon: Icon(Icons.chat_outlined), text: '对话'),
+              Tab(icon: Icon(Icons.inventory_2_outlined), text: '产物'),
+            ],
+          ),
+          Expanded(
+            child: TabBarView(
+              controller: _nestedTabController,
+              children: [
+                _buildChatPanel(context, provider, messages, artifactsByMessage),
+                _buildArtifactsPanel(context, provider, artifacts),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -982,47 +1069,123 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
     Map<String, AIAgentArtifact> artifactsByMessage,
   ) {
     final messenger = ScaffoldMessenger.of(context);
-    return Card(
-      child: Column(
-        children: [
-          Expanded(
-            child: messages.isEmpty
-                ? const Center(child: Text('暂无消息'))
-                : ListView.builder(
-                    padding: const EdgeInsets.all(10),
-                    itemCount: messages.length,
-                    itemBuilder: (context, index) {
-                      final message = messages[index];
-                      final artifact = artifactsByMessage[message.id];
-                      return _messageTile(context, provider, message, artifact);
-                    },
-                  ),
-          ),
-          const Divider(height: 1),
-          Padding(
-            padding: const EdgeInsets.all(8),
-            child: AIMultimodalMessageInput(
-              sending: provider.sending,
-              hintText: '输入消息...',
-              sendLabel: '发送',
-              onSend: (text, attachments) async {
-                try {
-                  await provider.sendMessage(
-                    text,
-                    attachments: attachments
-                        .map((item) => item.toJson())
-                        .toList(growable: false),
-                  );
-                } catch (_) {
-                  if (!mounted) return;
-                  final msg = provider.errorMessage ?? '发送失败';
-                  messenger.showSnackBar(SnackBar(content: Text(msg)));
-                }
-              },
+    final filteredMessages = _messageSearchQuery.isEmpty
+        ? messages
+        : messages
+            .where((m) =>
+                m.content.toLowerCase().contains(_messageSearchQuery.toLowerCase()))
+            .toList();
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(8),
+          child: TextField(
+            controller: _messageSearchController,
+            decoration: const InputDecoration(
+              labelText: '搜索消息',
+              prefixIcon: Icon(Icons.search),
+              border: OutlineInputBorder(),
+              isDense: true,
             ),
+            onChanged: (value) {
+              setState(() => _messageSearchQuery = value.trim());
+            },
           ),
-        ],
-      ),
+        ),
+        Expanded(
+          child: filteredMessages.isEmpty
+              ? Center(
+                  child: Text(_messageSearchQuery.isEmpty ? '暂无消息' : '无匹配消息'))
+              : ListView.builder(
+                  padding: const EdgeInsets.all(10),
+                  itemCount: filteredMessages.length,
+                  itemBuilder: (context, index) {
+                    final message = filteredMessages[index];
+                    final artifact = artifactsByMessage[message.id];
+                    return _messageTile(context, provider, message, artifact);
+                  },
+                ),
+        ),
+        const Divider(height: 1),
+        Padding(
+          padding: const EdgeInsets.all(8),
+          child: AIMultimodalMessageInput(
+            sending: provider.sending,
+            hintText: '输入消息...',
+            sendLabel: '发送',
+            onSend: (text, attachments) async {
+              try {
+                await provider.sendMessage(
+                  text,
+                  attachments: attachments
+                      .map((item) => item.toJson())
+                      .toList(growable: false),
+                );
+              } catch (_) {
+                if (!mounted) return;
+                final msg = provider.errorMessage ?? '发送失败';
+                messenger.showSnackBar(SnackBar(content: Text(msg)));
+              }
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildArtifactsPanel(
+    BuildContext context,
+    AIAgentProvider provider,
+    List<AIAgentArtifact> artifacts,
+  ) {
+    final filteredArtifacts = _artifactTypeFilter == 'all'
+        ? artifacts
+        : artifacts.where((a) => a.type == _artifactTypeFilter).toList();
+
+    final groupedArtifacts = <String, List<AIAgentArtifact>>{};
+    for (final artifact in filteredArtifacts) {
+      groupedArtifacts.putIfAbsent(artifact.type, () => []).add(artifact);
+    }
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(8),
+          child: Row(
+            children: [
+              const Text('类型筛选：'),
+              const SizedBox(width: 8),
+              DropdownButton<String>(
+                value: _artifactTypeFilter,
+                items: const [
+                  DropdownMenuItem(value: 'all', child: Text('全部')),
+                  DropdownMenuItem(value: 'questions', child: Text('题目')),
+                  DropdownMenuItem(value: 'plan', child: Text('计划')),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _artifactTypeFilter = value);
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        Expanded(
+          child: filteredArtifacts.isEmpty
+              ? const Center(child: Text('暂无产物'))
+              : ListView.builder(
+                  padding: const EdgeInsets.all(10),
+                  itemCount: groupedArtifacts.length,
+                  itemBuilder: (context, index) {
+                    final type = groupedArtifacts.keys.elementAt(index);
+                    final items = groupedArtifacts[type]!;
+                    return _artifactGroupTile(context, provider, type, items);
+                  },
+                ),
+        ),
+      ],
     );
   }
 
@@ -1210,6 +1373,113 @@ class _AgentTabPanelState extends State<_AgentTabPanel> {
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text('产物类型：${artifact.type}'),
+    );
+  }
+
+  Widget _artifactGroupTile(
+    BuildContext context,
+    AIAgentProvider provider,
+    String type,
+    List<AIAgentArtifact> items,
+  ) {
+    final typeLabel = type == 'questions' ? '题目' : type == 'plan' ? '计划' : type;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ExpansionTile(
+        title: Text('$typeLabel (${items.length})'),
+        children: items.map((artifact) {
+          final title = (artifact.payload['title'] ?? '').toString();
+          return ListTile(
+            dense: true,
+            title: Text(
+              title.isEmpty ? '产物 ${artifact.id}' : title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: Text(
+              artifact.createdAt.toLocal().toString(),
+              style: const TextStyle(fontSize: 11),
+            ),
+            trailing: IconButton(
+              icon: const Icon(Icons.visibility_outlined),
+              onPressed: () => _showArtifactPreview(context, provider, artifact),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Future<void> _showArtifactPreview(
+    BuildContext context,
+    AIAgentProvider provider,
+    AIAgentArtifact artifact,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final title = (artifact.payload['title'] ?? '').toString();
+    final content = (artifact.payload['content'] ?? artifact.payload.toString()).toString();
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title.isEmpty ? '产物预览' : title),
+        content: SizedBox(
+          width: 600,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('类型：${artifact.type}'),
+                Text('状态：${artifact.importStatus}'),
+                const Divider(),
+                Text(content),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('关闭'),
+          ),
+          if (artifact.type == 'questions')
+            FilledButton.icon(
+              onPressed: () async {
+                Navigator.of(ctx).pop();
+                try {
+                  await widget.onImportQuestions(artifact, []);
+                  if (!mounted) return;
+                  messenger.showSnackBar(const SnackBar(content: Text('题目导入成功')));
+                } catch (_) {
+                  if (!mounted) return;
+                  messenger.showSnackBar(
+                    SnackBar(content: Text(provider.errorMessage ?? '题目导入失败')),
+                  );
+                }
+              },
+              icon: const Icon(Icons.download_outlined),
+              label: const Text('导入题目'),
+            ),
+          if (artifact.type == 'plan')
+            FilledButton.icon(
+              onPressed: () async {
+                Navigator.of(ctx).pop();
+                try {
+                  await widget.onImportPlan(artifact);
+                  if (!mounted) return;
+                  messenger.showSnackBar(const SnackBar(content: Text('计划导入成功')));
+                } catch (_) {
+                  if (!mounted) return;
+                  messenger.showSnackBar(
+                    SnackBar(content: Text(provider.errorMessage ?? '计划导入失败')),
+                  );
+                }
+              },
+              icon: const Icon(Icons.download_outlined),
+              label: const Text('导入计划'),
+            ),
+        ],
+      ),
     );
   }
 }

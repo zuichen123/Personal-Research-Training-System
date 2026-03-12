@@ -128,6 +128,19 @@ class AIAgentSession {
       archivedAt: DateTime.tryParse(json['archived_at']?.toString() ?? ''),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'agent_id': agentId,
+    'title': title,
+    'last_message_at': lastMessageAt?.toIso8601String(),
+    'summary_updated_at': summaryUpdatedAt?.toIso8601String(),
+    'summary_message_count': summaryMessageCount,
+    'context_summary_meta': contextSummaryMeta,
+    'created_at': createdAt.toIso8601String(),
+    'updated_at': updatedAt.toIso8601String(),
+    'archived_at': archivedAt?.toIso8601String(),
+  };
 }
 
 class AIAgentIntent {
@@ -274,6 +287,17 @@ class AIAgentArtifact {
       importedAt: DateTime.tryParse(json['imported_at']?.toString() ?? ''),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'session_id': sessionId,
+    'message_id': messageId,
+    'type': type,
+    'payload': payload,
+    'import_status': importStatus,
+    'created_at': createdAt.toIso8601String(),
+    'imported_at': importedAt?.toIso8601String(),
+  };
 }
 
 class AISendMessageResult {

@@ -14,7 +14,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"prts/internal/config"
-	"prts/internal/modules/agent"
 	"prts/internal/modules/ai"
 	"prts/internal/modules/material"
 	"prts/internal/modules/mistake"
@@ -178,8 +177,6 @@ func NewApp(cfg config.Config) (*App, error) {
 	onboardingService := profile.NewOnboardingService(db)
 	profileHandler := profile.NewHandler(profileService, onboardingService)
 	materialHandler := material.NewHandler(materialService, cfg.UploadDir)
-	agentService := agent.NewService(db)
-	agentHandler := agent.NewHandler(agentService)
 	systemHandler := system.NewHandler()
 
 	effectiveWriteTimeout := cfg.WriteTimeout
@@ -215,7 +212,6 @@ func NewApp(cfg config.Config) (*App, error) {
 			resourceHandler.RegisterRoutes(r)
 			profileHandler.RegisterRoutes(r)
 			materialHandler.RegisterRoutes(r)
-			agentHandler.RegisterRoutes(r)
 		})
 	})
 

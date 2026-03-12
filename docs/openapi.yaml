@@ -1,0 +1,857 @@
+openapi: 3.0.3
+info:
+  title: PRTS API
+  description: Personal Research & Training System API
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+paths:
+  /ai/provider:
+    get:
+      summary: Get AI provider status
+      tags: [AI Provider]
+      responses:
+        '200':
+          description: Provider status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+
+  /ai/provider/default-agent:
+    get:
+      summary: Get default agent provider
+      tags: [AI Provider]
+      responses:
+        '200':
+          description: Default provider name
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: string
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+
+  /ai/provider/config:
+    put:
+      summary: Update provider configuration
+      tags: [AI Provider]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Configuration updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /ai/prompts:
+    get:
+      summary: List prompt templates
+      tags: [Prompts]
+      responses:
+        '200':
+          description: List of prompt templates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PromptTemplate'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+
+  /ai/prompts/{key}:
+    put:
+      summary: Update prompt template
+      tags: [Prompts]
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PromptTemplate'
+      responses:
+        '200':
+          description: Template updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/PromptTemplate'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+
+  /ai/prompts/reload:
+    post:
+      summary: Reload prompt templates from disk
+      tags: [Prompts]
+      responses:
+        '200':
+          description: Templates reloaded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /ai/agents:
+    get:
+      summary: List AI agents
+      tags: [Agents]
+      responses:
+        '200':
+          description: List of agents
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AIAgent'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+    post:
+      summary: Create AI agent
+      tags: [Agents]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAgentRequest'
+      responses:
+        '201':
+          description: Agent created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/AIAgent'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+
+  /ai/agents/{id}:
+    put:
+      summary: Update AI agent
+      tags: [Agents]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAgentRequest'
+      responses:
+        '200':
+          description: Agent updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/AIAgent'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+    delete:
+      summary: Delete AI agent
+      tags: [Agents]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Agent deleted
+
+  /ai/agents/{id}/sessions:
+    get:
+      summary: List agent sessions
+      tags: [Sessions]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AgentSession'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+    post:
+      summary: Create agent session
+      tags: [Sessions]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+      responses:
+        '201':
+          description: Session created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/AgentSession'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+
+  /ai/sessions/{id}/messages:
+    get:
+      summary: List session messages
+      tags: [Sessions]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+    post:
+      summary: Send message to session
+      tags: [Sessions]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content:
+                  type: string
+      responses:
+        '200':
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+
+  /ai/sessions/{id}/artifacts:
+    get:
+      summary: List session artifacts
+      tags: [Artifacts]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of artifacts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Artifact'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+
+  /ai/sessions/{id}:
+    delete:
+      summary: Delete agent session
+      tags: [Sessions]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Session deleted
+
+  /ai/questions/generate:
+    post:
+      summary: Generate questions using AI
+      tags: [AI Questions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Generated questions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Question'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+
+  /questions:
+    get:
+      summary: List questions
+      tags: [Questions]
+      responses:
+        '200':
+          description: List of questions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Question'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+    post:
+      summary: Create question
+      tags: [Questions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateQuestionRequest'
+      responses:
+        '201':
+          description: Question created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Question'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+
+  /questions/{id}:
+    put:
+      summary: Update question
+      tags: [Questions]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateQuestionRequest'
+      responses:
+        '200':
+          description: Question updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Question'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+    delete:
+      summary: Delete question
+      tags: [Questions]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Question deleted
+
+  /practice/submit:
+    post:
+      summary: Submit practice attempt
+      tags: [Practice]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - question_id
+                - user_answer
+                - elapsed_seconds
+              properties:
+                question_id:
+                  type: string
+                user_answer:
+                  type: array
+                  items:
+                    type: string
+                elapsed_seconds:
+                  type: integer
+      responses:
+        '200':
+          description: Attempt submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/PracticeAttempt'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+
+  /practice/attempts:
+    get:
+      summary: List practice attempts
+      tags: [Practice]
+      responses:
+        '200':
+          description: List of attempts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PracticeAttempt'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+
+  /practice/attempts/{id}:
+    delete:
+      summary: Delete practice attempt
+      tags: [Practice]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Attempt deleted
+
+  /plans:
+    get:
+      summary: List plans
+      tags: [Plans]
+      responses:
+        '200':
+          description: List of plans
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Plan'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+
+  /mistakes:
+    get:
+      summary: List mistakes
+      tags: [Mistakes]
+      responses:
+        '200':
+          description: List of mistakes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Mistake'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+
+components:
+  schemas:
+    Meta:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        trace_id:
+          type: string
+
+    PaginationMeta:
+      allOf:
+        - $ref: '#/components/schemas/Meta'
+        - type: object
+          properties:
+            has_more:
+              type: boolean
+            cursor:
+              type: string
+
+    SuccessResponse:
+      type: object
+      properties:
+        data:
+          type: object
+        meta:
+          $ref: '#/components/schemas/Meta'
+
+    ErrorResponse:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          enum:
+            - VALIDATION_ERROR
+            - NOT_FOUND
+            - UNAUTHORIZED
+            - INTERNAL_ERROR
+        message:
+          type: string
+        details:
+          type: object
+        trace_id:
+          type: string
+
+    PromptTemplate:
+      type: object
+      properties:
+        key:
+          type: string
+        name:
+          type: string
+        content:
+          type: string
+        variables:
+          type: array
+          items:
+            type: string
+
+    AIAgent:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        provider:
+          type: string
+        model:
+          type: string
+        system_prompt:
+          type: string
+        temperature:
+          type: number
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateAgentRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+        provider:
+          type: string
+        model:
+          type: string
+        system_prompt:
+          type: string
+        temperature:
+          type: number
+
+    UpdateAgentRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        provider:
+          type: string
+        model:
+          type: string
+        system_prompt:
+          type: string
+        temperature:
+          type: number
+
+    AgentSession:
+      type: object
+      properties:
+        id:
+          type: string
+        agent_id:
+          type: string
+        title:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Artifact:
+      type: object
+      properties:
+        id:
+          type: string
+        session_id:
+          type: string
+        type:
+          type: string
+        title:
+          type: string
+        content:
+          type: string
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    Question:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        stem:
+          type: string
+        type:
+          type: string
+        subject:
+          type: string
+        options:
+          type: array
+          items:
+            type: object
+            properties:
+              key:
+                type: string
+              text:
+                type: string
+        answer:
+          type: array
+          items:
+            type: string
+        tags:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+
+    CreateQuestionRequest:
+      type: object
+      required:
+        - stem
+      properties:
+        title:
+          type: string
+        stem:
+          type: string
+        type:
+          type: string
+        subject:
+          type: string
+        options:
+          type: array
+          items:
+            type: object
+        answer:
+          type: array
+          items:
+            type: string
+        tags:
+          type: array
+          items:
+            type: string
+
+    UpdateQuestionRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        stem:
+          type: string
+        type:
+          type: string
+        subject:
+          type: string
+        options:
+          type: array
+          items:
+            type: object
+        answer:
+          type: array
+          items:
+            type: string
+        tags:
+          type: array
+          items:
+            type: string
+
+    PracticeAttempt:
+      type: object
+      properties:
+        id:
+          type: string
+        question_id:
+          type: string
+        user_answer:
+          type: array
+          items:
+            type: string
+        elapsed_seconds:
+          type: integer
+        score:
+          type: number
+        correct:
+          type: boolean
+        feedback:
+          type: string
+        submitted_at:
+          type: string
+          format: date-time
+
+    Plan:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        content:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    Mistake:
+      type: object
+      properties:
+        id:
+          type: string
+        question_id:
+          type: string
+        error_type:
+          type: string
+        analysis:
+          type: string
+        created_at:
+          type: string
+          format: date-time

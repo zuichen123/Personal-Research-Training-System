@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"cd \\\"F:\\\\Code\\\\go\\\\Self-Study-Tool\\\\apps\\\\flutter_client\\\" && flutter analyze\",\"description\":\"Verify Flutter code compiles after fixing _extractData error\"}",
+  "error": "Exit code 1\nFlutter assets will be downloaded from https://storage.flutter-io.cn. Make sure you trust this source!\nAnalyzing flutter_client...                                     \n\n   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\\screens\\course_schedule\\course_schedule_screen.dart:1565:19 - use_build_context_synchronously\n   info - Parameter 'key' could be a super parameter - lib\\screens\\onboarding_screen.dart:8:9 - use_super_parameters\n   info...",
+  "timestamp": "2026-03-12T15:17:45.905Z",
+  "retry_count": 1
+}

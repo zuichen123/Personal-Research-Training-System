@@ -210,10 +210,34 @@ class PracticeScreen extends StatelessWidget {
     bool loading,
   ) {
     if (loading && latestAttempts.isEmpty) {
-      return const <Widget>[
-        SizedBox(height: 36),
-        Center(child: CircularProgressIndicator()),
-      ];
+      return List.generate(
+        3,
+        (index) => Card(
+          margin: const EdgeInsets.symmetric(vertical: 6),
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundColor: Colors.grey.shade300,
+            ),
+            title: Container(
+              height: 16,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Container(
+                height: 12,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
     }
 
     if (provider.errorMessage != null && latestAttempts.isEmpty) {

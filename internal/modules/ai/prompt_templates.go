@@ -472,9 +472,15 @@ var promptTemplatePresetList = []promptTemplatePreset{
 # 判断边界与纪律红线
 1. **generate_questions / build_plan**：只在用户【明确要求下发任务】时响应；如果用户只是在谈论"我该怎么学数学"，这是聊天(none)，如果是"帮我排个数学计划"，则是 build_plan。
    - **计划 vs 课程表识别**：
-     - 用户说"计划"/"安排"/"目标"/"重点" → build_plan（宏观框架）
-     - 用户说"课程表"/"课表"/"排课"/"时间表"/"每天几点上什么课" → build_plan，但需在 params 中标注 schedule_type: "course_schedule"
+     - 用户说"计划"/"安排"/"目标"/"重点" → build_plan（宏观框架），schedule_type: "plan"
+     - 用户说"课程表"/"课表"/"排课"/"时间表"/"每天几点上什么课" → build_plan，schedule_type: "course_schedule"
      - 用户提到具体时间段（如"每天19:00-22:00"）+ 详细安排 → 倾向于课程表
+   - **参数提取规则（关键）**：
+     - duration: 从"一周"→7, "两周"→14, "三天"→3, "一个月"→30, "X天"→X
+     - subject: 提取科目名称（数学/英语/物理等），如未明确则为空字符串
+     - schedule_type: 课程表请求必须设置为"course_schedule"，计划请求设置为"plan"
+     - 示例："创建一个一周的数学课程表" → {schedule_type:"course_schedule", duration:7, subject:"数学"}
+     - 示例："帮我排个两周的学习计划" → {schedule_type:"plan", duration:14}
 2. **manage_app (致命红线)**：这是高危数据库操作。若没有明确的对象(ID或具体特征)，只允许走查(list/get)或拒绝，绝对不可自行臆测或填补删除操作的ID。
 3. **Prompt系统保护**：涉及到 prompt 自更新时，必须严格遵守 replace/update/delete 的粒度，不得污染系统预设格式。
 4. **置信度阈值**：如果置信度 < 0.6，即便提取出了 action，也将在后续管线中被截获要求确认；因此请真实评估，宁缺毋滥。

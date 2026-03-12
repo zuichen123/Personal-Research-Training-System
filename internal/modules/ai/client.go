@@ -52,6 +52,7 @@ type LearnRequest struct {
 	Themes          []string             `json:"themes"`
 	Supplement      string               `json:"supplement"`
 	UserID          string               `json:"user_id"`
+	ScheduleType    string               `json:"schedule_type"`
 	Profile         LearnProfileSnapshot `json:"profile"`
 	ProfileSummary  string               `json:"profile_summary"`
 	ScheduleBinding *ScheduleBinding     `json:"schedule_binding,omitempty"`
