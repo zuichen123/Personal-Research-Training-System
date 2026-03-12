@@ -1,50 +1,85 @@
-# Technical Specification: Rename to PRTS
+# Course Schedule Migration Specification
 
-## 1. Naming Conventions
+**Date:** 2026-03-12
+**Goal:** Migrate Flutter course schedule from hardcoded templates to server-managed AI-controllable system
 
-**Use "PRTS" (uppercase) for:**
-- Go package identifiers that need abbreviation
-- Binary output names
-- Short references in logs/comments
+---
 
-**Use "prts" (lowercase) for:**
-- Go module path: `prts`
-- Directory names
-- File names
-- Android package: `com.prts.app`
+## Decision: Use AI Course Schedule System
 
-**Use "Personal Research & Training System" for:**
-- User-facing documentation (README)
-- Application titles in Flutter
-- Window titles
+After analysis, the project has TWO schedule systems:
+1. Basic schedule module (`/schedule/*`) - simpler, less features
+2. AI course schedule (`/ai/course-schedule/*`) - AI-integrated, richer features
 
-**Keep existing for:**
-- Database file name: `self-study.db` (avoid data migration)
-- Notion database name: "Self-Study-Tool" (external dependency)
+**Selected:** AI Course Schedule System (System 2)
 
-## 2. Code Changes
+**Rationale:**
+- Already has AI generation capability (`schedule_generator.go`)
+- Stores as plan items (integrates with existing plan system)
+- Richer data model (period, classroom, priority, notes)
+- Active API endpoints already exist
 
-### 2.1 Go Module Path
-- `go.mod`: `module self-study-tool` → `module prts`
-- All Go imports: `"self-study-tool/internal/..."` → `"prts/internal/..."`
+---
 
-### 2.2 Flutter Package
-- `pubspec.yaml`: `name: flutter_client` → `name: prts_client`
-- Android: `com.selfstudy.tool.flutter_client` → `com.prts.app`
+## Architecture
 
-## 3. Migration Order
+### Backend (Already Complete ✅)
+- **Storage:** `plans` table with `[course_schedule]` content marker
+- **API Endpoints:**
+  - `GET /ai/course-schedule/lessons?date=YYYY-MM-DD&granularity=day|week|month`
+  - `POST /ai/course-schedule/lessons` - Create lesson
+  - `PUT /ai/course-schedule/lessons/{id}` - Update lesson
+  - `DELETE /ai/course-schedule/lessons/{id}` - Delete lesson
+- **AI Generation:** Via `schedule_generator.go`
 
-1. Update go.mod module name
-2. Batch replace Go imports
-3. Update Flutter pubspec.yaml
-4. Update Android package identifier
-5. Update build scripts
-6. Update documentation
-7. Rename root directory
+### Frontend (Needs Implementation ❌)
+- **Remove:** Hardcoded `_weeklyTemplates` in `course_schedule_screen.dart`
+- **Add:** API client methods in `api_service.dart`
+- **Update:** UI to fetch/display server data
 
-## 4. Success Criteria
+---
 
-✅ Go builds and tests pass
-✅ Flutter analyzes without errors
-✅ Build scripts work
-✅ Documentation updated
+## Implementation Plan
+
+### Phase 1: API Client Layer
+**File:** `apps/flutter_client/lib/services/api_service.dart`
+
+Add methods:
+- `getCourseScheduleLessons(date, granularity)`
+- `createCourseScheduleLesson(request)`
+- `updateCourseScheduleLesson(id, request)`
+- `deleteCourseScheduleLesson(id)`
+
+### Phase 2: Data Model
+**File:** `apps/flutter_client/lib/models/course_lesson.dart` (new)
+
+Create model with JSON serialization.
+
+### Phase 3: UI Update
+**File:** `apps/flutter_client/lib/screens/course_schedule/course_schedule_screen.dart`
+
+1. Remove `_weeklyTemplates` constant
+2. Add `List<CourseLesson> _lessons = []`
+3. Add `_fetchLessons()` method
+4. Update views to use `_lessons`
+5. Add error handling and empty state
+
+---
+
+## Success Criteria
+
+✅ Hardcoded templates removed
+✅ Lessons fetched from server API
+✅ Day/week/month views work with server data
+✅ Create/update/delete operations work
+✅ Loading states and error handling implemented
+✅ Empty state shows appropriate message
+
+---
+
+## Out of Scope
+
+❌ AI generation UI (use existing agent chat)
+❌ Template management
+❌ Offline caching
+❌ Mastery tracking migration (keep local)

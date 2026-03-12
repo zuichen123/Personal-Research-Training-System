@@ -1389,3 +1389,112 @@ Before planning can proceed, these questions need answers:
 
 **End of Requirements Document**
 
+
+---
+
+## APPENDIX: Course Schedule Migration Analysis
+
+**Date:** 2026-03-12
+**Analyst:** oh-my-claudecode:analyst
+**Focus:** Migrate hardcoded Flutter templates to server-managed schedules
+
+### Critical Schema Mismatch Identified
+
+**BLOCKER:** Database schema (`migrations/sqlite/028_create_schedules.sql`) does NOT match API implementation (`internal/modules/ai/course_schedule_tool.go`):
+
+- Migration defines: `duration_minutes INTEGER`, `start_time TIME`
+- API uses: `start_time STRING`, `end_time STRING` (no duration field)
+- **Resolution required before implementation**
+
+### Missing Questions
+
+1. **Template seeding** - Should hardcoded `_weeklyTemplates` (35+ lessons) be migrated to database on first launch?
+2. **Offline behavior** - Cache schedules locally or require network? Current `api_service.dart` has no offline support.
+3. **User filtering** - `schedules` table has `user_id` FK, but API endpoints don't filter by user. Multi-user support unclear.
+4. **Backward compatibility** - Fallback to hardcoded templates if API fails, or show error?
+5. **Mastery tracking** - `_masteryRecords` and `_lessonSessions` bind to schedules. Migrate or keep local?
+6. **Timezone handling** - Server stores date strings without timezone. How to handle DST/timezone changes?
+
+### Undefined Guardrails
+
+1. **API timeouts** - No spec for loading duration or timeout handling
+   - Suggested: 10s timeout, loading indicator, error toast
+2. **Empty state** - What to show when no schedules exist?
+   - Suggested: "No lessons scheduled" + "Add Lesson" button
+3. **Error recovery** - Rollback UI on failed CREATE/UPDATE/DELETE?
+   - Suggested: Optimistic updates with rollback + error notification
+4. **Rate limits** - No bounds on lessons per day
+   - Suggested: 20 lessons/day maximum
+
+### Scope Risks
+
+1. **AI generation UI** - Requirement says "AI can manage schedules" but doesn't specify if Flutter needs AI generation UI (could add weeks of work)
+   - Prevention: Clarify AI management happens via existing agent chat, not new schedule screen UI
+2. **Template management** - Users may expect to save/reuse weekly templates
+   - Prevention: Exclude template CRUD from this phase; focus only on lesson CRUD
+3. **Mastery tracking migration** - Unclear if local `_masteryRecords` should move to server
+   - Prevention: Keep mastery tracking local; only migrate schedule data source
+
+### Unvalidated Assumptions
+
+1. **Schema alignment** - INVALID: Migration schema ≠ API schema (see blocker above)
+2. **Field mapping** - PARTIAL: `_CourseTemplateLesson` missing `id`, `title`, `status`, `priority`, `notes`, timestamps
+3. **Network availability** - UNVERIFIED: No offline caching observed in `api_service.dart`
+4. **API deployment** - UNVERIFIED: Need to test `/ai/course-schedule/lessons` endpoint
+
+### Missing Acceptance Criteria
+
+1. GET success: Given date range, fetch lessons, display in UI
+2. POST success: Create lesson, appears immediately, persists to server
+3. PUT success: Edit lesson, changes reflected in UI and server
+4. DELETE success: Remove lesson from UI and server
+5. Error handling: Network failure shows error, UI stays consistent
+6. Loading states: Show spinner for ≥300ms during fetch
+7. Empty state: Show message when no lessons for selected date
+
+### Edge Cases
+
+1. **Timezone drift** - User changes device timezone while viewing schedules
+   - Handle: Use `DateUtils.dateOnly()` to strip time components
+2. **Concurrent edits** - Same lesson edited on multiple devices
+   - Handle: Last-write-wins (server timestamp); refresh on next fetch
+3. **Partial data** - Query week but only 2 days have lessons
+   - Handle: Show available lessons, empty slots for others
+4. **Invalid dates** - Server returns malformed date string
+   - Handle: Catch parse exception, log error, skip invalid lesson
+5. **Large datasets** - 1000+ lessons across years
+   - Handle: API supports date filtering; client queries only visible range
+6. **Stale local state** - Lesson deleted on another device
+   - Handle: Refresh from server on screen resume
+
+### Open Questions
+
+- [ ] Resolve schema mismatch: Should migration be updated to match API, or API updated to match migration?
+- [ ] Define offline strategy: cache-first, network-only, or hybrid with sync?
+- [ ] Clarify user ID handling: How does API filter schedules per user?
+- [ ] Specify empty state UX and error message text
+- [ ] Define loading indicator behavior and timeout values
+- [ ] Decide if hardcoded templates should seed database on first launch
+- [ ] Clarify if mastery tracking stays local or migrates to server
+
+### Recommendations Priority
+
+**CRITICAL (blocks implementation):**
+1. Fix schema mismatch between migration and API
+2. Define offline behavior (impacts architecture)
+3. Specify user ID filtering mechanism
+
+**HIGH (needed for planning):**
+4. Define empty state UX
+5. Specify error messages and loading behavior
+6. Clarify mastery tracking scope
+
+**MEDIUM (can defer to implementation):**
+7. Document date conversion strategy
+8. Define optimistic UI update behavior
+9. Specify template seeding strategy
+
+**LOW (nice-to-have):**
+10. Add rate limits
+11. Document concurrent modification behavior
+

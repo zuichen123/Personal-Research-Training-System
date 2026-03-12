@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/ai_agent_chat.dart';
 import '../../models/plan.dart';
+import '../../models/course_lesson.dart';
 import '../../providers/ai_agent_provider.dart';
 import '../../providers/app_provider.dart';
 import '../plans_screen.dart';
@@ -23,7 +24,7 @@ class CourseScheduleScreen extends StatefulWidget {
 class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
   CourseScheduleView _view = CourseScheduleView.day;
   DateTime _focusDate = DateUtils.dateOnly(DateTime.now());
-  _CourseLesson? _selectedLesson;
+  CourseLesson? _selectedLesson;
   bool _startingLesson = false;
   bool _savingMastery = false;
   double _masteryScore = 75;
@@ -31,69 +32,9 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
   final List<_MasteryRecord> _masteryRecords = [];
   final Map<String, _LessonSessionBinding> _lessonSessions =
       <String, _LessonSessionBinding>{};
-
-  static const List<_CourseTemplateLesson> _weeklyTemplates = [
-    _CourseTemplateLesson(
-      id: 'mon_math_1',
-      weekday: DateTime.monday,
-      period: 1,
-      subject: '\u6570\u5b66',
-      topic: '\u4e8c\u6b21\u51fd\u6570',
-      classroom: '\u6559\u5ba4301',
-      startTime: '08:00',
-      endTime: '08:45',
-    ),
-    _CourseTemplateLesson(
-      id: 'mon_eng_2',
-      weekday: DateTime.monday,
-      period: 2,
-      subject: '\u82f1\u8bed',
-      topic: '\u9605\u8bfb\u7406\u89e3',
-      classroom: '\u6559\u5ba4204',
-      startTime: '09:00',
-      endTime: '09:45',
-    ),
-    _CourseTemplateLesson(
-      id: 'tue_phy_3',
-      weekday: DateTime.tuesday,
-      period: 3,
-      subject: '\u7269\u7406',
-      topic: '\u725b\u987f\u5b9a\u5f8b',
-      classroom: '\u5b9e\u9a8c\u5ba42',
-      startTime: '10:00',
-      endTime: '10:45',
-    ),
-    _CourseTemplateLesson(
-      id: 'wed_chem_4',
-      weekday: DateTime.wednesday,
-      period: 4,
-      subject: '\u5316\u5b66',
-      topic: '\u7269\u8d28\u7684\u91cf',
-      classroom: '\u5b9e\u9a8c\u5ba41',
-      startTime: '11:00',
-      endTime: '11:45',
-    ),
-    _CourseTemplateLesson(
-      id: 'thu_bio_5',
-      weekday: DateTime.thursday,
-      period: 5,
-      subject: '\u751f\u7269',
-      topic: '\u7ec6\u80de\u7ed3\u6784',
-      classroom: '\u6559\u5ba4202',
-      startTime: '14:00',
-      endTime: '14:45',
-    ),
-    _CourseTemplateLesson(
-      id: 'fri_hist_6',
-      weekday: DateTime.friday,
-      period: 6,
-      subject: '\u5386\u53f2',
-      topic: '\u5de5\u4e1a\u9769\u547d',
-      classroom: '\u6559\u5ba4101',
-      startTime: '15:00',
-      endTime: '15:45',
-    ),
-  ];
+  List<CourseLesson> _lessons = [];
+  bool _loadingLessons = false;
+  String? _lessonsError;
 
   @override
   void initState() {
@@ -104,7 +45,34 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
         return;
       }
       context.read<AppProvider>().fetchPlans();
+      _fetchLessons();
     });
+  }
+
+  Future<void> _fetchLessons() async {
+    if (!mounted) return;
+
+    setState(() {
+      _loadingLessons = true;
+      _lessonsError = null;
+    });
+
+    try {
+      final api = context.read<AppProvider>().apiService;
+      final dateStr = _focusDate.toIso8601String().split('T')[0];
+      final granularity = _view == CourseScheduleView.day ? 'day' : 'week';
+
+      final lessons = await api.getCourseScheduleLessons(dateStr, granularity);
+
+      if (!mounted) return;
+      setState(() => _lessons = lessons);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _lessonsError = e.toString());
+    } finally {
+      if (!mounted) return;
+      setState(() => _loadingLessons = false);
+    }
   }
 
   @override
@@ -218,6 +186,24 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
   }
 
   Widget _buildCurrentView(BuildContext context, AppProvider appProvider) {
+    if (_loadingLessons) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(48),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (_lessonsError != null) {
+      return Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text('加载失败: $_lessonsError', style: TextStyle(color: Colors.red)),
+        ),
+      );
+    }
+
     switch (_view) {
       case CourseScheduleView.year:
         return _buildYearView(context);
@@ -523,7 +509,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
     );
   }
 
-  Widget _currentLessonCard(BuildContext context, _CourseLesson lesson) {
+  Widget _currentLessonCard(BuildContext context, CourseLesson lesson) {
     final hasSession = _lessonSessions.containsKey(lesson.id);
     return Card(
       child: Padding(
@@ -540,7 +526,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
                   ),
                 ),
                 const Spacer(),
-                _smallChip(_dateLabel(lesson.date)),
+                _smallChip(_dateLabel(DateTime.parse(lesson.date))),
               ],
             ),
             const SizedBox(height: 8),
@@ -583,7 +569,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
     );
   }
 
-  Widget _knowledgeSummaryCard(_CourseLesson lesson) {
+  Widget _knowledgeSummaryCard(CourseLesson lesson) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -608,7 +594,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
     );
   }
 
-  Widget _afterClassPracticeCard(BuildContext context, _CourseLesson lesson) {
+  Widget _afterClassPracticeCard(BuildContext context, CourseLesson lesson) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -640,7 +626,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
 
   Future<void> _openLessonHomework(
     BuildContext context,
-    _CourseLesson lesson,
+    CourseLesson lesson,
   ) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
@@ -657,7 +643,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
     await context.read<AppProvider>().fetchAttempts(force: true);
   }
 
-  Widget _masteryCard(BuildContext context, _CourseLesson lesson) {
+  Widget _masteryCard(BuildContext context, CourseLesson lesson) {
     final scoreText = _masteryScore.round().toString();
     return Card(
       child: Padding(
@@ -744,7 +730,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
   Widget _linkedPlanCard(
     BuildContext context,
     AppProvider appProvider,
-    _CourseLesson lesson,
+    CourseLesson lesson,
   ) {
     final plans = _relatedPlansForLesson(appProvider.plans, lesson);
     return Card(
@@ -823,7 +809,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
 
   List<PlanItem> _relatedPlansForLesson(
     List<PlanItem> plans,
-    _CourseLesson lesson,
+    CourseLesson lesson,
   ) {
     final subject = lesson.subject.toLowerCase();
     final topic = lesson.topic.toLowerCase();
@@ -832,7 +818,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
           final title = item.title.toLowerCase();
           final content = item.content.toLowerCase();
           if (item.source == 'ai_agent' &&
-              item.targetDate == _dateLabel(lesson.date)) {
+              item.targetDate == _dateLabel(DateTime.parse(lesson.date))) {
             return true;
           }
           return title.contains(subject) ||
@@ -884,7 +870,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
     }
   }
 
-  Future<void> _startLesson(_CourseLesson lesson) async {
+  Future<void> _startLesson(CourseLesson lesson) async {
     if (_startingLesson) {
       return;
     }
@@ -933,7 +919,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
 
       final selectedAgent = _selectLessonAgent(enabledAgents);
       final sessionTitle =
-          '\u8bfe\u7a0b\u4f1a\u8bdd ${lesson.subject} ${_dateLabel(lesson.date)} \u7b2c${lesson.period}\u8282';
+          '课程会话 ${lesson.subject} ${_dateLabel(DateTime.parse(lesson.date))} 第${lesson.period}节';
       await agentProvider.selectAgent(selectedAgent.id);
       await agentProvider.createSession(title: sessionTitle);
       final sessionId = agentProvider.selectedSessionIdOf(selectedAgent.id);
@@ -978,7 +964,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
   }
 
   Future<void> _openLessonSession(
-    _CourseLesson lesson,
+    CourseLesson lesson,
     _LessonSessionBinding binding,
   ) async {
     if (!mounted) {
@@ -997,7 +983,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
     );
   }
 
-  Future<void> _saveMastery(_CourseLesson lesson) async {
+  Future<void> _saveMastery(CourseLesson lesson) async {
     if (_savingMastery) {
       return;
     }
@@ -1005,7 +991,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
 
     final appProvider = context.read<AppProvider>();
     final score = _masteryScore.round();
-    final targetDate = _nextReviewDate(score, lesson.date);
+    final targetDate = _nextReviewDate(score, DateTime.parse(lesson.date));
     final note = _masteryNoteController.text.trim();
     final planTitle =
         '\u590d\u4e60 ${lesson.subject} (${targetDate.year}-${targetDate.month.toString().padLeft(2, '0')}-${targetDate.day.toString().padLeft(2, '0')})';
@@ -1065,7 +1051,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
     }
   }
 
-  void _openPracticePrompt(_CourseLesson lesson) {
+  void _openPracticePrompt(CourseLesson lesson) {
     final hasSession = _lessonSessions.containsKey(lesson.id);
     final actionLabel = hasSession
         ? '\u8fdb\u5165\u4f1a\u8bdd'
@@ -1109,13 +1095,13 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
   }
 
   String _buildLessonSessionTheme({
-    required _CourseLesson lesson,
+    required CourseLesson lesson,
     required AppProvider appProvider,
   }) {
     final timeline = _buildLessonTimeline(lesson);
     final currentIndex = timeline.indexWhere((item) => item.id == lesson.id);
-    _CourseLesson? previous;
-    _CourseLesson? next;
+    CourseLesson? previous;
+    CourseLesson? next;
     if (currentIndex > 0) {
       previous = timeline[currentIndex - 1];
     }
@@ -1160,10 +1146,11 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
     return lines.join('; ');
   }
 
-  List<_CourseLesson> _buildLessonTimeline(_CourseLesson anchor) {
-    final lessons = <_CourseLesson>[];
+  List<CourseLesson> _buildLessonTimeline(CourseLesson anchor) {
+    final lessons = <CourseLesson>[];
+    final anchorDate = DateTime.parse(anchor.date);
     for (var offset = -7; offset <= 7; offset++) {
-      final date = anchor.date.add(Duration(days: offset));
+      final date = anchorDate.add(Duration(days: offset));
       lessons.addAll(_lessonsForDate(date));
     }
     lessons.sort((left, right) {
@@ -1176,12 +1163,12 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
     return lessons;
   }
 
-  String _lessonBrief(_CourseLesson lesson) {
-    return '${_dateLabel(lesson.date)} 第${lesson.period}节 ${lesson.subject}/${lesson.topic}';
+  String _lessonBrief(CourseLesson lesson) {
+    return '${_dateLabel(DateTime.parse(lesson.date))} 第${lesson.period}节 ${lesson.subject}/${lesson.topic}';
   }
 
   String _buildMasteryPlanContent({
-    required _CourseLesson lesson,
+    required CourseLesson lesson,
     required int score,
     required String note,
   }) {
@@ -1189,7 +1176,7 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
     return [
       '\u5b66\u79d1\uff1a${lesson.subject}',
       '\u4e3b\u9898\uff1a${lesson.topic}',
-      '\u65e5\u671f\uff1a${_dateLabel(lesson.date)}',
+      '日期：${_dateLabel(DateTime.parse(lesson.date))}',
       '\u638c\u63e1\u5ea6\uff1a$score/100',
       '\u5efa\u8bae\uff1a$recommendation',
       '\u8bfe\u5802\u5907\u6ce8\uff1a${note.isEmpty ? '-' : note}',
@@ -1226,9 +1213,9 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
     return '\u5efa\u8bae\u57283-4\u5929\u540e\u5b89\u6392\u95f4\u9694\u590d\u4e60\u3002';
   }
 
-  List<_CourseLesson> _lessonsInMonth(int year, int month) {
+  List<CourseLesson> _lessonsInMonth(int year, int month) {
     final days = DateUtils.getDaysInMonth(year, month);
-    final out = <_CourseLesson>[];
+    final out = <CourseLesson>[];
     for (var day = 1; day <= days; day++) {
       final date = DateTime(year, month, day);
       out.addAll(_lessonsForDate(date));
@@ -1236,24 +1223,9 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
     return out;
   }
 
-  List<_CourseLesson> _lessonsForDate(DateTime date) {
-    final normalizedDate = DateUtils.dateOnly(date);
-    return _weeklyTemplates
-        .where((template) => template.weekday == normalizedDate.weekday)
-        .map((template) {
-          final dayKey = _toDateKey(normalizedDate);
-          return _CourseLesson(
-            id: '${template.id}_$dayKey',
-            date: normalizedDate,
-            period: template.period,
-            subject: template.subject,
-            topic: template.topic,
-            classroom: template.classroom,
-            startTime: template.startTime,
-            endTime: template.endTime,
-          );
-        })
-        .toList(growable: false)
+  List<CourseLesson> _lessonsForDate(DateTime date) {
+    final dateStr = date.toIso8601String().split('T')[0];
+    return _lessons.where((lesson) => lesson.date == dateStr).toList()
       ..sort((a, b) => a.period.compareTo(b.period));
   }
 
@@ -1351,50 +1323,6 @@ class _CourseScheduleScreenState extends State<CourseScheduleScreen> {
   String _toDateString(DateTime date) {
     return _dateLabel(DateUtils.dateOnly(date));
   }
-}
-
-class _CourseTemplateLesson {
-  const _CourseTemplateLesson({
-    required this.id,
-    required this.weekday,
-    required this.period,
-    required this.subject,
-    required this.topic,
-    required this.classroom,
-    required this.startTime,
-    required this.endTime,
-  });
-
-  final String id;
-  final int weekday;
-  final int period;
-  final String subject;
-  final String topic;
-  final String classroom;
-  final String startTime;
-  final String endTime;
-}
-
-class _CourseLesson {
-  const _CourseLesson({
-    required this.id,
-    required this.date,
-    required this.period,
-    required this.subject,
-    required this.topic,
-    required this.classroom,
-    required this.startTime,
-    required this.endTime,
-  });
-
-  final String id;
-  final DateTime date;
-  final int period;
-  final String subject;
-  final String topic;
-  final String classroom;
-  final String startTime;
-  final String endTime;
 }
 
 class _MasteryRecord {

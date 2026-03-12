@@ -1,8 +1,0 @@
-{
-  "active": true,
-  "started_at": "2026-03-11T00:30:02.662Z",
-  "original_prompt": "/autopilot 班主任agent创建的计划太过简陋而且没有被正确解析，初始化时问的问题也太简单，没有收集到足够的资料",
-  "session_id": "01e4feee-b184-4721-9d9f-83222c8c13e7",
-  "reinforcement_count": 0,
-  "last_checked_at": "2026-03-11T00:30:02.663Z"
-}

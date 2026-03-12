@@ -17,6 +17,7 @@ import '../models/practice.dart';
 import '../models/question.dart';
 import '../models/resource.dart';
 import '../models/user_profile.dart';
+import '../models/course_lesson.dart';
 
 /// Offload large JSON decoding from the UI isolate to reduce jank (especially on
 /// Android when responses are large).
@@ -368,6 +369,46 @@ class ApiService {
 
   Future<void> deletePlan(String id) async {
     await _request(method: 'DELETE', path: '/plans/$id');
+  }
+
+  Future<List<CourseLesson>> getCourseScheduleLessons(
+    String date,
+    String granularity,
+  ) async {
+    final response = await _request(
+      method: 'GET',
+      path: '/ai/course-schedule/lessons',
+      query: {'date': date, 'granularity': granularity},
+    );
+    return (await _extractDataList(response))
+        .map((item) => CourseLesson.fromJson(item))
+        .toList();
+  }
+
+  Future<CourseLesson> createCourseScheduleLesson(
+    Map<String, dynamic> request,
+  ) async {
+    final response = await _request(
+      method: 'POST',
+      path: '/ai/course-schedule/lessons',
+      jsonBody: request,
+    );
+    return CourseLesson.fromJson(await _extractDataMap(response));
+  }
+
+  Future<void> updateCourseScheduleLesson(
+    String id,
+    Map<String, dynamic> request,
+  ) async {
+    await _request(
+      method: 'PUT',
+      path: '/ai/course-schedule/lessons/$id',
+      jsonBody: request,
+    );
+  }
+
+  Future<void> deleteCourseScheduleLesson(String id) async {
+    await _request(method: 'DELETE', path: '/ai/course-schedule/lessons/$id');
   }
 
   Future<List<PomodoroSession>> getPomodoroSessions({String? status}) async {

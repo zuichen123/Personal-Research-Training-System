@@ -1,0 +1,6 @@
+{"t":0,"agent":"system","event":"keyword_detected","keyword":"autopilot"}
+{"t":0,"agent":"system","event":"mode_change","mode_from":"none","mode_to":"autopilot"}
+{"t":0,"agent":"ac2815e","agent_type":"analyst","event":"agent_start","parent_mode":"none"}
+{"t":0,"agent":"ac2815e","agent_type":"analyst","event":"agent_stop","success":true,"duration_ms":115794}
+{"t":0,"agent":"a2acf65","agent_type":"architect","event":"agent_start","parent_mode":"none"}
+{"t":0,"agent":"a2acf65","agent_type":"architect","event":"agent_stop","success":true,"duration_ms":141347}

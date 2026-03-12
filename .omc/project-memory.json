@@ -136,15 +136,39 @@
   },
   "hotPaths": [
     {
+      "path": "apps/flutter_client/lib/screens/course_schedule/course_schedule_screen.dart",
+      "accessCount": 12,
+      "lastAccessed": 1773276656933,
+      "type": "file"
+    },
+    {
+      "path": "apps\\flutter_client\\lib\\widgets\\ai_formula_text.dart",
+      "accessCount": 8,
+      "lastAccessed": 1773275831198,
+      "type": "file"
+    },
+    {
       "path": "",
-      "accessCount": 7,
-      "lastAccessed": 1773273723088,
+      "accessCount": 8,
+      "lastAccessed": 1773276392216,
       "type": "directory"
     },
     {
       "path": "go.mod",
       "accessCount": 5,
       "lastAccessed": 1773274180155,
+      "type": "file"
+    },
+    {
+      "path": "apps\\flutter_client\\lib\\screens\\course_schedule\\course_schedule_screen.dart",
+      "accessCount": 5,
+      "lastAccessed": 1773276404376,
+      "type": "file"
+    },
+    {
+      "path": "apps/flutter_client/lib/services/api_service.dart",
+      "accessCount": 5,
+      "lastAccessed": 1773276542703,
       "type": "file"
     },
     {
@@ -220,6 +244,30 @@
       "type": "file"
     },
     {
+      "path": "apps/flutter_client/lib",
+      "accessCount": 2,
+      "lastAccessed": 1773275611664,
+      "type": "directory"
+    },
+    {
+      "path": "internal/platform/httpserver/router.go",
+      "accessCount": 2,
+      "lastAccessed": 1773276143351,
+      "type": "file"
+    },
+    {
+      "path": "migrations/sqlite/028_create_schedules.sql",
+      "accessCount": 2,
+      "lastAccessed": 1773276297506,
+      "type": "file"
+    },
+    {
+      "path": "apps\\flutter_client\\lib\\services\\api_service.dart",
+      "accessCount": 2,
+      "lastAccessed": 1773276377419,
+      "type": "file"
+    },
+    {
       "path": "apps\\flutter_client\\android\\app\\src\\main\\AndroidManifest.xml",
       "accessCount": 1,
       "lastAccessed": 1773273352395,
@@ -290,6 +338,102 @@
       "accessCount": 1,
       "lastAccessed": 1773274402669,
       "type": "file"
+    },
+    {
+      "path": "cmd/server/main.go",
+      "accessCount": 1,
+      "lastAccessed": 1773275393864,
+      "type": "file"
+    },
+    {
+      "path": "internal/config/config.go",
+      "accessCount": 1,
+      "lastAccessed": 1773275402237,
+      "type": "file"
+    },
+    {
+      "path": "internal/bootstrap",
+      "accessCount": 1,
+      "lastAccessed": 1773275411942,
+      "type": "directory"
+    },
+    {
+      "path": "internal/bootstrap/app.go",
+      "accessCount": 1,
+      "lastAccessed": 1773275419027,
+      "type": "file"
+    },
+    {
+      "path": "internal/platform/httpserver",
+      "accessCount": 1,
+      "lastAccessed": 1773275441173,
+      "type": "directory"
+    },
+    {
+      "path": "apps/flutter_client/lib/screens",
+      "accessCount": 1,
+      "lastAccessed": 1773275620826,
+      "type": "directory"
+    },
+    {
+      "path": "apps/flutter_client/lib/widgets",
+      "accessCount": 1,
+      "lastAccessed": 1773275631336,
+      "type": "directory"
+    },
+    {
+      "path": "apps/flutter_client/lib/screens/ai_tutor_team_screen.dart",
+      "accessCount": 1,
+      "lastAccessed": 1773275640384,
+      "type": "file"
+    },
+    {
+      "path": "internal/modules/ai/schedule_generator.go",
+      "accessCount": 1,
+      "lastAccessed": 1773276114223,
+      "type": "file"
+    },
+    {
+      "path": "internal/modules/ai/course_schedule_tool.go",
+      "accessCount": 1,
+      "lastAccessed": 1773276114286,
+      "type": "file"
+    },
+    {
+      "path": "internal/modules/schedule/handler.go",
+      "accessCount": 1,
+      "lastAccessed": 1773276143304,
+      "type": "file"
+    },
+    {
+      "path": "internal/modules/ai/handler.go",
+      "accessCount": 1,
+      "lastAccessed": 1773276143337,
+      "type": "file"
+    },
+    {
+      "path": "migrations\\sqlite\\028_create_schedules.sql",
+      "accessCount": 1,
+      "lastAccessed": 1773276169626,
+      "type": "file"
+    },
+    {
+      "path": "internal\\modules\\ai\\course_schedule_tool.go",
+      "accessCount": 1,
+      "lastAccessed": 1773276169634,
+      "type": "file"
+    },
+    {
+      "path": "internal\\modules\\ai\\handler.go",
+      "accessCount": 1,
+      "lastAccessed": 1773276175863,
+      "type": "file"
+    },
+    {
+      "path": "internal\\modules\\ai",
+      "accessCount": 1,
+      "lastAccessed": 1773276189127,
+      "type": "directory"
     }
   ],
   "userDirectives": []
