@@ -1,0 +1,8 @@
+./grading.go
+./handler.go
+./memory_repo.go
+./model.go
+./paper.go
+./repository.go
+./service.go
+./sqlite_repo.go

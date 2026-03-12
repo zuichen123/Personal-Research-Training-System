@@ -1,0 +1,28 @@
+{
+  "pid": 26892,
+  "parent_pid": 7644,
+  "started_at": "2026-03-11T03:02:44.225Z",
+  "cwd": "F:\\Code\\go\\Self-Study-Tool",
+  "notify_script": "C:\\Users\\62758\\AppData\\Roaming\\npm\\node_modules\\oh-my-codex\\scripts\\notify-hook.js",
+  "poll_ms": 700,
+  "pid_file": "F:\\Code\\go\\Self-Study-Tool\\.omx\\state\\notify-fallback.pid",
+  "max_lifetime_ms": 21600000,
+  "tracked_files": 1,
+  "seen_turns": 0,
+  "dispatch_drain": {
+    "enabled": true,
+    "max_per_tick": 5,
+    "run_count": 30519,
+    "leader_only": true,
+    "last_tick_at": "2026-03-11T09:02:43.715Z",
+    "last_result": {
+      "processed": 0,
+      "skipped": 0,
+      "failed": 0
+    },
+    "last_error": null
+  },
+  "stop_reason": "max_lifetime_exceeded",
+  "stop_signal": null,
+  "stopping": true
+}

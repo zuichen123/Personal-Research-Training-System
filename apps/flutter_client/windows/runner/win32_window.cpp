@@ -1,7 +1,8 @@
-#include "win32_window.h"
+﻿#include "win32_window.h"
 
 #include <dwmapi.h>
 #include <flutter_windows.h>
+#include <windowsx.h>
 
 #include "resource.h"
 
@@ -216,6 +217,46 @@ Win32Window::MessageHandler(HWND hwnd,
     case WM_DWMCOLORIZATIONCOLORCHANGED:
       UpdateTheme(hwnd);
       return 0;
+
+    // Synthesize legacy mouse messages from WM_POINTER* so that the Flutter
+    // child HWND receives pen/stylus input.  Direct WM_POINTER forwarding
+    // does not work because pointer handles are scoped to the receiving
+    // window.  Instead we extract the pen position, convert to child-client
+    // coordinates, and post WM_LBUTTON*/WM_MOUSEMOVE messages.
+    case WM_POINTERDOWN:
+    case WM_POINTERUPDATE:
+    case WM_POINTERUP: {
+      if (child_content_ == nullptr) break;
+
+      UINT32 pointer_id = GET_POINTERID_WPARAM(wparam);
+      POINTER_INPUT_TYPE pointer_type = PT_POINTER;
+      if (!GetPointerType(pointer_id, &pointer_type)) break;
+      // Only handle pen input; touch already works.
+      if (pointer_type != PT_PEN) break;
+
+      // Get pen position in screen coordinates.
+      POINT screen_pt;
+      screen_pt.x = GET_X_LPARAM(lparam);
+      screen_pt.y = GET_Y_LPARAM(lparam);
+
+      // Convert to child-window client coordinates.
+      POINT client_pt = screen_pt;
+      ScreenToClient(child_content_, &client_pt);
+
+      LPARAM child_lparam = MAKELPARAM(client_pt.x, client_pt.y);
+      WPARAM mouse_wparam = MK_LBUTTON;
+
+      UINT mouse_msg = WM_MOUSEMOVE;
+      if (message == WM_POINTERDOWN) {
+        mouse_msg = WM_LBUTTONDOWN;
+      } else if (message == WM_POINTERUP) {
+        mouse_msg = WM_LBUTTONUP;
+        mouse_wparam = 0;
+      }
+
+      PostMessage(child_content_, mouse_msg, mouse_wparam, child_lparam);
+      return 0;
+    }
   }
 
   return DefWindowProc(window_handle_, message, wparam, lparam);

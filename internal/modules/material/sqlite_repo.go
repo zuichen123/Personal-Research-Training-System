@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"self-study-tool/internal/shared/errs"
+	"prts/internal/shared/errs"
 )
 
 type SQLiteRepository struct {

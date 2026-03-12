@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"self-study-tool/internal/modules/question"
+	"prts/internal/modules/question"
 )
 
 type MockClient struct {

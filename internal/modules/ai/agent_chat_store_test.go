@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	sqlitestore "self-study-tool/internal/platform/storage/sqlite"
+	sqlitestore "prts/internal/platform/storage/sqlite"
 )
 
 func TestSQLiteAgentRepository_SessionSummaryFields(t *testing.T) {

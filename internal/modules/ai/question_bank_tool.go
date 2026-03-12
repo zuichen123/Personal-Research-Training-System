@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"self-study-tool/internal/modules/question"
+	"prts/internal/modules/question"
 )
 
 type QuestionBankQueryResult struct {

@@ -9,9 +9,9 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"self-study-tool/internal/modules/question"
-	"self-study-tool/internal/shared/errs"
-	"self-study-tool/internal/shared/httpx"
+	"prts/internal/modules/question"
+	"prts/internal/shared/errs"
+	"prts/internal/shared/httpx"
 )
 
 type Handler struct {

@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"self-study-tool/internal/modules/plan"
-	"self-study-tool/internal/platform/observability/logx"
-	"self-study-tool/internal/shared/errs"
+	"prts/internal/modules/plan"
+	"prts/internal/platform/observability/logx"
+	"prts/internal/shared/errs"
 )
 
 const (

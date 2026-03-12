@@ -7,9 +7,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"self-study-tool/internal/bootstrap"
-	"self-study-tool/internal/config"
-	"self-study-tool/internal/platform/observability/logx"
+	"prts/internal/bootstrap"
+	"prts/internal/config"
+	"prts/internal/platform/observability/logx"
 )
 
 func main() {

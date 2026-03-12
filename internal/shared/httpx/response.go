@@ -5,8 +5,8 @@ import (
 	"io"
 	"net/http"
 
-	"self-study-tool/internal/platform/observability/logx"
-	"self-study-tool/internal/shared/errs"
+	"prts/internal/platform/observability/logx"
+	"prts/internal/shared/errs"
 )
 
 type SuccessResponse struct {

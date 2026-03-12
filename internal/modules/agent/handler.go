@@ -5,7 +5,7 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
-	"self-study-tool/internal/shared/httpx"
+	"prts/internal/shared/httpx"
 )
 
 type Handler struct {

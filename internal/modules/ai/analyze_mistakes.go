@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"self-study-tool/internal/modules/mistake"
-	"self-study-tool/internal/modules/profile"
-	"self-study-tool/internal/shared/errs"
+	"prts/internal/modules/mistake"
+	"prts/internal/modules/profile"
+	"prts/internal/shared/errs"
 )
 
 type AnalyzeMistakesRequest struct {

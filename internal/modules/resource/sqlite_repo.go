@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"self-study-tool/internal/shared/errs"
+	"prts/internal/shared/errs"
 )
 
 type SQLiteRepository struct {

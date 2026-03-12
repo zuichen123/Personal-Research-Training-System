@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:flutter_client/controllers/ai_tutor_team_controller.dart';
-import 'package:flutter_client/models/ai_tutor_team.dart';
+import 'package:prts_client/controllers/ai_tutor_team_controller.dart';
+import 'package:prts_client/models/ai_tutor_team.dart';
 
 void main() {
   group('AITutorTeamController', () {

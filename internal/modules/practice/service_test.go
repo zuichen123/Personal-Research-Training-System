@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"self-study-tool/internal/modules/ai"
-	"self-study-tool/internal/modules/mistake"
-	"self-study-tool/internal/modules/question"
+	"prts/internal/modules/ai"
+	"prts/internal/modules/mistake"
+	"prts/internal/modules/question"
 )
 
 func TestService_SubmitWrongAnswerCreatesMistake(t *testing.T) {

@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"self-study-tool/internal/modules/question"
-	"self-study-tool/internal/platform/observability/logx"
-	"self-study-tool/internal/shared/errs"
+	"prts/internal/modules/question"
+	"prts/internal/platform/observability/logx"
+	"prts/internal/shared/errs"
 )
 
 type promptInvokeInput struct {

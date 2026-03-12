@@ -1,0 +1,296 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1773273005723,
+  "projectRoot": "F:\\Code\\go\\Self-Study-Tool",
+  "techStack": {
+    "languages": [
+      {
+        "name": "Go",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "go.mod"
+        ]
+      }
+    ],
+    "frameworks": [],
+    "packageManager": "go",
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": null,
+    "testCommand": null,
+    "lintCommand": null,
+    "devCommand": null,
+    "scripts": {}
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "scripts"
+    ],
+    "gitBranches": {
+      "defaultBranch": "main",
+      "branchingStrategy": null
+    }
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "apps": {
+      "path": "apps",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1773273005682,
+      "keyFiles": []
+    },
+    "cmd": {
+      "path": "cmd",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1773273005684,
+      "keyFiles": []
+    },
+    "data": {
+      "path": "data",
+      "purpose": "Data files",
+      "fileCount": 3,
+      "lastAccessed": 1773273005684,
+      "keyFiles": [
+        "self-study.db",
+        "self-study.db-shm",
+        "self-study.db-wal"
+      ]
+    },
+    "dist": {
+      "path": "dist",
+      "purpose": "Distribution/build output",
+      "fileCount": 3,
+      "lastAccessed": 1773273005684,
+      "keyFiles": [
+        "self-study-tool-android-arm64",
+        "self-study-tool-linux-amd64",
+        "self-study-tool-windows-amd64.exe"
+      ]
+    },
+    "internal": {
+      "path": "internal",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1773273005684,
+      "keyFiles": []
+    },
+    "migrations": {
+      "path": "migrations",
+      "purpose": "Database migrations",
+      "fileCount": 0,
+      "lastAccessed": 1773273005685,
+      "keyFiles": []
+    },
+    "prompts": {
+      "path": "prompts",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1773273005685,
+      "keyFiles": [
+        "默认agent-主控.md"
+      ]
+    },
+    "scripts": {
+      "path": "scripts",
+      "purpose": "Build/utility scripts",
+      "fileCount": 5,
+      "lastAccessed": 1773273005685,
+      "keyFiles": [
+        "build-client.ps1",
+        "build-client.sh",
+        "build-cross.ps1",
+        "build-cross.sh",
+        "verify_state.sh"
+      ]
+    },
+    "dist\\data": {
+      "path": "dist\\data",
+      "purpose": "Data files",
+      "fileCount": 2,
+      "lastAccessed": 1773273005686,
+      "keyFiles": [
+        "self-study.db"
+      ]
+    },
+    "internal\\config": {
+      "path": "internal\\config",
+      "purpose": "Configuration files",
+      "fileCount": 1,
+      "lastAccessed": 1773273005687,
+      "keyFiles": [
+        "config.go"
+      ]
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "",
+      "accessCount": 7,
+      "lastAccessed": 1773273723088,
+      "type": "directory"
+    },
+    {
+      "path": "go.mod",
+      "accessCount": 5,
+      "lastAccessed": 1773274180155,
+      "type": "file"
+    },
+    {
+      "path": "apps\\flutter_client\\pubspec.yaml",
+      "accessCount": 3,
+      "lastAccessed": 1773273722790,
+      "type": "file"
+    },
+    {
+      "path": "apps/flutter_client/windows/CMakeLists.txt",
+      "accessCount": 3,
+      "lastAccessed": 1773274485952,
+      "type": "file"
+    },
+    {
+      "path": "apps/flutter_client/web/index.html",
+      "accessCount": 3,
+      "lastAccessed": 1773274518924,
+      "type": "file"
+    },
+    {
+      "path": "README.md",
+      "accessCount": 3,
+      "lastAccessed": 1773274811970,
+      "type": "file"
+    },
+    {
+      "path": "apps\\flutter_client\\android\\app\\src\\main\\kotlin\\com\\selfstudy\\tool\\flutter_client\\MainActivity.kt",
+      "accessCount": 2,
+      "lastAccessed": 1773273701681,
+      "type": "file"
+    },
+    {
+      "path": "apps/flutter_client/pubspec.yaml",
+      "accessCount": 2,
+      "lastAccessed": 1773274350685,
+      "type": "file"
+    },
+    {
+      "path": "apps/flutter_client/android/app/src/main/AndroidManifest.xml",
+      "accessCount": 2,
+      "lastAccessed": 1773274379859,
+      "type": "file"
+    },
+    {
+      "path": "apps/flutter_client/macos/Runner/Configs/AppInfo.xcconfig",
+      "accessCount": 2,
+      "lastAccessed": 1773274449304,
+      "type": "file"
+    },
+    {
+      "path": "apps/flutter_client/linux/CMakeLists.txt",
+      "accessCount": 2,
+      "lastAccessed": 1773274459961,
+      "type": "file"
+    },
+    {
+      "path": "apps/flutter_client/web/manifest.json",
+      "accessCount": 2,
+      "lastAccessed": 1773274496467,
+      "type": "file"
+    },
+    {
+      "path": "apps/flutter_client/README.md",
+      "accessCount": 2,
+      "lastAccessed": 1773274831257,
+      "type": "file"
+    },
+    {
+      "path": "CLAUDE.md",
+      "accessCount": 2,
+      "lastAccessed": 1773274852956,
+      "type": "file"
+    },
+    {
+      "path": "apps\\flutter_client\\android\\app\\src\\main\\AndroidManifest.xml",
+      "accessCount": 1,
+      "lastAccessed": 1773273352395,
+      "type": "file"
+    },
+    {
+      "path": "apps\\flutter_client\\lib\\main.dart",
+      "accessCount": 1,
+      "lastAccessed": 1773273359382,
+      "type": "file"
+    },
+    {
+      "path": "apps\\flutter_client",
+      "accessCount": 1,
+      "lastAccessed": 1773273695865,
+      "type": "directory"
+    },
+    {
+      "path": "apps\\flutter_client\\linux\\CMakeLists.txt",
+      "accessCount": 1,
+      "lastAccessed": 1773273701752,
+      "type": "file"
+    },
+    {
+      "path": "apps\\flutter_client\\ios\\Runner.xcodeproj\\project.pbxproj",
+      "accessCount": 1,
+      "lastAccessed": 1773273701768,
+      "type": "file"
+    },
+    {
+      "path": "apps\\flutter_client\\windows\\CMakeLists.txt",
+      "accessCount": 1,
+      "lastAccessed": 1773273701827,
+      "type": "file"
+    },
+    {
+      "path": "apps\\flutter_client\\macos\\Runner\\Configs\\AppInfo.xcconfig",
+      "accessCount": 1,
+      "lastAccessed": 1773273709109,
+      "type": "file"
+    },
+    {
+      "path": "apps\\flutter_client\\windows\\runner\\Runner.rc",
+      "accessCount": 1,
+      "lastAccessed": 1773273709142,
+      "type": "file"
+    },
+    {
+      "path": "cmd\\server\\main.go",
+      "accessCount": 1,
+      "lastAccessed": 1773273715775,
+      "type": "file"
+    },
+    {
+      "path": "internal\\bootstrap\\app.go",
+      "accessCount": 1,
+      "lastAccessed": 1773273715843,
+      "type": "file"
+    },
+    {
+      "path": "apps/flutter_client/android/app/src/main/kotlin/com/selfstudy/tool/flutter_client/MainActivity.kt",
+      "accessCount": 1,
+      "lastAccessed": 1773274397119,
+      "type": "file"
+    },
+    {
+      "path": "apps/flutter_client/android/app/src/main/kotlin/com/prts/app/MainActivity.kt",
+      "accessCount": 1,
+      "lastAccessed": 1773274402669,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}

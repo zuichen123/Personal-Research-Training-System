@@ -1,4 +1,4 @@
-module self-study-tool
+module prts
 
 go 1.24.0
 

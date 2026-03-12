@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"self-study-tool/internal/platform/observability/logx"
-	"self-study-tool/internal/shared/errs"
-	"self-study-tool/internal/shared/httpx"
+	"prts/internal/platform/observability/logx"
+	"prts/internal/shared/errs"
+	"prts/internal/shared/httpx"
 )
 
 const (

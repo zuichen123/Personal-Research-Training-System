@@ -1,7 +1,8 @@
-package httpserver
+﻿package httpserver
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"log/slog"
 	"net/http"
@@ -10,7 +11,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5/middleware"
-	"self-study-tool/internal/platform/observability/logx"
+	"prts/internal/platform/observability/logx"
 )
 
 type MiddlewareConfig struct {
@@ -31,7 +32,7 @@ func RequestMiddleware(cfg MiddlewareConfig) func(http.Handler) http.Handler {
 	logCfg.AppEnv = cfg.AppEnv
 
 	return func(next http.Handler) http.Handler {
-		handler := middleware.Timeout(cfg.Timeout)(next)
+		handler := activityTimeout(cfg.Timeout)(next)
 		handler = requestLogger(logCfg)(handler)
 		handler = traceMiddleware(handler)
 		handler = middleware.RequestID(handler)
@@ -49,6 +50,26 @@ func securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("X-Frame-Options", "DENY")
 		next.ServeHTTP(w, r)
 	})
+}
+
+func activityTimeout(timeout time.Duration) func(http.Handler) http.Handler {
+	if timeout <= 0 {
+		return func(next http.Handler) http.Handler {
+			return next
+		}
+	}
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx, cancel := context.WithCancelCause(r.Context())
+			defer cancel(nil)
+
+			writer := newActivityTimeoutWriter(w, r.ProtoMajor, timeout, cancel)
+			defer writer.Close()
+
+			next.ServeHTTP(writer, r.WithContext(ctx))
+		})
+	}
 }
 
 func maxBodySize(maxBytes int64) func(http.Handler) http.Handler {

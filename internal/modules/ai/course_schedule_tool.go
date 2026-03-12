@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"self-study-tool/internal/modules/plan"
-	"self-study-tool/internal/shared/errs"
+	"prts/internal/modules/plan"
+	"prts/internal/shared/errs"
 )
 
 const courseScheduleContentMarker = "[course_schedule]"

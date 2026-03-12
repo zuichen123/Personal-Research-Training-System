@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"self-study-tool/internal/modules/plan"
+	"prts/internal/modules/plan"
 )
 
 func TestRenderCurrentScheduleSegment_ThemeWithoutPlans(t *testing.T) {

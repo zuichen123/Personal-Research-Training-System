@@ -1,4 +1,4 @@
-import 'dart:ui';
+﻿import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'core/logging/app_logger.dart';
 import 'providers/ai_agent_provider.dart';
 import 'providers/app_provider.dart';
+import 'services/api_service.dart';
 import 'widgets/stylus_pointer_interceptor.dart';
 import 'screens/agent_chat_hub_screen.dart';
 import 'screens/course_schedule/course_schedule_screen.dart';
@@ -16,6 +17,7 @@ import 'screens/practice_screen.dart';
 import 'screens/questions_screen.dart';
 import 'screens/resources_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/stylus_diagnostic_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -43,6 +45,7 @@ Future<void> main() async {
     return true;
   };
 
+  await ApiService.loadCustomServerUrl();
   runApp(const MyApp());
 }
 
@@ -188,6 +191,11 @@ class _MainScreenState extends State<MainScreen> {
       label: '\u8ba1\u5212\u7ba1\u7406',
     ),
     _NavItem(
+      icon: Icons.draw_outlined,
+      selectedIcon: Icons.draw,
+      label: '手写笔诊断',
+    ),
+    _NavItem(
       icon: Icons.settings_outlined,
       selectedIcon: Icons.settings,
       label: '\u8bbe\u7f6e',
@@ -224,6 +232,9 @@ class _MainScreenState extends State<MainScreen> {
         screen = const PlansScreen();
         break;
       case 2:
+        screen = const StylusDiagnosticScreen();
+        break;
+      case 3:
         provider.ensureAILoaded();
         provider.ensureProfileLoaded();
         screen = const SettingsScreen();

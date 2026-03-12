@@ -1,11 +1,11 @@
 {
-    "name": "flutter_client",
-    "short_name": "flutter_client",
+    "name": "PRTS",
+    "short_name": "PRTS",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Personal Research & Training System",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

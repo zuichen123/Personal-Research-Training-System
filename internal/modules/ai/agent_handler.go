@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"self-study-tool/internal/shared/httpx"
+	"prts/internal/shared/httpx"
 )
 
 func (h *Handler) listAgents(w http.ResponseWriter, r *http.Request) {

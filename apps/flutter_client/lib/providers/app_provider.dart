@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../core/logging/app_logger.dart';
 import '../i18n/error_mapper.dart';
@@ -23,9 +23,23 @@ enum DataSection {
 }
 
 class AppProvider with ChangeNotifier {
-  final ApiService _api = ApiService();
+  ApiService _api = ApiService();
   final AppLogger _logger = AppLogger.instance;
   ApiService get apiService => _api;
+
+  /// Return the current server URL.
+  String get serverUrl => ApiService.currentEffectiveUrl();
+
+  /// Update the server URL, persist it, and recreate the ApiService.
+  Future<void> updateServerUrl(String url) async {
+    await ApiService.setCustomServerUrl(url);
+    _api = ApiService();
+    // Reset all loaded sections so they reload from the new server.
+    for (final section in DataSection.values) {
+      _isSectionLoaded[section] = false;
+    }
+    notifyListeners();
+  }
 
   final Map<DataSection, bool> _isSectionLoading = {
     DataSection.questions: false,

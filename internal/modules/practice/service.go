@@ -6,10 +6,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"self-study-tool/internal/modules/ai"
-	"self-study-tool/internal/modules/mistake"
-	"self-study-tool/internal/modules/question"
-	"self-study-tool/internal/shared/errs"
+	"prts/internal/modules/ai"
+	"prts/internal/modules/mistake"
+	"prts/internal/modules/question"
+	"prts/internal/shared/errs"
 )
 
 type Service struct {

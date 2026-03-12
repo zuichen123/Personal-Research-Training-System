@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"self-study-tool/internal/modules/profile"
+	"prts/internal/modules/profile"
 )
 
 type UserInfoResult struct {

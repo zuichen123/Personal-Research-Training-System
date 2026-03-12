@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"self-study-tool/internal/modules/material"
+	"prts/internal/modules/material"
 )
 
 type MaterialQueryResult struct {

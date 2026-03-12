@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	sqlitestore "self-study-tool/internal/platform/storage/sqlite"
+	sqlitestore "prts/internal/platform/storage/sqlite"
 )
 
 func TestSQLiteProviderConfigRepository_PromptTemplates(t *testing.T) {

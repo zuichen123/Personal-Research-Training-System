@@ -1,6 +1,6 @@
-﻿# Flutter Client
+﻿# PRTS Client
 
-Self Study Tool 的 Flutter 客户端。
+Personal Research & Training System 的 Flutter 客户端。
 
 ## 功能页
 

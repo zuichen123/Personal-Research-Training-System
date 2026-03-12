@@ -5,6 +5,8 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../core/logging/app_logger.dart';
 import '../models/ai_agent_chat.dart';
 import '../core/logging/trace_id.dart';
@@ -15,6 +17,10 @@ import '../models/practice.dart';
 import '../models/question.dart';
 import '../models/resource.dart';
 import '../models/user_profile.dart';
+
+/// Offload large JSON decoding from the UI isolate to reduce jank (especially on
+/// Android when responses are large).
+dynamic _decodeJsonInBackground(String body) => jsonDecode(body);
 
 class ApiException implements Exception {
   ApiException({
@@ -52,17 +58,51 @@ class ApiService {
 
   static const Duration _defaultRequestTimeout = Duration(seconds: 15);
   static const Duration _aiRequestTimeout = Duration(seconds: 120);
-  static const Duration _aiStreamIdleTimeout = Duration(seconds: 20);
+  static const int _jsonDecodeIsolateThresholdChars = 64 * 1024;
 
   final String baseUrl;
   final http.Client _client;
   final AppLogger _logger = AppLogger.instance;
 
+  /// SharedPreferences key for the user-configured server URL.
+  static const String _serverUrlPrefKey = 'custom_server_url';
+
+  /// In-memory cache of the user-configured server URL (loaded once).
+  static String? _cachedCustomUrl;
+
+  /// Load the custom server URL from SharedPreferences (call once at startup).
+  static Future<void> loadCustomServerUrl() async {
+    final prefs = await SharedPreferences.getInstance();
+    _cachedCustomUrl = prefs.getString(_serverUrlPrefKey);
+  }
+
+  /// Persist a new server URL. Pass empty string to clear (revert to default).
+  static Future<void> setCustomServerUrl(String url) async {
+    final prefs = await SharedPreferences.getInstance();
+    final trimmed = url.trim();
+    if (trimmed.isEmpty) {
+      await prefs.remove(_serverUrlPrefKey);
+      _cachedCustomUrl = null;
+    } else {
+      await prefs.setString(_serverUrlPrefKey, trimmed);
+      _cachedCustomUrl = trimmed;
+    }
+  }
+
+  /// Return the currently effective server URL (custom or platform default).
+  static String currentEffectiveUrl() => _defaultBaseUrl();
+
   static String _defaultBaseUrl() {
+    // 1. In-memory custom URL (loaded from SharedPreferences at startup)
+    if (_cachedCustomUrl != null && _cachedCustomUrl!.trim().isNotEmpty) {
+      return _normalizeBaseUrl(_cachedCustomUrl!);
+    }
+    // 2. Compile-time env
     const configured = String.fromEnvironment('API_BASE_URL', defaultValue: '');
     if (configured.trim().isNotEmpty) {
       return _normalizeBaseUrl(configured);
     }
+    // 3. Platform defaults
     if (kIsWeb) {
       return 'http://127.0.0.1:8080/api/v1';
     }
@@ -106,7 +146,7 @@ class ApiService {
       path: '/questions',
       query: query,
     );
-    return _extractDataList(response).map(Question.fromJson).toList();
+    return (await _extractDataList(response)).map(Question.fromJson).toList();
   }
 
   Future<Question> createQuestion(Map<String, dynamic> input) async {
@@ -115,7 +155,7 @@ class ApiService {
       path: '/questions',
       jsonBody: input,
     );
-    return Question.fromJson(_extractDataMap(response));
+    return Question.fromJson(await _extractDataMap(response));
   }
 
   Future<Question> updateQuestion(String id, Map<String, dynamic> input) async {
@@ -124,7 +164,7 @@ class ApiService {
       path: '/questions/$id',
       jsonBody: input,
     );
-    return Question.fromJson(_extractDataMap(response));
+    return Question.fromJson(await _extractDataMap(response));
   }
 
   Future<void> deleteQuestion(String id) async {
@@ -145,7 +185,7 @@ class ApiService {
         'elapsed_seconds': elapsedSeconds,
       },
     );
-    return PracticeAttempt.fromJson(_extractDataMap(response));
+    return PracticeAttempt.fromJson(await _extractDataMap(response));
   }
 
   Future<List<PracticeAttempt>> getPracticeAttempts({
@@ -160,7 +200,9 @@ class ApiService {
       path: '/practice/attempts',
       query: query,
     );
-    return _extractDataList(response).map(PracticeAttempt.fromJson).toList();
+    return (await _extractDataList(response))
+        .map(PracticeAttempt.fromJson)
+        .toList();
   }
 
   Future<void> deletePracticeAttempt(String id) async {
@@ -177,7 +219,9 @@ class ApiService {
       path: '/mistakes',
       query: query,
     );
-    return _extractDataList(response).map(MistakeRecord.fromJson).toList();
+    return (await _extractDataList(response))
+        .map(MistakeRecord.fromJson)
+        .toList();
   }
 
   Future<MistakeRecord> createMistake(Map<String, dynamic> input) async {
@@ -186,7 +230,7 @@ class ApiService {
       path: '/mistakes',
       jsonBody: input,
     );
-    return MistakeRecord.fromJson(_extractDataMap(response));
+    return MistakeRecord.fromJson(await _extractDataMap(response));
   }
 
   Future<void> deleteMistake(String id) async {
@@ -203,7 +247,9 @@ class ApiService {
       path: '/resources',
       query: query,
     );
-    return _extractDataList(response).map(ResourceMaterial.fromJson).toList();
+    return (await _extractDataList(response))
+        .map(ResourceMaterial.fromJson)
+        .toList();
   }
 
   Future<ResourceMaterial> uploadResource({
@@ -264,7 +310,7 @@ class ApiService {
         'trace_id': traceId,
       },
     );
-    return ResourceMaterial.fromJson(_extractDataMap(response));
+    return ResourceMaterial.fromJson(await _extractDataMap(response));
   }
 
   Future<DownloadedResource> downloadResource(String id) async {
@@ -299,7 +345,7 @@ class ApiService {
       path: '/plans',
       query: query,
     );
-    return _extractDataList(response).map(PlanItem.fromJson).toList();
+    return (await _extractDataList(response)).map(PlanItem.fromJson).toList();
   }
 
   Future<PlanItem> createPlan(Map<String, dynamic> input) async {
@@ -308,7 +354,7 @@ class ApiService {
       path: '/plans',
       jsonBody: input,
     );
-    return PlanItem.fromJson(_extractDataMap(response));
+    return PlanItem.fromJson(await _extractDataMap(response));
   }
 
   Future<PlanItem> updatePlan(String id, Map<String, dynamic> input) async {
@@ -317,7 +363,7 @@ class ApiService {
       path: '/plans/$id',
       jsonBody: input,
     );
-    return PlanItem.fromJson(_extractDataMap(response));
+    return PlanItem.fromJson(await _extractDataMap(response));
   }
 
   Future<void> deletePlan(String id) async {
@@ -334,7 +380,9 @@ class ApiService {
       path: '/pomodoro',
       query: query,
     );
-    return _extractDataList(response).map(PomodoroSession.fromJson).toList();
+    return (await _extractDataList(response))
+        .map(PomodoroSession.fromJson)
+        .toList();
   }
 
   Future<PomodoroSession> startPomodoro({
@@ -353,7 +401,7 @@ class ApiService {
         'break_minutes': breakMinutes,
       },
     );
-    return PomodoroSession.fromJson(_extractDataMap(response));
+    return PomodoroSession.fromJson(await _extractDataMap(response));
   }
 
   Future<PomodoroSession> endPomodoro(
@@ -365,7 +413,7 @@ class ApiService {
       path: '/pomodoro/$id/end',
       jsonBody: {'status': status},
     );
-    return PomodoroSession.fromJson(_extractDataMap(response));
+    return PomodoroSession.fromJson(await _extractDataMap(response));
   }
 
   Future<void> deletePomodoro(String id) async {
@@ -382,7 +430,7 @@ class ApiService {
       path: '/profile',
       query: query,
     );
-    return UserProfile.fromJson(_extractDataMap(response));
+    return UserProfile.fromJson(await _extractDataMap(response));
   }
 
   Future<UserProfile> updateUserProfile({
@@ -417,12 +465,12 @@ class ApiService {
       path: '/profile',
       jsonBody: body,
     );
-    return UserProfile.fromJson(_extractDataMap(response));
+    return UserProfile.fromJson(await _extractDataMap(response));
   }
 
   Future<Map<String, dynamic>> getAIProviderStatus() async {
     final response = await _request(method: 'GET', path: '/ai/provider');
-    return _extractDataMap(response);
+    return await _extractDataMap(response);
   }
 
   Future<Map<String, dynamic>> getAIDefaultAgentProvider() async {
@@ -430,7 +478,7 @@ class ApiService {
       method: 'GET',
       path: '/ai/provider/default-agent',
     );
-    return _extractDataMap(response);
+    return await _extractDataMap(response);
   }
 
   Future<Map<String, dynamic>> updateAIProviderConfig({
@@ -454,12 +502,12 @@ class ApiService {
       path: '/ai/provider/config',
       jsonBody: body,
     );
-    return _extractDataMap(response);
+    return await _extractDataMap(response);
   }
 
   Future<List<Map<String, dynamic>>> getAIPromptTemplates() async {
     final response = await _request(method: 'GET', path: '/ai/prompts');
-    return _extractDataList(response);
+    return await _extractDataList(response);
   }
 
   Future<Map<String, dynamic>> updateAIPromptTemplate({
@@ -491,17 +539,19 @@ class ApiService {
       path: '/ai/prompts/$key',
       jsonBody: body,
     );
-    return _extractDataMap(response);
+    return await _extractDataMap(response);
   }
 
   Future<List<Map<String, dynamic>>> reloadAIPromptTemplates() async {
     final response = await _request(method: 'POST', path: '/ai/prompts/reload');
-    return _extractDataList(response);
+    return await _extractDataList(response);
   }
 
   Future<List<AIAgentSummary>> getAIAgents() async {
     final response = await _request(method: 'GET', path: '/ai/agents');
-    return _extractDataList(response).map(AIAgentSummary.fromJson).toList();
+    return (await _extractDataList(response))
+        .map(AIAgentSummary.fromJson)
+        .toList();
   }
 
   Future<AIAgentSummary> createAIAgent(Map<String, dynamic> input) async {
@@ -511,7 +561,7 @@ class ApiService {
       jsonBody: input,
       timeout: _aiRequestTimeout,
     );
-    return AIAgentSummary.fromJson(_extractDataMap(response));
+    return AIAgentSummary.fromJson(await _extractDataMap(response));
   }
 
   Future<AIAgentSummary> updateAIAgent(
@@ -524,7 +574,7 @@ class ApiService {
       jsonBody: input,
       timeout: _aiRequestTimeout,
     );
-    return AIAgentSummary.fromJson(_extractDataMap(response));
+    return AIAgentSummary.fromJson(await _extractDataMap(response));
   }
 
   Future<void> deleteAIAgent(String id) async {
@@ -546,7 +596,9 @@ class ApiService {
       query: query,
       timeout: _aiRequestTimeout,
     );
-    return _extractDataList(response).map(AIAgentSession.fromJson).toList();
+    return (await _extractDataList(response))
+        .map(AIAgentSession.fromJson)
+        .toList();
   }
 
   Future<AIAgentSession> createAIAgentSession(
@@ -559,7 +611,7 @@ class ApiService {
       jsonBody: {'title': title},
       timeout: _aiRequestTimeout,
     );
-    return AIAgentSession.fromJson(_extractDataMap(response));
+    return AIAgentSession.fromJson(await _extractDataMap(response));
   }
 
   Future<void> deleteAIAgentSession(String sessionId) async {
@@ -574,7 +626,7 @@ class ApiService {
       path: '/ai/sessions/$sessionId/schedule-binding',
       timeout: _aiRequestTimeout,
     );
-    return _extractDataMap(response);
+    return await _extractDataMap(response);
   }
 
   Future<Map<String, dynamic>> updateAISessionScheduleBinding(
@@ -587,7 +639,7 @@ class ApiService {
       jsonBody: input,
       timeout: _aiRequestTimeout,
     );
-    return _extractDataMap(response);
+    return await _extractDataMap(response);
   }
 
   Future<List<AIAgentMessage>> getAISessionMessages(
@@ -605,7 +657,9 @@ class ApiService {
       query: query,
       timeout: _aiRequestTimeout,
     );
-    return _extractDataList(response).map(AIAgentMessage.fromJson).toList();
+    return (await _extractDataList(response))
+        .map(AIAgentMessage.fromJson)
+        .toList();
   }
 
   Future<AISendMessageResult> sendAISessionMessage(
@@ -664,7 +718,7 @@ class ApiService {
       jsonBody: {'force': force, 'trigger': normalizedTrigger},
       timeout: _aiRequestTimeout,
     );
-    return _extractDataMap(response);
+    return await _extractDataMap(response);
   }
 
   Future<List<AIAgentArtifact>> getAISessionArtifacts(
@@ -680,7 +734,9 @@ class ApiService {
       query: query,
       timeout: _aiRequestTimeout,
     );
-    return _extractDataList(response).map(AIAgentArtifact.fromJson).toList();
+    return (await _extractDataList(response))
+        .map(AIAgentArtifact.fromJson)
+        .toList();
   }
 
   Future<Map<String, dynamic>> importAIArtifactQuestions(
@@ -700,7 +756,7 @@ class ApiService {
       },
       timeout: _aiRequestTimeout,
     );
-    return _extractDataMap(response);
+    return await _extractDataMap(response);
   }
 
   Future<Map<String, dynamic>> importAIArtifactPlan(
@@ -713,7 +769,7 @@ class ApiService {
       jsonBody: {'append': append},
       timeout: _aiRequestTimeout,
     );
-    return _extractDataMap(response);
+    return await _extractDataMap(response);
   }
 
   Future<Map<String, dynamic>> buildLearningPlan(
@@ -762,7 +818,7 @@ class ApiService {
       query: {'topic': topic, 'subject': subject, 'count': '$count'},
       timeout: _aiRequestTimeout,
     );
-    return _extractDataList(response).map(Question.fromJson).toList();
+    return (await _extractDataList(response)).map(Question.fromJson).toList();
   }
 
   Future<Map<String, dynamic>> gradeWithAI(Map<String, dynamic> input) async {
@@ -855,7 +911,9 @@ class ApiService {
       query: query.isEmpty ? null : query,
       timeout: _aiRequestTimeout,
     );
-    return _extractDataList(response).map(_asMap).toList(growable: false);
+    return (await _extractDataList(response))
+        .map(_asMap)
+        .toList(growable: false);
   }
 
   Future<Map<String, dynamic>> createAICourseScheduleLesson(
@@ -867,7 +925,7 @@ class ApiService {
       jsonBody: input,
       timeout: _aiRequestTimeout,
     );
-    return _extractDataMap(response);
+    return await _extractDataMap(response);
   }
 
   Future<Map<String, dynamic>> updateAICourseScheduleLesson(
@@ -880,7 +938,7 @@ class ApiService {
       jsonBody: input,
       timeout: _aiRequestTimeout,
     );
-    return _extractDataMap(response);
+    return await _extractDataMap(response);
   }
 
   Future<Map<String, dynamic>> deleteAICourseScheduleLesson(String id) async {
@@ -889,7 +947,7 @@ class ApiService {
       path: '/ai/course-schedule/lessons/$id',
       timeout: _aiRequestTimeout,
     );
-    return _extractDataMap(response);
+    return await _extractDataMap(response);
   }
 
   Future<dynamic> _requestAIStreamData({
@@ -1004,8 +1062,7 @@ class ApiService {
     try {
       final data = await _readSSEData(
         stream: streamedResponse.stream,
-        idleTimeout: _aiStreamIdleTimeout,
-        timeout: timeout,
+        idleTimeout: timeout,
         onProgress: onProgress,
       );
       final latency = DateTime.now().difference(started).inMilliseconds;
@@ -1048,7 +1105,6 @@ class ApiService {
   Future<dynamic> _readSSEData({
     required Stream<List<int>> stream,
     required Duration idleTimeout,
-    required Duration timeout,
     AIStreamProgressCallback? onProgress,
   }) async {
     Future<dynamic> consume() async {
@@ -1159,13 +1215,7 @@ class ApiService {
       return resultData;
     }
 
-    return consume().timeout(
-      timeout,
-      onTimeout: () => throw TimeoutException(
-        'AI stream exceeded ${timeout.inSeconds}s',
-        timeout,
-      ),
-    );
+    return consume();
   }
 
   dynamic _decodeNonStreamResponseData(http.Response response) {
@@ -1457,16 +1507,24 @@ class ApiService {
     return completer.future;
   }
 
-  List<Map<String, dynamic>> _extractDataList(http.Response response) {
-    final decoded = jsonDecode(response.body);
+  Future<dynamic> _decodeJsonResponse(http.Response response) async {
+    final body = response.body;
+    if (!kIsWeb && body.length >= _jsonDecodeIsolateThresholdChars) {
+      return compute(_decodeJsonInBackground, body);
+    }
+    return jsonDecode(body);
+  }
+
+  Future<List<Map<String, dynamic>>> _extractDataList(http.Response response) async {
+    final decoded = await _decodeJsonResponse(response);
     final list = decoded is Map<String, dynamic>
         ? decoded['data'] as List<dynamic>? ?? <dynamic>[]
         : <dynamic>[];
     return list.whereType<Map<String, dynamic>>().toList(growable: false);
   }
 
-  Map<String, dynamic> _extractDataMap(http.Response response) {
-    final decoded = jsonDecode(response.body);
+  Future<Map<String, dynamic>> _extractDataMap(http.Response response) async {
+    final decoded = await _decodeJsonResponse(response);
     if (decoded is Map<String, dynamic>) {
       final data = decoded['data'];
       if (data is Map<String, dynamic>) {

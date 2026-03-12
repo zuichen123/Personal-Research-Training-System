@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"self-study-tool/internal/modules/question"
-	sqlitestore "self-study-tool/internal/platform/storage/sqlite"
+	"prts/internal/modules/question"
+	sqlitestore "prts/internal/platform/storage/sqlite"
 )
 
 func TestService_CompressSessionMessages_ManualSuccess(t *testing.T) {

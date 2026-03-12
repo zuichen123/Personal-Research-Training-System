@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"self-study-tool/internal/modules/practice"
-	"self-study-tool/internal/modules/question"
+	"prts/internal/modules/practice"
+	"prts/internal/modules/question"
 )
 
 func TestExecuteQuestionList_DefaultCompact(t *testing.T) {

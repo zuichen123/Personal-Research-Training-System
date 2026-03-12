@@ -2,7 +2,7 @@ package schedule
 
 import (
 	"context"
-	"self-study-tool/internal/modules/ai"
+	"prts/internal/modules/ai"
 )
 
 type AIAdapter struct {

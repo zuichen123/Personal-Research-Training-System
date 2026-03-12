@@ -8,7 +8,7 @@ import (
 	"strings"
 	"unicode"
 
-	"self-study-tool/internal/shared/errs"
+	"prts/internal/shared/errs"
 )
 
 func (s *Service) ComputeMath(_ context.Context, req MathComputeRequest) (MathComputeResult, error) {

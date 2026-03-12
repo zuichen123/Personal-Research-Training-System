@@ -1,7 +1,8 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/ai_agent_chat.dart';
+import '../services/api_service.dart';
 import '../models/user_profile.dart';
 import '../providers/ai_agent_provider.dart';
 import '../providers/app_provider.dart';
@@ -21,6 +22,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
 
+  final _serverUrlController = TextEditingController();
   final _modelController = TextEditingController();
   final _modelFocusNode = FocusNode();
   final _openAIBaseURLController = TextEditingController();
@@ -143,6 +145,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
     _bindPromptDirtyListener(_outputPromptController);
 
+    _serverUrlController.text = ApiService.currentEffectiveUrl();
     _checkBackendHealth();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AIAgentProvider>().refreshAgents();
@@ -153,6 +156,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   void dispose() {
     _tabController.dispose();
 
+    _serverUrlController.dispose();
     _modelController.dispose();
     _modelFocusNode.dispose();
     _openAIBaseURLController.dispose();
@@ -176,6 +180,26 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
 
     super.dispose();
+  }
+
+  Future<void> _saveServerUrl(BuildContext context) async {
+    final url = _serverUrlController.text.trim();
+    final provider = context.read<AppProvider>();
+    await provider.updateServerUrl(url);
+    _serverUrlController.text = ApiService.currentEffectiveUrl();
+    if (mounted) {
+      _checkBackendHealth();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            url.isEmpty
+                ? '已恢复默认服务器地址: ${ApiService.currentEffectiveUrl()}'
+                : '服务器地址已更新为: ${ApiService.currentEffectiveUrl()}',
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   Future<void> _checkBackendHealth() async {
@@ -394,6 +418,64 @@ class _SettingsScreenState extends State<SettingsScreen>
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        _section(
+          title: '服务器连接',
+          icon: Icons.dns_outlined,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '当前 App 连接的后端服务器地址。修改后保存将立即重连。',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _serverUrlController,
+                decoration: InputDecoration(
+                  labelText: '服务器地址',
+                  hintText: 'http://192.168.x.x:8080/api/v1',
+                  border: const OutlineInputBorder(),
+                  isDense: true,
+                  suffixIcon: IconButton(
+                    tooltip: '恢复默认',
+                    onPressed: () {
+                      _serverUrlController.clear();
+                    },
+                    icon: const Icon(Icons.restore),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  FilledButton.icon(
+                    onPressed: () => _saveServerUrl(context),
+                    icon: const Icon(Icons.save),
+                    label: const Text('保存并重连'),
+                  ),
+                  const SizedBox(width: 12),
+                  OutlinedButton.icon(
+                    onPressed: _checkBackendHealth,
+                    icon: _checkingHealth
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.favorite_border),
+                    label: Text(
+                      _backendHealthy == null
+                          ? '检测连接'
+                          : _backendHealthy!
+                              ? '已连接 (${_healthLatencyMs}ms)'
+                              : '无法连接',
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
         _healthCard(context),
         _section(
           title: '模型服务状态',

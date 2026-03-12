@@ -1,4 +1,4 @@
-#include <flutter/dart_project.h>
+﻿#include <flutter/dart_project.h>
 #include <flutter/flutter_view_controller.h>
 #include <windows.h>
 
@@ -16,6 +16,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   // Initialize COM, so that it is available for use in the library and/or
   // plugins.
   ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+
+  // Enable mouse-in-pointer so that stylus/pen pointer events are translated
+  // into legacy WM_LBUTTON* / WM_MOUSEMOVE messages.  Without this, the
+  // Flutter child HWND never receives pen input because WM_POINTER messages
+  // are only delivered to the top-level window.
+  ::EnableMouseInPointer(TRUE);
 
   flutter::DartProject project(L"data");
 

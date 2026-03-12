@@ -5,8 +5,8 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"self-study-tool/internal/shared/httpx"
-	"self-study-tool/internal/shared/errs"
+	"prts/internal/shared/httpx"
+	"prts/internal/shared/errs"
 )
 
 type Handler struct {

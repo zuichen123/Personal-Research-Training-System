@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"self-study-tool/internal/modules/question"
+	"prts/internal/modules/question"
 )
 
 type GenerateRequest struct {

@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_client/models/ai_agent_chat.dart';
-import 'package:flutter_client/utils/agent_form_initial_data.dart';
+import 'package:prts_client/models/ai_agent_chat.dart';
+import 'package:prts_client/utils/agent_form_initial_data.dart';
 
 void main() {
   group('AgentFormInitialData', () {

@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"self-study-tool/internal/modules/ai"
-	"self-study-tool/internal/modules/plan"
-	"self-study-tool/internal/shared/errs"
+	"prts/internal/modules/ai"
+	"prts/internal/modules/plan"
+	"prts/internal/shared/errs"
 )
 
 type testPlanRepo struct {

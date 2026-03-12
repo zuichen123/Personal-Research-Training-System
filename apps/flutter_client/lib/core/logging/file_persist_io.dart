@@ -30,7 +30,8 @@ class IoLogFilePersist extends LogFilePersist {
     if (_file == null) {
       return;
     }
-    await _file!.writeAsString('$line\n', mode: FileMode.append, flush: true);
+    // Avoid flush-per-line which can be expensive on Android devices.
+    await _file!.writeAsString('$line\n', mode: FileMode.append);
   }
 
   @override

@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"self-study-tool/internal/modules/plan"
-	"self-study-tool/internal/modules/question"
+	"prts/internal/modules/plan"
+	"prts/internal/modules/question"
 )
 
 type testConfigStore struct {

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"self-study-tool/internal/modules/question"
-	sqlitestore "self-study-tool/internal/platform/storage/sqlite"
+	"prts/internal/modules/question"
+	sqlitestore "prts/internal/platform/storage/sqlite"
 )
 
 func TestService_CreateAgent_ManualCreateUsesConfiguredProviderDefaults(t *testing.T) {

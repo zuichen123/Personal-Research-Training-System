@@ -7,15 +7,15 @@ import (
 	"strconv"
 	"strings"
 
-	"self-study-tool/internal/modules/ai"
-	"self-study-tool/internal/modules/mistake"
-	"self-study-tool/internal/modules/plan"
-	"self-study-tool/internal/modules/pomodoro"
-	"self-study-tool/internal/modules/practice"
-	"self-study-tool/internal/modules/profile"
-	"self-study-tool/internal/modules/question"
-	"self-study-tool/internal/modules/resource"
-	"self-study-tool/internal/shared/errs"
+	"prts/internal/modules/ai"
+	"prts/internal/modules/mistake"
+	"prts/internal/modules/plan"
+	"prts/internal/modules/pomodoro"
+	"prts/internal/modules/practice"
+	"prts/internal/modules/profile"
+	"prts/internal/modules/question"
+	"prts/internal/modules/resource"
+	"prts/internal/shared/errs"
 )
 
 type aiAppControl struct {

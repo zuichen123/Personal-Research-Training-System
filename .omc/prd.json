@@ -1,0 +1,118 @@
+{
+  "title": "Self-Study-Tool Core Enhancements",
+  "description": "Complete AI-powered learning platform with intelligent orchestration, adaptive scheduling, professional grading, and comprehensive profiling",
+  "tasks": [
+    {
+      "id": "task-1",
+      "title": "Complete Schedule Service with AI Generation",
+      "description": "Implement AI-powered schedule generation using user profile and course data. Add dynamic adjustment based on user requests.",
+      "status": "done",
+      "priority": "high",
+      "complexity": "medium",
+      "files": [
+        "internal/modules/schedule/service.go",
+        "internal/modules/schedule/handler.go",
+        "internal/modules/schedule/ai_adapter.go",
+        "internal/modules/schedule/repository.go"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "task-2",
+      "title": "Implement Agent Orchestration Service",
+      "description": "Create head teacher agent that manages subject agents, dispatches tasks, and coordinates teaching activities.",
+      "status": "done",
+      "priority": "high",
+      "complexity": "high",
+      "files": [
+        "internal/modules/agent/service.go",
+        "internal/modules/agent/handler.go"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "task-3",
+      "title": "Implement 10-Level Difficulty System",
+      "description": "Create Gaokao-aligned difficulty assessment with 10 levels. Add difficulty assignment to questions.",
+      "status": "done",
+      "priority": "high",
+      "complexity": "medium",
+      "files": [
+        "internal/modules/question/difficulty.go",
+        "internal/modules/question/service.go"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "task-4",
+      "title": "Implement Professional Grading System",
+      "description": "Create subject-specific grading with detailed feedback, error pinpointing, and scoring aligned with Gaokao standards.",
+      "status": "done",
+      "priority": "high",
+      "complexity": "high",
+      "files": [
+        "internal/modules/practice/grading.go",
+        "internal/modules/ai/grading.go"
+      ],
+      "dependencies": ["task-3"]
+    },
+    {
+      "id": "task-5",
+      "title": "Implement Intelligent Paper Generation",
+      "description": "AI-powered test paper composition based on user progress with validation for correctness.",
+      "status": "done",
+      "priority": "medium",
+      "complexity": "high",
+      "files": [
+        "internal/modules/practice/paper.go",
+        "internal/modules/practice/service.go"
+      ],
+      "dependencies": ["task-3", "task-4"]
+    },
+    {
+      "id": "task-6",
+      "title": "Add Multi-Format Material Support",
+      "description": "Support PDF, images, MOBI formats with AI-powered classification and querying.",
+      "status": "done",
+      "priority": "medium",
+      "complexity": "medium",
+      "files": [
+        "internal/modules/material/parser.go",
+        "internal/modules/material/service.go"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "task-7",
+      "title": "Enhance Mistake Analysis with AI",
+      "description": "AI-powered error pattern analysis, weak point identification, and user profiling updates.",
+      "status": "done",
+      "priority": "medium",
+      "complexity": "medium",
+      "files": [
+        "internal/modules/mistake/analysis.go",
+        "internal/modules/mistake/service.go"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "task-8",
+      "title": "Wire All Services in Bootstrap",
+      "description": "Integrate all new services into bootstrap, register routes, and ensure proper dependency injection.",
+      "status": "done",
+      "priority": "high",
+      "complexity": "low",
+      "files": [
+        "internal/bootstrap/app.go"
+      ],
+      "dependencies": ["task-1", "task-2", "task-3", "task-4", "task-5", "task-6", "task-7"]
+    }
+  ],
+  "acceptance_criteria": [
+    "All services compile without errors",
+    "API endpoints functional and tested",
+    "AI integration working with proper prompts",
+    "Git commit per task with clear messages",
+    "Minimal code implementation throughout"
+  ]
+}

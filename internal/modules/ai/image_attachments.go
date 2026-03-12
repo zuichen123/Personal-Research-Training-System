@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"self-study-tool/internal/shared/errs"
+	"prts/internal/shared/errs"
 )
 
 const maxMediaAttachments = 6

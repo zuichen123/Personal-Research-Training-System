@@ -1,5 +1,5 @@
 ﻿param(
-  [string]$AppName = "self-study-tool"
+  [string]$AppName = "prts"
 )
 
 $ErrorActionPreference = "Stop"

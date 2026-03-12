@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"self-study-tool/internal/shared/errs"
+	"prts/internal/shared/errs"
 )
 
 const (

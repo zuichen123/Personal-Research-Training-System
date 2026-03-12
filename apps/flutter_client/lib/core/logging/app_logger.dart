@@ -22,7 +22,7 @@ class AppLogger extends ChangeNotifier {
   final LogFilePersist _filePersist = createLogFilePersist();
   SharedPreferences? _prefs;
   bool _initialized = false;
-  AppLogLevel _minLevel = AppLogLevel.info;
+  AppLogLevel _minLevel = kReleaseMode ? AppLogLevel.warn : AppLogLevel.info;
 
   List<LogRecord> get records => List<LogRecord>.unmodifiable(_records);
   AppLogLevel get minLevel => _minLevel;
@@ -44,12 +44,17 @@ class AppLogger extends ChangeNotifier {
       }
     }
     _initialized = true;
-    info(
-      module: 'app',
-      event: 'logger.init',
-      message: '日志系统已初始化',
-      data: {'loaded_records': _records.length, 'file_path': _filePersist.path},
-    );
+    if (!kReleaseMode) {
+      info(
+        module: 'app',
+        event: 'logger.init',
+        message: '日志系统已初始化',
+        data: {
+          'loaded_records': _records.length,
+          'file_path': _filePersist.path,
+        },
+      );
+    }
   }
 
   void setMinLevel(AppLogLevel level) {
@@ -155,6 +160,12 @@ class AppLogger extends ChangeNotifier {
     String? traceId,
   }) {
     final id = traceId ?? newTraceId();
+    // In release, default to warn+ only (and allow raising/lowering via settings).
+    // Dropping low-level logs avoids excessive JSON encoding + persistence overhead
+    // that can cause jank on Android.
+    if (level.weight < _minLevel.weight) {
+      return id;
+    }
     final record = LogRecord(
       ts: DateTime.now(),
       level: level,
@@ -171,12 +182,12 @@ class AppLogger extends ChangeNotifier {
       _records.removeAt(0);
     }
     final encoded = jsonEncode(record.toJson());
-    debugPrint(encoded);
+    if (!kReleaseMode) {
+      debugPrint(encoded);
+    }
     _filePersist.appendLine(encoded);
     _persist();
-    if (level.weight >= _minLevel.weight) {
-      notifyListeners();
-    }
+    notifyListeners();
     return id;
   }
 

@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"self-study-tool/internal/shared/errs"
-	"self-study-tool/internal/shared/httpx"
+	"prts/internal/shared/errs"
+	"prts/internal/shared/httpx"
 
 	"github.com/go-chi/chi/v5"
 )
