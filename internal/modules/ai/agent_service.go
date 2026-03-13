@@ -327,12 +327,11 @@ func computeAgentStatus(agentID string, activeCount int, messages []AgentMessage
 		combined := strings.Join(userMsgs, " ")
 		words := strings.Fields(combined)
 		if len(words) > 0 {
-			status.CurrentTopic = words[0]
-			for _, w := range words {
-				if len(w) > len(status.CurrentTopic) {
-					status.CurrentTopic = w
-				}
+			maxWords := 3
+			if len(words) < maxWords {
+				maxWords = len(words)
 			}
+			status.CurrentTopic = strings.Join(words[:maxWords], " ")
 		}
 	}
 

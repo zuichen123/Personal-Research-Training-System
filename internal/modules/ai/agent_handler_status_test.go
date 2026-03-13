@@ -14,7 +14,16 @@ import (
 func TestGetAgent_Success(t *testing.T) {
 	store := &mockAgentStore{
 		agents: map[string]Agent{
-			"agent1": {ID: "agent1", Name: "Test Agent"},
+			"agent1": {
+				ID:                 "agent1",
+				Name:               "Test Agent",
+				Protocol:           AgentProtocolClaudeNative,
+				Primary:            AgentProviderConfig{Model: "claude-3-sonnet"},
+				Enabled:            true,
+				IntentCapabilities: []string{"chat"},
+				CreatedAt:          "2026-03-13T00:00:00Z",
+				UpdatedAt:          "2026-03-13T00:00:00Z",
+			},
 		},
 	}
 	svc := &Service{agentStore: store}
@@ -60,7 +69,16 @@ func TestGetAgent_NotFound(t *testing.T) {
 func TestGetAgentStatus_Success(t *testing.T) {
 	store := &mockAgentStore{
 		agents: map[string]Agent{
-			"agent1": {ID: "agent1", Name: "Test Agent"},
+			"agent1": {
+				ID:                 "agent1",
+				Name:               "Test Agent",
+				Protocol:           AgentProtocolClaudeNative,
+				Primary:            AgentProviderConfig{Model: "claude-3-sonnet"},
+				Enabled:            true,
+				IntentCapabilities: []string{"chat"},
+				CreatedAt:          "2026-03-13T00:00:00Z",
+				UpdatedAt:          "2026-03-13T00:00:00Z",
+			},
 		},
 		sessions: 2,
 		messages: []AgentMessage{
