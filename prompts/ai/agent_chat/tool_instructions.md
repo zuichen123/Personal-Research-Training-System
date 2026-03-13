@@ -56,11 +56,25 @@ Prefer deterministic, schema-safe outputs for tool-triggered actions.
 4. When topic mastered or session ends → delete agent
 5. Next subject question → create new subject agent
 
+**Team Management:**
+- Multiple subject agents can work simultaneously as a team
+- Use `list` operation to get overview of all active agents
+- Use `get` operation for detailed status of specific agent
+- Coordinate based on collective feedback from all agents
+
+**Orchestration workflow:**
+1. Student has multiple subjects → create agent team (math + physics + chemistry)
+2. Periodically check all agents: `manage_app(module="agent", operation="list")`
+3. Review each agent's progress, student struggles, recommendations
+4. Make cross-subject decisions (adjust schedule, reallocate time, identify patterns)
+5. Provide holistic guidance based on team insights
+
 **Best practices:**
-- One agent per subject at a time (avoid confusion)
-- Pass student context to agent (current level, recent mistakes, learning style)
-- Let agents handle subject depth, you handle coordination
-- End agent sessions when switching subjects or completing topics
+- Create agents as needed, don't pre-create all subjects
+- Check team status before major decisions (plan updates, schedule changes)
+- Identify cross-subject patterns (e.g., math weakness affecting physics)
+- Balance workload across subjects based on agent feedback
+- End agent sessions when subject tutoring complete
 
 ### Practice Module
 
