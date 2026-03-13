@@ -70,6 +70,18 @@ type AgentMessage struct {
 	CreatedAt           string               `json:"created_at"`
 }
 
+type AgentStatus struct {
+	AgentID                string   `json:"agent_id"`
+	ActiveSessions         int      `json:"active_sessions"`
+	LastActive             string   `json:"last_active,omitempty"`
+	CurrentTopic           string   `json:"current_topic,omitempty"`
+	StudentAccuracy        float64  `json:"student_accuracy"`
+	CommonMistakes         []string `json:"common_mistakes"`
+	Recommendations        []string `json:"recommendations"`
+	MessageCount           int      `json:"message_count"`
+	SessionDurationMinutes int      `json:"session_duration_minutes"`
+}
+
 type AgentChatStore interface {
 	ListAgents(ctx context.Context) ([]Agent, error)
 	GetAgentByID(ctx context.Context, id string) (Agent, error)
@@ -100,6 +112,9 @@ type AgentChatStore interface {
 	GetArtifactByID(ctx context.Context, artifactID string) (AgentArtifact, error)
 	CreateArtifact(ctx context.Context, item AgentArtifact) (AgentArtifact, error)
 	UpdateArtifactImportStatus(ctx context.Context, artifactID, status, importedAt string) error
+
+	GetActiveSessionsCount(ctx context.Context, agentID string) (int, error)
+	GetRecentMessages(ctx context.Context, agentID string, limit int) ([]AgentMessage, error)
 }
 
 type SQLiteAgentRepository struct {
@@ -701,6 +716,48 @@ func (r *SQLiteAgentRepository) UpdateArtifactImportStatus(
 		return errs.NotFound("ai artifact not found")
 	}
 	return nil
+}
+
+func (r *SQLiteAgentRepository) GetActiveSessionsCount(ctx context.Context, agentID string) (int, error) {
+	var count int
+	err := r.db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM ai_agent_sessions
+		WHERE agent_id = ? AND archived_at IS NULL
+	`, agentID).Scan(&count)
+	if err != nil {
+		return 0, errs.Internal(fmt.Sprintf("failed to count active sessions: %v", err))
+	}
+	return count, nil
+}
+
+func (r *SQLiteAgentRepository) GetRecentMessages(ctx context.Context, agentID string, limit int) ([]AgentMessage, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT m.id, m.session_id, m.role, m.content, m.intent_json, m.pending_confirmation_json,
+		       m.provider_used, m.model_used, m.fallback_used, m.latency_ms, m.artifact_id, m.created_at
+		FROM ai_agent_messages m
+		JOIN ai_agent_sessions s ON s.id = m.session_id
+		WHERE s.agent_id = ? AND s.archived_at IS NULL
+		ORDER BY m.created_at DESC
+		LIMIT ?
+	`, agentID, limit)
+	if err != nil {
+		return nil, errs.Internal(fmt.Sprintf("failed to get recent messages: %v", err))
+	}
+	defer rows.Close()
+
+	items := make([]AgentMessage, 0)
+	for rows.Next() {
+		item, scanErr := scanAgentMessage(rows)
+		if scanErr != nil {
+			return nil, errs.Internal(fmt.Sprintf("failed to scan agent message: %v", scanErr))
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, errs.Internal(fmt.Sprintf("failed to iterate messages: %v", err))
+	}
+	return items, nil
 }
 
 type agentScanner interface {

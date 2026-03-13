@@ -216,6 +216,142 @@ func (s *Service) DeleteAgent(ctx context.Context, id string) error {
 	return s.agentStore.DeleteAgent(ctx, id)
 }
 
+func (s *Service) GetAgentByID(ctx context.Context, id string) (Agent, error) {
+	if s.agentStore == nil {
+		return Agent{}, errs.BadRequest("ai agent store is not ready")
+	}
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return Agent{}, errs.BadRequest("agent id is required")
+	}
+	agent, err := s.agentStore.GetAgentByID(ctx, id)
+	if err != nil {
+		return Agent{}, err
+	}
+	return redactAgentSecrets(agent), nil
+}
+
+func (s *Service) GetAgentStatus(ctx context.Context, agentID string, sessionID string) (AgentStatus, error) {
+	if s.agentStore == nil {
+		return AgentStatus{}, errs.BadRequest("ai agent store is not ready")
+	}
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		return AgentStatus{}, errs.BadRequest("agent id is required")
+	}
+
+	if _, err := s.agentStore.GetAgentByID(ctx, agentID); err != nil {
+		return AgentStatus{}, err
+	}
+
+	count, err := s.agentStore.GetActiveSessionsCount(ctx, agentID)
+	if err != nil {
+		return AgentStatus{}, err
+	}
+	if count == 0 {
+		return AgentStatus{}, errs.NotFound("no active sessions for agent")
+	}
+
+	messages, err := s.agentStore.GetRecentMessages(ctx, agentID, 50)
+	if err != nil {
+		return AgentStatus{}, err
+	}
+
+	return computeAgentStatus(agentID, count, messages), nil
+}
+
+func computeAgentStatus(agentID string, activeCount int, messages []AgentMessage) AgentStatus {
+	status := AgentStatus{
+		AgentID:         agentID,
+		ActiveSessions:  activeCount,
+		CommonMistakes:  []string{},
+		Recommendations: []string{},
+	}
+
+	if len(messages) == 0 {
+		return status
+	}
+
+	status.LastActive = messages[0].CreatedAt
+	status.MessageCount = len(messages)
+
+	if len(messages) > 1 {
+		first, _ := time.Parse(time.RFC3339, messages[len(messages)-1].CreatedAt)
+		last, _ := time.Parse(time.RFC3339, messages[0].CreatedAt)
+		status.SessionDurationMinutes = int(last.Sub(first).Minutes())
+	}
+
+	var userMsgs []string
+	var correctCount, totalGraded int
+	mistakes := make(map[string]int)
+	recs := make(map[string]int)
+
+	for i, msg := range messages {
+		if msg.Role == "user" && i < 10 {
+			userMsgs = append(userMsgs, msg.Content)
+		}
+		if msg.Role == "assistant" {
+			content := strings.ToLower(msg.Content)
+			if strings.Contains(content, `"correct":true`) || strings.Contains(content, `"correct": true`) {
+				correctCount++
+				totalGraded++
+			} else if strings.Contains(content, `"correct":false`) || strings.Contains(content, `"correct": false`) {
+				totalGraded++
+			}
+			for _, pattern := range []string{"mistake:", "error:", "incorrect because"} {
+				if idx := strings.Index(content, pattern); idx != -1 {
+					end := idx + 100
+					if end > len(content) {
+						end = len(content)
+					}
+					mistakes[content[idx:end]]++
+				}
+			}
+			for _, pattern := range []string{"recommend:", "suggestion:", "should practice"} {
+				if idx := strings.Index(content, pattern); idx != -1 {
+					end := idx + 100
+					if end > len(content) {
+						end = len(content)
+					}
+					recs[content[idx:end]]++
+				}
+			}
+		}
+	}
+
+	if totalGraded > 0 {
+		status.StudentAccuracy = float64(correctCount) / float64(totalGraded)
+	}
+
+	if len(userMsgs) > 0 {
+		combined := strings.Join(userMsgs, " ")
+		words := strings.Fields(combined)
+		if len(words) > 0 {
+			status.CurrentTopic = words[0]
+			for _, w := range words {
+				if len(w) > len(status.CurrentTopic) {
+					status.CurrentTopic = w
+				}
+			}
+		}
+	}
+
+	for m := range mistakes {
+		status.CommonMistakes = append(status.CommonMistakes, m)
+		if len(status.CommonMistakes) >= 3 {
+			break
+		}
+	}
+	for r := range recs {
+		status.Recommendations = append(status.Recommendations, r)
+		if len(status.Recommendations) >= 3 {
+			break
+		}
+	}
+
+	return status
+}
+
 func (s *Service) ListAgentSessions(
 	ctx context.Context,
 	agentID string,

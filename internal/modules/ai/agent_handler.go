@@ -257,3 +257,23 @@ func (h *Handler) importPlanFromArtifact(w http.ResponseWriter, r *http.Request)
 	}
 	httpx.WriteJSON(w, http.StatusOK, result)
 }
+
+func (h *Handler) getAgent(w http.ResponseWriter, r *http.Request) {
+	item, err := h.service.GetAgentByID(r.Context(), strings.TrimSpace(chi.URLParam(r, "id")))
+	if err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, item)
+}
+
+func (h *Handler) getAgentStatus(w http.ResponseWriter, r *http.Request) {
+	agentID := strings.TrimSpace(chi.URLParam(r, "id"))
+	sessionID := strings.TrimSpace(r.URL.Query().Get("session_id"))
+	status, err := h.service.GetAgentStatus(r.Context(), agentID, sessionID)
+	if err != nil {
+		httpx.WriteError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, status)
+}
