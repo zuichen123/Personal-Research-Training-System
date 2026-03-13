@@ -40,12 +40,14 @@ func TestGetAgent_Success(t *testing.T) {
 		t.Errorf("expected 200, got %d", w.Code)
 	}
 
-	var agent Agent
-	if err := json.NewDecoder(w.Body).Decode(&agent); err != nil {
+	var resp struct {
+		Data Agent `json:"data"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
-	if agent.ID != "agent1" {
-		t.Errorf("expected agent1, got %s", agent.ID)
+	if resp.Data.ID != "agent1" {
+		t.Errorf("expected agent1, got %s", resp.Data.ID)
 	}
 }
 
@@ -99,15 +101,17 @@ func TestGetAgentStatus_Success(t *testing.T) {
 		t.Errorf("expected 200, got %d", w.Code)
 	}
 
-	var status AgentStatus
-	if err := json.NewDecoder(w.Body).Decode(&status); err != nil {
+	var resp struct {
+		Data AgentStatus `json:"data"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
-	if status.AgentID != "agent1" {
-		t.Errorf("expected agent1, got %s", status.AgentID)
+	if resp.Data.AgentID != "agent1" {
+		t.Errorf("expected agent1, got %s", resp.Data.AgentID)
 	}
-	if status.ActiveSessions != 2 {
-		t.Errorf("expected 2 sessions, got %d", status.ActiveSessions)
+	if resp.Data.ActiveSessions != 2 {
+		t.Errorf("expected 2 sessions, got %d", resp.Data.ActiveSessions)
 	}
 }
 
