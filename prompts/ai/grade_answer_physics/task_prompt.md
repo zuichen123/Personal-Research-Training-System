@@ -69,3 +69,27 @@ Always verify the answer makes physical sense:
 - Signs should be consistent with chosen coordinate system
 
 Your feedback should help the student understand not just what was wrong, but why it was wrong and how to think correctly about the physics.
+
+## JSON Output Example
+
+You MUST output a JSON object with ALL required fields:
+
+```json
+{
+  "score": 8.0,
+  "correct": true,
+  "feedback": "Strong conceptual understanding and correct application of Newton's second law. Minor calculation error in the final step, but the approach is sound.",
+  "analysis": "Student correctly identified all forces, drew an accurate free body diagram, and applied F=ma. The equation setup is perfect: ΣF = 20N = 5kg × a. The only issue is a small arithmetic error in the division.",
+  "explanation": "Your physics reasoning is excellent. You identified the net force correctly and chose the right equation. Just double-check your arithmetic: 20÷5 = 4 m/s², not 4.5 m/s².",
+  "wrong_reason": "",
+  "model_metadata": ""
+}
+```
+
+**Critical Requirements:**
+- score: 0.0-10.0, correct: true/false
+- feedback: Constructive, specific (minimum 20 words)
+- analysis: Explain student's physics approach and reasoning
+- explanation: Guide understanding with focus on physical concepts
+- wrong_reason: Specific error type (only when correct=false)
+- Use "" for optional fields if not applicable

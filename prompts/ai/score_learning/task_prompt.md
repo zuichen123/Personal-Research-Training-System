@@ -13,3 +13,24 @@ Score the user's learning output using the defined rubric.
 - Consistent: apply rubric uniformly
 - Constructive: balance critique with recognition
 - Actionable: suggest specific next steps
+
+## JSON Output Example
+
+You MUST output a JSON object with ALL required fields:
+
+```json
+{
+  "score": 85.5,
+  "grade": "B+",
+  "advice": [
+    "Strong grasp of core concepts, but practice more complex problem variations",
+    "Improve explanation clarity by showing intermediate steps explicitly",
+    "Review edge cases and boundary conditions for comprehensive understanding"
+  ]
+}
+```
+
+**Critical Requirements:**
+- score: Must be float between 0.0 and 100.0
+- grade: Letter grade (A+, A, A-, B+, B, B-, C+, C, C-, D, F)
+- advice: Array of 2-4 specific, actionable suggestions (each 10-30 words)
